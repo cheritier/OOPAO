@@ -43,6 +43,11 @@ tel = Telescope(resolution          = param['resolution'],\
                 pupilReflectivity   = M1_pupil_reflectivity,\
                 pupil               = M1_pupil)
 
+
+#%%
+import matplotlib.pyplot as plt
+plt.figure()
+plt.imshow(tel.pupil)
 #%% -----------------------     NGS   ----------------------------------
 # create the Source object
 ngs=Source(optBand   = param['opticalBand'],\
@@ -63,7 +68,7 @@ atm=Atmosphere(telescope     = tel,\
                altitude      = param['altitude'])
 
 # initialize atmosphere
-atm.initializeAtmosphere(tel)
+#atm.initializeAtmosphere(tel)
 
 #%% -----------------------     DEFORMABLE MIRROR   ----------------------------------
 # mis-registrations object reading the param
@@ -76,54 +81,75 @@ dm = DeformableMirror(telescope    = tel,\
                     M4_param     = param)
                     
 
-
-tel-atm
-
-# create the Pyramid Object
-wfs = Pyramid(nSubap                = param['nSubaperture'],\
-              telescope             = tel,\
-              modulation            = param['modulation'],\
-              lightRatio            = param['lightThreshold'],\
-              pupilSeparationRatio  = param['pupilSeparationRatio'],\
-              calibModulation       = param['calibrationModulation'],\
-              psfCentering          = param['psfCentering'],\
-              edgePixel             = param['edgePixel'],\
-              unitCalibration       = param['unitCalibration'],\
-              extraModulationFactor = param['extraModulationFactor'],\
-              postProcessing        = param['postProcessing'])
+##%% -----------------------     WFS   ----------------------------------
+#
+#tel-atm
+#
+## create the Pyramid Object
+#wfs = Pyramid(nSubap                = param['nSubaperture'],\
+#              telescope             = tel,\
+#              modulation            = param['modulation'],\
+#              lightRatio            = param['lightThreshold'],\
+#              pupilSeparationRatio  = param['pupilSeparationRatio'],\
+#              calibModulation       = param['calibrationModulation'],\
+#              psfCentering          = param['psfCentering'],\
+#              edgePixel             = param['edgePixel'],\
+#              unitCalibration       = param['unitCalibration'],\
+#              extraModulationFactor = param['extraModulationFactor'],\
+#              postProcessing        = param['postProcessing'])
 
 
 #%% -----------------------    MODAL BASIS   ----------------------------------
-### CVE: THIS IS TO SPEED UP  DEBUGGING (OR MULTIPLE BASIS NEED TO BE COMPUED)
-tel.isPaired = False # separate from eventual atmosphere
-dm.coefs = np.eye(dm.nValidAct) # assign dm coefs to get the cube of IF in OPD
-tel*dm    # propagate to get the OPD of the IFS after reflection
+### CVE: THIS IS TO SPEED UP/DEBUGGING (OR MULTIPLE BASIS NEED TO BE COMPUED)
+print('Pre-computing the influence functions truncated by the pupil...')
+pupil_1D = np.reshape(tel.pupil, tel.resolution**2)
 
-IF_2D = np.moveaxis(tel.OPD,-1,0)
-dim=IF_2D.shape[0]
-nact=IF_2D.shape[0]
+# get influence functions truncated by the pupil mask in 2D
+IF_2D  = np.reshape(np.moveaxis(dm.modes*np.tile(pupil_1D[:,None],dm.nAct),-1,0), [dm.nAct,tel.resolution,tel.resolution])
 
-pupil=tel.pupil
-idxpup=np.where(pupil==1)
-
-IFma=np.matrix(aou.vectorifyb(IF_2D,idxpup))
+IF_1D_pup = np.squeeze(dm.modes[tel.pupilLogical,:])
+print('Done!')
 
 #%%
 ## COMPUTE HHt and KL basis with PTT as specific basis
 ## ESTIMATE HHt division
-siz             = tel.OPD.shape[0]
-SZ              = siz*2 #np.int(siz*1.1)
+resolution_IF   = tel.resolution #np.int(siz*1.1)
+resolution_FFT  = resolution_IF*1.1 #np.int(siz*1.1)
 nact            = 5352
-mem_available   = 256.e9
+mem_available   = 50.e9
 
 # estimate how to break up the computation of the covariance matrix in NDIVL pieces 
-mem,NDIVL       = aou.estimate_ndivl(SZ,siz,nact,mem_available)
+mem,NDIVL       = aou.estimate_ndivl(SZ = resolution_FFT,\
+                                     sz = resolution_IF,\
+                                     nact = dm.nAct,\
+                                     MEMmax = mem_available)
 
 #%%
 """
  ---------------------- DOUBLE DIAGON:IZATION KL IN DM SPACE FORCING PISTON, TIP & TILT ----------------------
  computes KL modes forcing to include piston and tit-tilt modes (default value of nZer = 3)
-
+ 
+ 
+    - HHtName       = None      extension for the HHt Covariance file
+    - baseName      = None      extension to the filename for basis saving
+    - SpM_2D        = None      2D Specific modes [dim,dim,nspm], if None then automatic
+    - nZer          = 3         number of zernike (Piston,Tip,Tilt...) for automatic computation of specific modes
+    - SZ            = None      resolution of FFts for HHt (By default SZ=2*tel.resolution)
+    - mem_available = None      Memory allocated for HHt computation (default is 50GB)
+    - NDIVL         = None      Subdiv. of HHt task in ~NDIVL**2. None:-> mem_available
+    - computeSpM    = True      Flag to compute Specific modes 
+    - ortho_spm     = True      Flag to orthonormalize specific modes (QR decomposition)
+    - computeSB     = True      Flag to compute the Seed Basis
+    - computeKL     = True      Flag to compute the KL basis
+    - minimF        = False     Flag to minimize Forces
+    - P2F           = None      Stiffness matrix (loaded by default)
+    - alpha         = None      Force regularization parameter (expert)
+    - beta          = None      Position damping parameter (expert)
+    - nmo           = None      Number of modes to compute
+    - IF_2D         = None      2D Influence Functions in OPD (for speeding up)
+    - IFma          = None      Serial Influence Functions (only for speeding up)
+    - returnSB      = False     Flag to return also the Seed Basis (w/ or w/o KL)
+    
 """
 KL_piston_tip_tilt = compute_M2C(telescope          = tel,\
                                  atmosphere         = atm,\
@@ -132,14 +158,14 @@ KL_piston_tip_tilt = compute_M2C(telescope          = tel,\
                                  nameFolder         = None,\
                                  nameFile           = None,\
                                  remove_piston      = False,\
-                                 HHtName            = 'covariance_matrix_HHt_tutorial',\
-                                 baseName           = 'KL_piston_tip_tilt_tutorial' ,\
+                                 HHtName            = 'covariance_matrix_HHt_tutorial_KL',\
+                                 baseName           = 'KL_piston_tip_tilt_tutorial_new' ,\
                                  mem_available      = mem_available,\
                                  minimF             = False,\
                                  nmo                = 4300,\
                                  ortho_spm          = True,\
-                                 IF_2D              = None,\
-                                 IFma               = None,\
+                                 IF_2D              = IF_2D,\
+                                 IFma               = IF_1D_pup,\
                                  nZer               = 3,\
                                  NDIVL              = NDIVL) 
 
@@ -162,7 +188,7 @@ KL_9_zernike = compute_M2C(telescope                = tel,\
                                  nmo                = 4300,\
                                  ortho_spm          = True,\
                                  IF_2D              = IF_2D,\
-                                 IFma               = IFma,\
+                                 IFma               = IF_1D_pup,\
                                  nZer               = 9,\
                                  NDIVL              = NDIVL) 
 
@@ -188,7 +214,7 @@ KL_small_padding = compute_M2C(telescope                = tel,\
                                  ortho_spm          = True,\
                                  SZ                 = np.int(1.1*tel.OPD.shape[0]),\
                                  IF_2D              = IF_2D,\
-                                 IFma               = IFma,\
+                                 IFma               = IF_1D_pup,\
                                  nZer               = 3,\
                                  NDIVL              = 1) 
 
@@ -213,8 +239,8 @@ KL_piston_tip_tilt_minimized_forces = compute_M2C(telescope          = tel,\
                                  minimF             = True,\
                                  nmo                = 4300,\
                                  ortho_spm          = True,\
-                                 IF_2D              = None,\
-                                 IFma               = None,\
+                                 IF_2D              = IF_2D,\
+                                 IFma               = IF_1D_pup,\
                                  P2F                = None,\
                                  nZer               = 3,\
                                  NDIVL              = NDIVL) 
@@ -250,8 +276,8 @@ KL_pure_petals_minimized_forces = compute_M2C(telescope          = tel,\
                                  minimF             = True,\
                                  nmo                = 4300,\
                                  ortho_spm          = False,\
-                                 IF_2D              = None,\
-                                 IFma               = None,\
+                                 IF_2D              = IF_2D,\
+                                 IFma               = IF_1D_pup,\
                                  P2F                = None,\
                                  SpM_2D             = petals.copy(),\
                                  NDIVL              = NDIVL) 
@@ -287,8 +313,8 @@ KL_orthogonal_petals_minimized_forces = compute_M2C(telescope          = tel,\
                                  minimF             = True,\
                                  nmo                = 4300,\
                                  ortho_spm          = True,\
-                                 IF_2D              = None,\
-                                 IFma               = None,\
+                                 IF_2D              = IF_2D,\
+                                 IFma               = IF_1D_pup,\
                                  P2F                = None,\
                                  SpM_2D             = PM.copy(),\
                                  NDIVL              = NDIVL) 

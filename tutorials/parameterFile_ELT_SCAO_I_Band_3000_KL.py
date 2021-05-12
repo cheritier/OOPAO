@@ -26,8 +26,8 @@ def initializeParameterFile():
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% M1 PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
     param['diameter'             ] = 40                                             # diameter in [m] -- hard-coded
-    param['nSubaperture'         ] = 96                                             # number of PWFS subaperture along the telescope diameter
-    param['nPixelPerSubap'       ] = 6                                              # sampling of the PWFS subapertures
+    param['nSubaperture'         ] = 90                                             # number of PWFS subaperture along the telescope diameter
+    param['nPixelPerSubap'       ] = 8                                              # sampling of the PWFS subapertures
     param['resolution'           ] = param['nSubaperture']*param['nPixelPerSubap']  # resolution of the telescope driven by the PWFS
     param['sizeSubaperture'      ] = param['diameter']/param['nSubaperture']        # size of a sub-aperture projected in the M1 space
     param['samplingTime'         ] = 1/1000                                         # loop sampling time of the AO loop in [s]
@@ -70,7 +70,7 @@ def initializeParameterFile():
         
     param['m4_filename'          ] = path_m4
     param['validActCriteria'     ] = 0
-    param['nActuator'            ] = 6*892                                          # number of actuators to consider for M4 
+    param['nActuator'            ] = 1*892                                          # number of actuators to consider for M4 
     param['isM4'                 ] = True                                           # tag for the deformable mirror class
     param['dm_coordinates'       ] = None                                           # tag for the eformable mirror class
     param['mechanicalCoupling']    = 0                                              # mechanical coupling (non-applicable for M4 case or user-defined influence functions )
