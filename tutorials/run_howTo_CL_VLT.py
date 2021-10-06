@@ -108,29 +108,14 @@ wfs = Pyramid(nSubap                = param['nSubaperture'],\
 
 
 
-uvs = wfs.validI4Q
 
-
-# create the Pyramid Object
-wfs_0 = Pyramid(nSubap                = param['nSubaperture'],\
-              telescope             = tel,\
-              modulation            = param['modulation'],\
-              lightRatio            = param['lightThreshold'],\
-              pupilSeparationRatio  = param['pupilSeparationRatio'],\
-              calibModulation       = param['calibrationModulation'],\
-              psfCentering          = param['psfCentering'],\
-              edgePixel             = param['edgePixel'],\
-              extraModulationFactor = param['extraModulationFactor'],\
-              postProcessing        = param['postProcessing'],\
-              zeroPadding           = tel.resolution,\
-              userValidSignal       = uvs)
 
 #%%
 wfs.nJobs = 4
 tel*wfs
 plt.close('all')
 plt.figure()
-plt.imshow(wfs_0.pyramidSignal_2D)
+plt.imshow(wfs.cam.frame)
 plt.title('WFS Camera Frame')
 
 
@@ -166,24 +151,12 @@ ao_calib =  ao_calibration(param            = param,\
                            dm               = dm,\
                            wfs              = wfs,\
                            nameFolderIntMat = None,\
-                           nameIntMat       = 'test_large_zp',\
+                           nameIntMat       = 'test',\
                            nameFolderBasis  = None,\
                            nameBasis        = None,\
                            nMeasurements    = 100)
 
 
-#%%
-
-plt.figure()
-plt.plot(np.std(ao_calib.basis,0))
-
-tel.resetOPD()
-tel.OPD = np.reshape(ao_calib.basis[:,10],[tel.resolution, tel.resolution])*10*1e-9
-
-tel*wfs_0
-mode_out = ao_calib.calib.M@wfs_0.pyramidSignal
-plt.figure()
-plt.plot(mode_out)
 
 
 
@@ -194,7 +167,7 @@ plt.plot(mode_out)
 from AO_modules.tools.displayTools import displayPyramidSignals
 
 
-displayPyramidSignals(wfs, ao_calib.calib.D[:,0])
+displayPyramidSignals(wfs, ao_calib.calib.D[:,:9])
 
 
 #%% to manually measure the interaction matrix
@@ -309,7 +282,7 @@ wfsSignal               = np.arange(0,wfs.nSignal)*0
 # loop parameters
 gainCL                  = 0.6
 wfs.cam.photonNoise     = True
-display                 = False
+display                 = True
 
 for i in range(param['nLoop']):
     a=time.time()

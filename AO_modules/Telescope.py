@@ -121,11 +121,11 @@ class Telescope:
             # number of pixel considered 
             N       = zeroPaddingFactor * self.resolution            
             center = N//2           
-            norma   = (self.src.fluxMap.sum())
+            norma   = N
             
             # zeroPadded support for the FFT
             supportPadded = np.zeros([N,N],dtype='complex')
-            supportPadded [center-self.resolution//2:center+self.resolution//2,center-self.resolution//2:center+self.resolution//2] = self.pupil*self.pupilReflectivity*np.exp(1j*self.src.phase)
+            supportPadded [center-self.resolution//2:center+self.resolution//2,center-self.resolution//2:center+self.resolution//2] = self.pupil*self.pupilReflectivity*np.sqrt(self.src.fluxMap)*np.exp(1j*self.src.phase)
             # phasor to center the FFT on the 4 central pixels
             [xx,yy]                         = np.meshgrid(np.linspace(0,N-1,N),np.linspace(0,N-1,N))
             self.phasor                     = np.exp(-(1j*np.pi*(N+1)/N)*(xx+yy))
@@ -139,9 +139,9 @@ class Telescope:
             self.yPSF_rad   = [-(np.fix(N/2))*(self.src.wavelength/self.D) * (self.resolution/N),(np.fix(N/2))*(self.src.wavelength/self.D) * (self.resolution/N)]
             
             # PSF computation
-            self.PSF        = (np.abs(np.fft.fft2(supportPadded*self.phasor))**2)
+            self.PSF        = (np.abs(np.fft.fft2(supportPadded*self.phasor)/norma)**2)
             # PSF normalization
-            self.PSF  = self.PSF * (norma/self.PSF.sum())
+            # self.PSF  = self.PSF
             
             # zoom on the core of the PSF 
             self.indPSF     = [self.resolution*zeroPaddingFactor//2-self.resolution//2-1,self.resolution*zeroPaddingFactor//2+self.resolution//2-1]
