@@ -52,25 +52,35 @@ def computeMetaSensitivityMatrix(nameFolder,nameSystem,tel,atm,ngs,dm_0,pitch,wf
     _ calib_0                   : interaction matrix corresponding to misRegistrationZeroPoint stored as a calibration object.
 
 """
-def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pitch, wfs, basis, misRegistrationZeroPoint, epsilonMisRegistration, param, wfs_mis_registrated = None):
+def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pitch, wfs, basis, misRegistrationZeroPoint, epsilonMisRegistration, param, wfs_mis_registrated = None, extra_dm_mis_registration = None):
     #%% --------------------  CREATION OF THE DESTINATION FOLDER --------------------
     homeFolder = misRegistrationZeroPoint.misRegName+'/'
-    intMat_name = 'interactionMatrix'
+    intMat_name = 'IM'
+    if extra_dm_mis_registration is None:
+        print('No extra mis-registration added to the dm')
+        extra_misReg_name = ''
+    else:
+        print('Warning, an extra mis-registration is added to the dm')
+        extra_misReg_name = '_extra_dm_rot_'   + str('%.2f' %extra_dm_mis_registration.rotationAngle)            +'_deg_'\
+                            'sX_'             + str('%.2f' %(extra_dm_mis_registration.shiftX))                 +'_m_'\
+                            'sY_'             + str('%.2f' %(extra_dm_mis_registration.shiftY))                 +'_m_'
+
+        
     if basis.modes.shape == np.shape(np.eye(dm_0.nValidAct)):
         
         comparison = basis.modes == np.eye(dm_0.nValidAct)
         if comparison.all():
             foldername  = nameFolder+nameSystem+homeFolder+'zonal/'
-            extraName   = '' 
+            extraName   = ''+extra_misReg_name 
             createFolder(foldername)
 
         else:
             foldername  = nameFolder+nameSystem+homeFolder+'modal/'
-            extraName   = '_'+str(basis.indexModes[0])+'-'+str(basis.indexModes[-1])+'_'+basis.extra
+            extraName   = '_'+str(basis.indexModes[0])+'-'+str(basis.indexModes[-1])+'_'+basis.extra+extra_misReg_name
             createFolder(foldername)
     else:
         foldername  = nameFolder+nameSystem+homeFolder+'modal/'
-        extraName   = '_'+str(basis.indexModes[0])+'-'+str(basis.indexModes[-1])+'_'+basis.extra    
+        extraName   = '_'+str(basis.indexModes[0])+'-'+str(basis.indexModes[-1])+'_'+basis.extra+extra_misReg_name    
         createFolder(foldername)
     
 
@@ -119,7 +129,7 @@ def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pi
             setattr(misRegistration_tmp,epsilonMisRegistration_field[i],getattr(misRegistration_tmp,epsilonMisRegistration_field[i]) + getattr(epsilonMisRegistration,epsilonMisRegistration_field[i]))
             
             # compute new deformable mirror
-            dm_tmp      = applyMisRegistration(tel,misRegistration_tmp,param, wfs = wfs_mis_registrated)
+            dm_tmp      = applyMisRegistration(tel,misRegistration_tmp,param, wfs = wfs_mis_registrated, extra_dm_mis_registration = extra_dm_mis_registration)
             # compute the interaction matrix for the positive mis-registration
             calib_tmp_p = interactionMatrix(ngs, atm, tel, dm_tmp, wfs, basis.modes, stroke, phaseOffset=0, nMeasurements=50)
             # save output in fits file
@@ -140,7 +150,7 @@ def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pi
             misRegistration_tmp = MisRegistration(misRegistrationZeroPoint)
             setattr(misRegistration_tmp,epsilonMisRegistration_field[i], getattr(misRegistration_tmp,epsilonMisRegistration_field[i]) - getattr(epsilonMisRegistration,epsilonMisRegistration_field[i]))
             # compute new deformable mirror
-            dm_tmp = applyMisRegistration(tel,misRegistration_tmp,param, wfs = wfs_mis_registrated)
+            dm_tmp = applyMisRegistration(tel,misRegistration_tmp,param, wfs = wfs_mis_registrated,extra_dm_mis_registration = extra_dm_mis_registration)
             # compute the interaction matrix for the negative mis-registration
             calib_tmp_n = interactionMatrix(ngs, atm, tel, dm_tmp, wfs, basis.modes, stroke, phaseOffset=0, nMeasurements=50)
             # save output in fits file

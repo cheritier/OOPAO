@@ -62,7 +62,7 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
     
     
 """
-def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, basis, calib_in, misRegistrationZeroPoint, epsilonMisRegistration, param, precision = 3, gainEstimation = 1, sensitivity_matrices = None, return_all = False, fast = False,nIteration = 3, wfs_mis_registrated = None):
+def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, basis, calib_in, misRegistrationZeroPoint, epsilonMisRegistration, param, precision = 3, gainEstimation = 1, sensitivity_matrices = None, return_all = False, fast = False,nIteration = 3, wfs_mis_registrated = None, extra_dm_mis_registration=None):
     
     #%%  ---------- LOAD/COMPUTE SENSITIVITY MATRICES --------------------
     # compute the sensitivity matrices. if the data already exits, the files will be loaded
@@ -83,7 +83,8 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
                                          misRegistrationZeroPoint   = misRegistrationZeroPoint,\
                                          epsilonMisRegistration     = epsilonMisRegistration,\
                                          param                      = param,\
-                                         wfs_mis_registrated        = wfs_mis_registrated)
+                                         wfs_mis_registrated        = wfs_mis_registrated,\
+                                         extra_dm_mis_registration = extra_dm_mis_registration)
     else:
         metaMatrix = sensitivity_matrices
         
@@ -128,7 +129,7 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
             
         
             # temporary interaction matrix
-            calib_tmp =  interactionMatrixFromPhaseScreen(ngs,atm,tel,wfs,input_modes_cp,stroke,phaseOffset=0,nMeasurements=50)
+            calib_tmp =  interactionMatrixFromPhaseScreen(ngs,atm,tel,wfs,input_modes_cp,stroke,phaseOffset=0,nMeasurements=50,invert = False)
             # temporary scaling factor    
             scalingFactor_tmp   = np.round(np.diag(calib_tmp.D.T@calib_in.D)/ np.diag(calib_tmp.D.T@calib_tmp.D),precision)
             
@@ -139,9 +140,9 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
             misRegEstBuffer+= np.round(misReg_tmp,precision)
             
             # define the next working point to adjust the scaling factor
-            misRegistration_out.rotationAngle   += np.round(misReg_tmp[0],precision)
-            misRegistration_out.shiftX          += np.round(misReg_tmp[1],precision)
-            misRegistration_out.shiftY          += np.round(misReg_tmp[2],precision)
+            misRegistration_out.rotationAngle        += np.round(misReg_tmp[0],precision)
+            misRegistration_out.shiftX               += np.round(misReg_tmp[1],precision)
+            misRegistration_out.shiftY               += np.round(misReg_tmp[2],precision)
             misRegistration_out.tangentialScaling    += np.round(misReg_tmp[3],precision)
             misRegistration_out.radialScaling        += np.round(misReg_tmp[4],precision)           # save the data for each iteration
 
@@ -161,10 +162,10 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
         while criteria ==0:
             i=i+1
             # temporary deformable mirror
-            dm_tmp = applyMisRegistration(tel,misRegistration_out,param, wfs = wfs_mis_registrated)
+            dm_tmp = applyMisRegistration(tel,misRegistration_out,param, wfs = wfs_mis_registrated, extra_dm_mis_registration = extra_dm_mis_registration)
         
             # temporary interaction matrix
-            calib_tmp =  interactionMatrix(ngs,atm,tel,dm_tmp,wfs,basis.modes,stroke,phaseOffset=0,nMeasurements=50)
+            calib_tmp =  interactionMatrix(ngs,atm,tel,dm_tmp,wfs,basis.modes,stroke,phaseOffset=0,nMeasurements=50, invert = False)
             # erase dm_tmp to free memory
             del dm_tmp
             # temporary scaling factor    
@@ -172,7 +173,7 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
             
             # temporary mis-registration
             misReg_tmp          = gainEstimation*np.matmul(metaMatrix.M,np.reshape( calib_in.D@np.diag(1/scalingFactor_tmp) - calib_tmp.D ,calib_in.D.shape[0]*calib_in.D.shape[1]))
-            
+
             # cumulative mis-registration
             misRegEstBuffer+= np.round(misReg_tmp,precision)
             

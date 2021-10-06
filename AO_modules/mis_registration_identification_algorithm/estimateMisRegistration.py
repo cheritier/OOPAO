@@ -87,7 +87,7 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
     scalingFactor_values    = []
     misRegistration_values  = []
     i=0
-    tel-atm
+    tel.isPaired = False
     misRegistration_out = MisRegistration(misRegistrationZeroPoint)
     
     if fast:
