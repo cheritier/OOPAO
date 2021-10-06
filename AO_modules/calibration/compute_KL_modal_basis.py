@@ -230,11 +230,16 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param, nameFolder = Non
 
     if computeKL == True:
         check=1
-        nmoKL = nmo #SB.shape[1]
+        if nmo>SB.shape[1]:
+            print('WARNING: Number of modes requested too high, taking the maximum value possible!')
+            nmoKL = SB.shape[1]
+        else:
+            nmoKL = nmo
         KL=aou.build_KLBasis(HHt,SB,DELTA,nmoKL,check)
         #pdb.set_trace()
         DELTA_KL = KL.T @ DELTA @ KL
         print('Orthonormality error for '+str(nmoKL)+' modes of the KL Basis = ',np.max(np.abs(DELTA_KL[0:nmoKL,0:nmoKL]/tpup-np.eye(nmoKL))))
+        
 
         BASIS=np.asmatrix(np.zeros([nact,nspm+nmoKL],dtype=np.float64))
         BASIS[:,0:nspm] = SpM

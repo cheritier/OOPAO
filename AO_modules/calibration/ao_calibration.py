@@ -13,7 +13,7 @@ from AO_modules.tools.tools import emptyClass,createFolder, read_fits
 
 
 
-def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = None, nameFolderBasis = None, nameBasis = None, nMeasurements=50, index_modes = None):
+def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = None, nameFolderBasis = None, nameBasis = None, nMeasurements=50, index_modes = None, get_basis = True):
     
     # check if the name of the basis is specified otherwise take the nominal name
     if nameBasis is None:
@@ -45,11 +45,12 @@ def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = Non
         else:
             M2C = M2C[:,index_modes]
                     
-        ao_obj.dm.coefs = M2C
-        ao_obj.tel*ao_obj.dm
-    
-        basis = np.reshape(ao_obj.tel.OPD,[ao_obj.tel.resolution**2,M2C.shape[1]])
-        ao_calib_object.basis = basis
+        if get_basis:
+            ao_obj.dm.coefs = M2C
+            ao_obj.tel*ao_obj.dm
+        
+            basis = np.reshape(ao_obj.tel.OPD,[ao_obj.tel.resolution**2,M2C.shape[1]])
+            ao_calib_object.basis = basis
         
         if ao_obj.param['getProjector']:
             
@@ -87,12 +88,14 @@ def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = Non
     
     try:
         print('Loading Interaction matrix '+nameIntMat+'...')
-        hdu_imat=pfits.open(nameFolderIntMat+nameIntMat+'.fits')
-        calib = calibrationVault(hdu_imat[1].data@M2C)    
+        imat = read_fits(nameFolderIntMat+nameIntMat+'.fits')
+        calib = calibrationVault(imat@M2C)    
         print('Done!')
 
         
     except:  
+        print('ERROR! Computingh the zonal interaction matrix')
+
         M2C_zon = np.eye(ao_obj.dm.nValidAct)
 
         stroke =1e-9 # 1 nm amplitude
@@ -101,7 +104,9 @@ def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = Non
         hdr=pfits.Header()
         hdr['TITLE'] = 'INTERACTION MATRIX'
         empty_primary = pfits.PrimaryHDU(header=hdr)
+        # primary_hdu = pfits.ImageHDU(calib.D.astype(np.float32))
         primary_hdu = pfits.ImageHDU(calib.D)
+
         hdu = pfits.HDUList([empty_primary, primary_hdu])
         hdu.writeto(nameFolderIntMat + nameIntMat + '.fits', overwrite=True)
 
@@ -115,8 +120,8 @@ def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = Non
         nameModalGains = 'modal_gains'+nameExtra    
     
     try:
-        hdu_modalGains  = pfits.open(nameFolderIntMat+ nameModalGains+'.fits')
-        data_gains      = hdu_modalGains[1].data
+        data_gains  = read_fits(nameFolderIntMat+ nameModalGains+'.fits')
+
         print('Using Modal Gains loaded from '+str(nameFolderIntMat+ nameModalGains+'.fits'))
 
     except:
@@ -138,7 +143,7 @@ def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = Non
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
 
-def ao_calibration(ngs, tel, atm, dm, wfs, param, nameFolderIntMat = None, nameIntMat = None, nameFolderBasis = None, nameBasis = None, nMeasurements=50, index_modes = None):
+def ao_calibration(ngs, tel, atm, dm, wfs, param, nameFolderIntMat = None, nameIntMat = None, nameFolderBasis = None, nameBasis = None, nMeasurements=50, index_modes = None, get_basis = True):
     
     # check if the name of the basis is specified otherwise take the nominal name
     if nameBasis is None:
@@ -171,12 +176,13 @@ def ao_calibration(ngs, tel, atm, dm, wfs, param, nameFolderIntMat = None, nameI
             M2C = M2C[:,:param['nModes']]
         else:
             M2C = M2C[:,index_modes]
-        
-        dm.coefs = M2C
-        tel*dm
+            
+        if get_basis or param['getProjector']:
+            dm.coefs = M2C
+            tel*dm
     
-        basis = np.reshape(tel.OPD,[tel.resolution**2,M2C.shape[1]])
-        ao_calib_object.basis       = basis
+            basis = np.reshape(tel.OPD,[tel.resolution**2,M2C.shape[1]])
+            ao_calib_object.basis       = basis
 
         if param['getProjector']:
             print('Computing the pseudo-inverse of the modal basis...')
@@ -208,8 +214,8 @@ def ao_calibration(ngs, tel, atm, dm, wfs, param, nameFolderIntMat = None, nameI
             nameIntMat = 'zonal_interaction_matrix_'+str(param['resolution'])+'_res_'+str(param['modulation'])+'_mod_'+str(param['postProcessing'])+'_psfCentering_'+str(param['psfCentering'])
     try:
         print('Loading Interaction matrix '+nameIntMat+'...')
-        hdu_imat=pfits.open(nameFolderIntMat+nameIntMat+'.fits')
-        calib = calibrationVault(hdu_imat[1].data@M2C)    
+        imat = read_fits(nameFolderIntMat+nameIntMat+'.fits')
+        calib = calibrationVault(imat@M2C)      
         print('Done!')
 
         
@@ -221,6 +227,7 @@ def ao_calibration(ngs, tel, atm, dm, wfs, param, nameFolderIntMat = None, nameI
         hdr=pfits.Header()
         hdr['TITLE'] = 'INTERACTION MATRIX'
         empty_primary = pfits.PrimaryHDU(header=hdr)
+        # primary_hdu = pfits.ImageHDU(calib.D.astype(np.float32))
         primary_hdu = pfits.ImageHDU(calib.D)
         hdu = pfits.HDUList([empty_primary, primary_hdu])
         hdu.writeto(nameFolderIntMat+nameIntMat+'.fits',overwrite=True)
@@ -236,8 +243,8 @@ def ao_calibration(ngs, tel, atm, dm, wfs, param, nameFolderIntMat = None, nameI
         nameModalGains = 'modal_gains'+nameExtra    
     
     try:
-        hdu_modalGains  = pfits.open(nameFolderIntMat+ nameModalGains+'.fits')
-        data_gains      = hdu_modalGains[1].data
+        data_gains  = read_fits(nameFolderIntMat+ nameModalGains+'.fits')
+
         print('Using Modal Gains loaded from '+str(nameFolderIntMat+ nameModalGains+'.fits'))
 
     except:
@@ -267,10 +274,9 @@ def get_modal_gains_from_ao_obj(ao_obj, nameFolderIntMat = None):
         nameModalGains = 'modal_gains'+ao_obj.param['extra']+nameExtra
     except:
         nameModalGains = 'modal_gains'+nameExtra    
-    
+    print('Looking for Modal Gains loaded from '+str(nameFolderIntMat+ nameModalGains+'.fits'))
     try:
-        hdu_modalGains  = pfits.open(nameFolderIntMat+ nameModalGains+'.fits')
-        data_gains      = hdu_modalGains[1].data
+        data_gains  = read_fits(nameFolderIntMat+ nameModalGains+'.fits')
         print('Using Modal Gains loaded from '+str(nameFolderIntMat+ nameModalGains+'.fits'))
 
     except:
@@ -304,8 +310,7 @@ def get_modal_gains(ngs, tel, atm, dm, wfs, param, nameFolderIntMat = None):
         nameModalGains = 'modal_gains'+nameExtra    
     
     try:
-        hdu_modalGains  = pfits.open(nameFolderIntMat+ nameModalGains+'.fits')
-        data_gains      = hdu_modalGains[1].data
+        data_gains  = read_fits(nameFolderIntMat+ nameModalGains+'.fits')
         print('Using Modal Gains loaded from '+str(nameFolderIntMat+ nameModalGains+'.fits'))
 
     except:

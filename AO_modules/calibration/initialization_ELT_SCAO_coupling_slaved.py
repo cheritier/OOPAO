@@ -92,6 +92,57 @@ def run_initialization_ELT_SCAO(param):
                           nSubap       = param['nSubaperture'],\
                           misReg       = misReg,\
                           M4_param     = param)
+        
+        
+        
+    from joblib import Parallel, delayed    
+    import numpy as np
+  
+    def get_distance(x1,x2,y1,y2):
+        r = np.sqrt((x1-x2)**2 + (y1-y2)**2)
+        return r 
+    
+    def joblib_distance():
+        Q=Parallel(n_jobs=8,prefer='threads')(delayed(get_distance)(i,j,k,l) for i,j,k,l in zip(coord_x_1,coord_x_2,coord_y_1,coord_y_2))
+        return Q 
+    
+    from AO_modules.M4_model.get_M4_coordinates                 import get_M4_coordinates
+    coord, coord_m = get_M4_coordinates(M1_pupil,param['m4_filename'],nAct =param['nActuator'])
+
+    dist = np.zeros([892,892])
+    c = np.zeros([892,2])
+    c[:,0] = np.flip(coord_m[:892,0])
+    c[:,1] = np.flip(coord_m[:892,1])
+    
+    for i_act in range(892):
+        coord_x_1       = c[:892,0] 
+        coord_x_2       = np.tile(c[i_act,0],892)
+        coord_y_1       = c[:892,1] 
+        coord_y_2       = np.tile(c[i_act,1],892)
+        dist[i_act,:]   = np.asarray(joblib_distance())
+    
+    dist[dist>0.8] =0
+    
+    index_coupling = []
+    for i in range(892):
+        index_coupling.append(np.where(dist[i,:] >0.1))
+        
+        
+        
+    dm_modes = np.copy(dm.modes)
+    
+    for i_petal in range(6):
+        for i in range(892):
+            print(i+892*i_petal)
+            vect = index_coupling[i][0]
+            for j in range(len(vect)):
+                print('Coupling with actuator'+str(vect[j]+892*i_petal))
+                dm_modes[:,i+892*i_petal]+=param['mechanicalCoupling']*dm.modes[:,i_petal*892+vect[j]]
+            
+          
+    dm.modes = dm_modes
+            
+            
     try:
         petals,petals_float = getPetalModes(tel,dm,[1,2,3,4,5,6])
     except:

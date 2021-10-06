@@ -64,7 +64,8 @@ def run_initialization_ELT_SCAO(param):
                    windSpeed     = param['windSpeed'],\
                    fractionalR0  = param['fractionnalR0'],\
                    windDirection = param['windDirection'],\
-                   altitude      = param['altitude'])
+                   altitude      = param['altitude'],\
+                   param         = param)
     
     # initialize atmosphere
     atm.initializeAtmosphere(tel)
@@ -89,7 +90,7 @@ def run_initialization_ELT_SCAO(param):
     except:
         petals,petals_float = getPetalModes(tel,dm,[1])
     tel.index_pixel_petals = petals
-    tel.isPetalFree =True
+    tel.isPetalFree =False
 
     
     #%% -----------------------     PYRAMID WFS   ----------------------------------

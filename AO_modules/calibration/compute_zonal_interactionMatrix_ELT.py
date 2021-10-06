@@ -48,7 +48,7 @@ def computeZonalInteractionMatrix_from_ao_obj(ao_obj, nameFolder = None, nameFil
     hdr             = pfits.Header()
     hdr['TITLE']    = 'zonal_interaction_matrix'
     empty_primary   = pfits.PrimaryHDU(header=hdr)
-    primary_hdu     = pfits.ImageHDU(calib.D)
+    primary_hdu     = pfits.ImageHDU(calib.D.astype(np.float32))
     hdu             = pfits.HDUList([empty_primary, primary_hdu])
     # save output
     hdu.writeto(nameFolder+nameFile+'.fits',overwrite=True)
@@ -95,6 +95,7 @@ def computeZonalInteractionMatrix(ngs, atm, tel, dm, wfs,param, nameFolder = Non
     hdr['TITLE']    = 'zonal_interaction_matrix'
     empty_primary   = pfits.PrimaryHDU(header=hdr)
     primary_hdu     = pfits.ImageHDU(calib.D)
+    # primary_hdu     = pfits.ImageHDU(calib.D.astype(np.float32))
     hdu             = pfits.HDUList([empty_primary, primary_hdu])
     # save output
     hdu.writeto(nameFolder+nameFile+'.fits',overwrite=True)

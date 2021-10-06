@@ -63,8 +63,8 @@ def run_initialization_ELT_SCAO(param):
                    windSpeed     = param['windSpeed'],\
                    fractionalR0  = param['fractionnalR0'],\
                    windDirection = param['windDirection'],\
-                   altitude      = param['altitude'])
-    
+                   altitude      = param['altitude'],\
+                   param         = param)
     # initialize atmosphere
     atm.initializeAtmosphere(tel)
     

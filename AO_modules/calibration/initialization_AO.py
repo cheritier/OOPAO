@@ -44,7 +44,8 @@ def run_initialization_basic_AO(param):
                    windSpeed     = param['windSpeed'],\
                    fractionalR0  = param['fractionnalR0'],\
                    windDirection = param['windDirection'],\
-                   altitude      = param['altitude'])
+                   altitude      = param['altitude'],\
+                   param         = param)
     
     # initialize atmosphere
     atm.initializeAtmosphere(tel)
@@ -87,7 +88,7 @@ def run_initialization_basic_AO(param):
                   postProcessing        = param['postProcessing'],\
                   zeroPadding           = param['zeroPadding'])
     
-    set_paralleling_setup(wfs)
+    set_paralleling_setup(wfs, ELT = False)
     # propagate the light through the WFS
     tel*wfs
 
