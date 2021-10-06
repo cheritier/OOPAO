@@ -3,7 +3,7 @@ Object Oriented Python Adaptive Optics (OOPAO) is a project under development to
 
 The project was initially intended for personal use, i tried to make it user-friendly so it can benefit to other users. 
 
-# LICENCE
+# LICENSE
 This project is licensed under the terms of the MIT license.
 
 # MODULES REQUIRED
