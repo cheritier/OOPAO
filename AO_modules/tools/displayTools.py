@@ -8,6 +8,9 @@ Created on Mon Mar 16 18:33:20 2020
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from AO_modules.tools.tools import  emptyClass
+import matplotlib.gridspec as gridspec
+import matplotlib as mpl
 
 def update_line(hl, new_dataX,new_dataY):
     
@@ -77,6 +80,10 @@ def makeSquareAxes(ax):
     """
     ax.set_aspect(1 / ax.get_data_ratio())
 
+
+def getColorOrder():
+    color = (plt.rcParams['axes.prop_cycle'].by_key()['color'])
+    return color
             
         
 def displayPyramidSignals(wfs,signals,returnOutput=False, norma = False):
@@ -109,7 +116,7 @@ def displayPyramidSignals(wfs,signals,returnOutput=False, norma = False):
         
 
 
-def interactive_plot(x,y,im_array, event_name ='button_press_event', n_fig = None):   
+def interactive_plot(x,y,im_array, im_array_ref, event_name ='button_press_event', n_fig = None):   
     # create figure and plot scatter
     if n_fig is None:
         fig = plt.figure()
@@ -119,10 +126,11 @@ def interactive_plot(x,y,im_array, event_name ='button_press_event', n_fig = Non
         fig = plt.figure(n_fig)        
         ax = plt.subplot(111)
 
-    line, = ax.plot(x,y, ls="", marker="o", markersize = 10)
+    line, = ax.plot(x,y, ls="",color = 'k', marker="o", markersize = 10)
     
     # create the annotations box
     im = OffsetImage(im_array[0,:,:], zoom=2)
+
     xybox=(100., 100.)
     ab = AnnotationBbox(im, (0,0), xybox=xybox, xycoords='data',
             boxcoords="offset points",  pad=0.3,  arrowprops=dict(arrowstyle="->"))
@@ -147,8 +155,10 @@ def interactive_plot(x,y,im_array, event_name ='button_press_event', n_fig = Non
             # place it at the position of the hovered scatter point
             ab.xy =(x[ind], y[ind])
             # set the image corresponding to that point
-            im.set_data(im_array[ind,:,:])
-
+            if event.button == 1:
+                im.set_data(im_array[ind,:,:])
+            if event.button == 3:
+                im.set_data(im_array_ref[ind,:,:])
         else:
             #if the mouse is not over a scatter point
             ab.set_visible(False)
@@ -200,6 +210,136 @@ def interactive_plot_text(x,y,text_array, event_name ='button_press_event'):
     plt.show()
     
 
+#%%
+
+
+def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20, list_ratio = None, list_title = None):
     
+    n_im = len(list_fig)
+    n_sp = int(np.ceil(np.sqrt(n_im)))
+    n_add = 0
+    if (n_sp**2-n_im)<2:
+        n_add = 1
+    n_sp_y = n_sp + n_add
+    
+    if plt_obj is None:
+        if list_ratio is None:
+            gs = gridspec.GridSpec(n_sp_y,n_sp, height_ratios=np.ones(n_sp_y), width_ratios=np.ones(n_sp), hspace=0.25, wspace=0.25)
+        else:
+            gs = gridspec.GridSpec(n_sp_y,n_sp, height_ratios=list_ratio[0], width_ratios=list_ratio[1], hspace=0.25, wspace=0.25)
+        
+        plt_obj = emptyClass()
+        setattr(plt_obj,'gs',gs)
+        plt_obj.keep_going = True
+        f = plt.figure(fig_number)
+        
+        line_comm = ['Stop','Pause','Continue']
+        col_comm = ['r','b','b']
+        
+        for i in range(2):
+            
+            setattr(plt_obj,'ax_0_'+str(i+1), plt.subplot(gs[n_sp_y-1,n_sp-2+i]))
+            
+            sp_tmp =getattr(plt_obj,'ax_0_'+str(i+1)) 
+            
+            annot = sp_tmp.annotate(line_comm[i],color ='k', fontsize=25, xy=(0.5,0.5), xytext=(0.5,0.5),bbox=dict(boxstyle="round", fc=col_comm[i]))
+            setattr(plt_obj,'annot_'+str(i+1), annot)
+        
+            plt.axis('off')
+        
+
+        count = 0
+        for i in range(n_sp):
+            for j in range(n_sp):
+                if count < n_im:
+                    print(count)
+                    setattr(plt_obj,'ax_'+str(count), plt.subplot(gs[i,j]))
+                    sp_tmp =getattr(plt_obj,'ax_'+str(count))            
+
+                    setattr(plt_obj,'type_fig_'+str(count),type_fig[count])
+           # IMSHOW
+                    if type_fig[count] == 'imshow':
+                        data_tmp = list_fig[count]
+                        if len(data_tmp)==3:
+                            setattr(plt_obj,'im_'+str(count),sp_tmp.imshow(data_tmp[2],extent = [data_tmp[0][0],data_tmp[0][1],data_tmp[1][0],data_tmp[1][1]]))        
+                        else:
+                            setattr(plt_obj,'im_'+str(count),sp_tmp.imshow(data_tmp))        
+                            
+
+                        im_tmp =getattr(plt_obj,'im_'+str(count))
+                        plt.colorbar(im_tmp)
+           # PLOT     
+                    if type_fig[count] == 'plot':
+                        data_tmp = list_fig[count]
+                        if len(data_tmp)==2:
+                            line_tmp, = sp_tmp.plot(data_tmp[0],data_tmp[1],'-x')
+                        else:
+                            line_tmp, = sp_tmp.plot(data_tmp,'-o')                                
+                        setattr(plt_obj,'im_'+str(count),line_tmp)        
+           # SCATTER
+                    if type_fig[count] == 'scatter':
+                        data_tmp = list_fig[count]
+                        
+                        scatter_tmp = sp_tmp.scatter(data_tmp[0],data_tmp[1],c=data_tmp[2],marker = 'h', s =16)
+                        setattr(plt_obj,'im_'+str(count),scatter_tmp)  
+                        makeSquareAxes(plt.gca())
+                        plt.colorbar(scatter_tmp)
+                        plt.axis('off')
+                    if list_title is not None:
+                        plt.title(list_title[count])
+
+                count+=1
+                
+        def hover(event):
+            if event.inaxes == plt_obj.ax_0_1:
+                cont, ind = f.contains(event)        
+                if cont:
+                    plt_obj.keep_going = False
+                    plt_obj.annot_1.set_fontweight('bold')
+                    plt_obj.annot_1.set_text('Stopped')
+          
+                        
+            if event.inaxes == plt_obj.ax_0_2:
+                cont, ind = f.contains(event)        
+                if cont:
+                    plt_obj.annot_2.set_text('Pause')
+                    plt_obj.annot_2.set_backgroundcolor('g')
+                    plt_obj.annot_2.set_fontweight('bold')
+                    plt.waitforbuttonpress()
+        f.canvas.mpl_connect('button_press_event', hover)   
+        return plt_obj
+    if plt_obj is not None:
+        count = 0
+        for i in range(n_sp):
+            for j in range(n_sp):
+                if count < n_im:
+                    data = list_fig[count]
+                    if getattr(plt_obj,'type_fig_'+str(count)) == 'imshow':
+                        im_tmp =getattr(plt_obj,'im_'+str(count))
+                        im_tmp.set_data(data)
+                        im_tmp.set_clim(vmin=data.min(),vmax=data.max())
+                    if getattr(plt_obj,'type_fig_'+str(count)) == 'plot':
+                        if len(data)==2:
+                            im_tmp =getattr(plt_obj,'im_'+str(count))
+                            im_tmp.set_xdata(data[0])
+                            im_tmp.set_ydata(data[1])
+                            im_tmp.axes.set_ylim([np.min(data[1])-0.1*np.abs(np.min(data[1])),np.max(data[1])+0.1*np.abs(np.max(data[1]))])
+                            im_tmp.axes.set_xlim([np.min(data[0])-0.1*np.abs(np.min(data[0])),np.max(data[0])+0.1*np.abs(np.max(data[0]))])
+
+                        else:
+                            im_tmp =getattr(plt_obj,'im_'+str(count))
+                            im_tmp.set_ydata(data[0])
+                            im_tmp.axes.set_ylim([np.min(data[0])-0.1*np.abs(np.min(data[0])),np.max(data[0])+0.1*np.abs(np.max(data[0]))])
+                                                
+                    if getattr(plt_obj,'type_fig_'+str(count)) == 'scatter':
+                        n = mpl.colors.Normalize(vmin = min(data), vmax = max(data))
+                        m = mpl.cm.ScalarMappable(norm=n, cmap=mpl.cm.afmhot)
+
+                        im_tmp =getattr(plt_obj,'im_'+str(count))
+                        im_tmp.set_facecolor(m.to_rgba(data))
+                        im_tmp.set_clim(vmin=min(data), vmax=max(data))
+                    plt.draw()
+    
+                count+=1
     
     

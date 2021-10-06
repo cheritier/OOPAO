@@ -9,7 +9,8 @@ import numpy as np
 import os 
 import skimage.transform as sk
 from astropy.io import fits as pfits
-
+import json
+import jsonpickle
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% USEFUL FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 def createFolder(path):
     
@@ -70,6 +71,14 @@ def reshape_3D(A,axis = 1 ):
     return out        
 
 
+def read_json(filename):
+    with open(filename ) as f:
+        C = json.load(f)
+    
+    data = jsonpickle.decode(C) 
+
+    return data
+
 def read_fits(filename , dim = 0):
     hdu  = pfits.open(filename)
     if dim == 0:
@@ -114,4 +123,14 @@ def findNextPowerOf2(n):
     # return next power of 2
     return n << 1
       
-    
+def centroid(im, threshold = 0):
+    im[im<threshold]=0
+    x = 0
+    y = 0
+    s = im.sum()
+    for i in range(im.shape[0]):
+        for j in range(im.shape[1]):
+            x+=im[i,j]*j/s
+            y+=im[j,i]*j/s
+            
+    return x,y    
