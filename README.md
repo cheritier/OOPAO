@@ -1,14 +1,12 @@
 # OOPAO
-Object Oriented Python Adaptive Optics
-
-OOPAO is a project under development to propose a python-based tool to perform end-to-end AO simulations. 
+Object Oriented Python Adaptive Optics (OOPAO) is a project under development to propose a python-based tool to perform end-to-end AO simulations. 
 
 The project was initially intended for personal use, i tried to make it user-friendly so it can benefit to other users. 
 
+# LICENCE
 This project is licensed under the terms of the MIT license.
 
-# Modules required
-
+# MODULES REQUIRED
 The code is written for Python 3 and requires the following modules
 
     numba => required in aotools
@@ -16,3 +14,6 @@ The code is written for Python 3 and requires the following modules
     scikit-image => 2D interpolations
     numexpr => memory optimized simple operations
     astropy => handling of fits files
+    
+# CONTRIBUTORS
+C.T. Heritier
