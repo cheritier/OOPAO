@@ -102,6 +102,7 @@ class Telescope:
         self.pupilLogical                = np.where(np.reshape(self.pupil,resolution*resolution)>0)     # index of valid pixels in the pupil
         self.src                         = Source(optBand = 'V', magnitude = 0)                                                # temporary source object associated to the telescope object
         self.OPD                         = self.pupil.astype(float)                                     # set the initial OPD
+        self.em_field                    = self.pupilReflectivity*np.exp(1j*self.src.phase)
         self.tag                         = 'telescope'                                                  # tag of the object
         self.isPaired                    = False                                                        # indicate if telescope object is paired with an atmosphere object
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TELESCOPE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
@@ -188,6 +189,10 @@ class Telescope:
     def OPD(self,val):
         self._OPD = val
         self.src.phase = self._OPD*2*np.pi/self.src.wavelength
+        if np.ndim(self.src.phase)==2: 
+            self.em_field  = self.pupilReflectivity*np.exp(1j*self.src.phase)
+        else:
+            self.em_field  = np.tile(self.pupilReflectivity[...,None],(1,1,self.src.phase.shape[2]))*np.exp(1j*self.src.phase)
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TELESCOPE INTERACTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def __mul__(self,obj): 
@@ -200,11 +205,14 @@ class Telescope:
         if obj.tag=='detector':
             self.computePSF()
             obj.frame = obj.rebin(self.PSF,(obj.resolution,obj.resolution))
+            
+        if obj.tag=='spatialFilter':
+            self.computePSF()
+            obj.frame = obj.rebin(self.PSF,(obj.resolution,obj.resolution))
         
         # interaction with deformable mirror object: update of the of the phase screen
         if obj.tag=='deformableMirror':
             # local variable to use the numexpr module
-
             
             # case where the telescope is paired to an atmosphere
             if self.isPaired:
@@ -267,6 +275,28 @@ class Telescope:
             print('ERROR : the indexes of the petals have not been properly set yet!')
             return self.OPD
             
+    def pad(self,resolution_padded):
+        if np.ndim(self.OPD) == 2:
+            em_field_padded = np.zeros([resolution_padded,resolution_padded],dtype = complex)
+            OPD_padded = np.zeros([resolution_padded,resolution_padded],dtype = float)
+
+            center = resolution_padded//2
+            
+            em_field_padded[center-self.resolution//2:center+self.resolution//2,center-self.resolution//2:center+self.resolution//2] =  self.em_field
+            OPD_padded[center-self.resolution//2:center+self.resolution//2,center-self.resolution//2:center+self.resolution//2]      =  self.OPD
+        else:
+            em_field_padded = np.zeros([resolution_padded,resolution_padded, self.OPD.shape[2]],dtype = complex)
+            OPD_padded = np.zeros([resolution_padded,resolution_padded,self.OPD.shape[2]],dtype = float)
+
+            center = resolution_padded//2
+            
+            em_field_padded[center-self.resolution//2:center+self.resolution//2,center-self.resolution//2:center+self.resolution//2,:] =  self.em_field
+            OPD_padded[center-self.resolution//2:center+self.resolution//2,center-self.resolution//2:center+self.resolution//2,:]      =  self.OPD
+        
+        
+        return OPD_padded, em_field_padded
+        
+        
     
     def getPetalOPD(self,petalIndex,image = None):
         if image is None:
