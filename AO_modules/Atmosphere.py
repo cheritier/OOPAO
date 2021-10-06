@@ -7,18 +7,20 @@ Created on Fri Aug 14 10:59:02 2020
 import inspect
 import numpy             as np
 from AO_modules.phaseStats import makeCovarianceMatrix,ft_phase_screen
-from AO_modules.tools.tools import emptyClass,translationImageMatrix,globalTransformation
+from AO_modules.tools.tools import emptyClass,translationImageMatrix,globalTransformation, createFolder
 import time
+import json
+import jsonpickle
 from numpy.random import RandomState
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 class Atmosphere:
-    def __init__(self,telescope,r0,L0,windSpeed,fractionalR0,windDirection,altitude,mode=2):
+    def __init__(self,telescope,r0,L0,windSpeed,fractionalR0,windDirection,altitude,mode=2, param = None):
         self.hasNotBeenInitialized  = True
         self.r0                     = r0                # Fried Parameter in m 
         self.fractionalR0           = fractionalR0      # Cn2 square profile
         self.L0                     = L0                # Outer Scale in m
         self.altitude               = altitude          # altitude of the layers
-        self.nLayer                 = len(altitude)     # number of layer
+        self.nLayer                 = len(fractionalR0)     # number of layer
         self.windSpeed              = windSpeed         # wind speed of the layers in m/s
         self.windDirection          = windDirection     # wind direction in degrees
         self.tag                    = 'atmosphere'      # Tag of the object
@@ -27,7 +29,7 @@ class Atmosphere:
         self.tel                    = telescope         # associated telescope object
         self.mode                   = mode              # DEBUG -> first phase screen generation mode
         self.seeingArcsec           = 206265*(self.wavelength/self.r0)
-
+        self.param = param
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATM INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def initializeAtmosphere(self,telescope):
         
@@ -100,15 +102,15 @@ class Atmosphere:
         a=time.time()
         if self.mode ==1:
             import aotools as ao
-            layer.phaseScreen   = ao.turbulence.infinitephasescreen.PhaseScreenVonKarman(layer.resolution,layer.D/(layer.resolution),r0,L0,random_seed=1)
+            layer.phaseScreen   = ao.turbulence.infinitephasescreen.PhaseScreenVonKarman(layer.resolution,layer.D/(layer.resolution),r0,L0,random_seed=i_layer)
             layer.phase         = layer.phaseScreen.scrn
         else:
             if self.mode == 2:
                 from AO_modules.phaseStats import ft_sh_phase_screen
 
-                layer.phase         = ft_sh_phase_screen(self,layer.resolution,layer.D/layer.resolution,seed=1)                
+                layer.phase         = ft_sh_phase_screen(self,layer.resolution,layer.D/layer.resolution,seed=i_layer)                
             else: 
-                layer.phase         = ft_phase_screen(self,layer.resolution,layer.D/layer.resolution,seed=1)
+                layer.phase         = ft_phase_screen(self,layer.resolution,layer.D/layer.resolution,seed=i_layer)
 
         layer.initialPhase = layer.phase
         b=time.time()
@@ -130,18 +132,74 @@ class Atmosphere:
         outerZ = u[layer.outerMask!=0] + 1j*v[layer.outerMask!=0]
 
         # Compute the covariance matrices
-        c=time.time()        
-        ZZt = makeCovarianceMatrix(innerZ,innerZ,self)
-        d=time.time()
-        print('ZZt.. : ' +str(d-c) +' s')
-        ZXt = makeCovarianceMatrix(innerZ,outerZ,self)
-        e=time.time()
-        print('ZXt.. : ' +str(e-d) +' s')
-        XXt = makeCovarianceMatrix(outerZ,outerZ,self)
-        f=time.time()
-        print('XXt.. : ' +str(f-e) +' s')
+        try:
+            c=time.time()        
+            ZZt = self.ZZt
+            d=time.time()
+            print('ZZt.. : ' +str(d-c) +' s')
+            ZXt = self.ZXt
+            e=time.time()
+            print('ZXt.. : ' +str(e-d) +' s')
+            XXt = self.XXt
+            f=time.time()
+            print('XXt.. : ' +str(f-e) +' s')
+            ZZt_inv = self.ZZt_inv
+
+            print('covariance matrices were already computed!')
+
+        except:
+            c=time.time()        
+            ZZt = makeCovarianceMatrix(innerZ,innerZ,self)
+            
+            if self.param is None:
+                ZZt_inv = np.linalg.pinv(ZZt)
+            else:
+                try:
+                    print('Loading pre-computed data...')            
+                    name_data       = 'ZZt_inv_spider_L0_'+str(self.L0)+'_m_r0_'+str(self.r0)+'_shape_'+str(ZZt.shape[0])+'x'+str(ZZt.shape[1])+'.json'
+                    location_data   = self.param['pathInput'] + self.param['name'] + '/sk_v/'
+                    try:
+                        with open(location_data+name_data ) as f:
+                            C = json.load(f)
+                        data_loaded = jsonpickle.decode(C)               
+                    except:
+                        createFolder(location_data)
+                        with open(location_data+name_data ) as f:
+                            C = json.load(f)
+                        data_loaded = jsonpickle.decode(C)                    
+                    ZZt_inv = data_loaded['ZZt_inv']
+                    
+                except: 
+                    print('Something went wrong.. re-computing ZZt_inv ...')
+                    name_data       = 'ZZt_inv_spider_L0_'+str(self.L0)+'_m_r0_'+str(self.r0)+'_shape_'+str(ZZt.shape[0])+'x'+str(ZZt.shape[1])+'.json'
+                    location_data   = self.param['pathInput'] + self.param['name'] + '/sk_v/'
+                    createFolder(location_data)
+                    
+                    ZZt_inv = np.linalg.pinv(ZZt)
+                
+                    print('saving for future...')
+                    data = dict()
+                    data['pupil'] = self.tel.pupil
+                    data['ZZt_inv'] = ZZt_inv
+                            
+                    data_encoded  = jsonpickle.encode(data)
+                    with open(location_data+name_data, 'w') as f:
+                        json.dump(data_encoded, f)
+            d=time.time()
+            print('ZZt.. : ' +str(d-c) +' s')
+            ZXt = makeCovarianceMatrix(innerZ,outerZ,self)
+            e=time.time()
+            print('ZXt.. : ' +str(e-d) +' s')
+            XXt = makeCovarianceMatrix(outerZ,outerZ,self)
+            f=time.time()
+            print('XXt.. : ' +str(f-e) +' s')
+            
+            self.ZZt = ZZt
+            self.ZXt = ZXt
+            self.XXt = XXt
+            self.ZZt_inv = ZZt_inv
         
-        layer.A         = np.matmul(ZXt.T,np.linalg.pinv(ZZt))    
+        layer.A         = np.matmul(ZXt.T,ZZt_inv)    
         BBt             = XXt -  np.matmul(layer.A,ZXt)
         layer.B         = np.linalg.cholesky(BBt)
         layer.mapShift  = np.zeros([layer.nPixel+1,layer.nPixel+1])        
