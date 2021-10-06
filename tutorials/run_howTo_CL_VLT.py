@@ -44,7 +44,7 @@ ngs=Source(optBand   = param['opticalBand'],\
 # combine the NGS to the telescope using '*' operator:
 ngs*tel
 
-tel.computePSF(zeroPaddingFactor = 2)
+tel.computePSF(zeroPaddingFactor = 4)
 plt.figure()
 plt.imshow(np.log(np.abs(tel.PSF)),extent = [tel.xPSF_arcsec[0],tel.xPSF_arcsec[1],tel.xPSF_arcsec[0],tel.xPSF_arcsec[1]])
 plt.colorbar()
