@@ -49,18 +49,18 @@ class MisRegistration:
                 
         if self.radialScaling ==0 and self.tangentialScaling ==0:
             self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)            +'_deg_'\
-                              'sX_'             + str('%.2f' %(self.shiftX))                 +'_m_'\
-                              'sY_'             + str('%.2f' %(self.shiftY))                 +'_m_'\
+                              'sX_'         + str('%.2f' %(self.shiftX))                 +'_m_'\
+                              'sY_'         + str('%.2f' %(self.shiftY))                 +'_m_'\
                               'anamAngle_'  + str('%.2f' %self.anamorphosisAngle)        +'_deg_'\
-                              'radScal_'      + str('%.2f' %(self.radialScaling+1.))       +'_'\
-                              'tangScal_'  + str('%.2f' %(self.tangentialScaling+1.)) 
+                              'radScal_'    + str('%.2f' %(self.radialScaling+1.))       +'_'\
+                              'tangScal_'   + str('%.2f' %(self.tangentialScaling+1.)) 
         else:
-             self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)            +'_deg_'\
+             self.misRegName = 'rot_'       + str('%.2f' %self.rotationAngle)            +'_deg_'\
                           'sX_'             + str('%.2f' %(self.shiftX))                 +'_m_'\
                           'sY_'             + str('%.2f' %(self.shiftY))                 +'_m_'\
-                          'anamAngle_'  + str('%.2f' %self.anamorphosisAngle)        +'_deg_'\
-                          'radScal_'      + str('%.4f' %(self.radialScaling+1.))       +'_'\
-                          'tangScal_'  + str('%.4f' %(self.tangentialScaling+1.)) 
+                          'anamAngle_'      + str('%.2f' %self.anamorphosisAngle)        +'_deg_'\
+                          'radScal_'        + str('%.4f' %(self.radialScaling+1.))       +'_'\
+                          'tangScal_'       + str('%.4f' %(self.tangentialScaling+1.)) 
                             
         self.isInitialized = True
 
