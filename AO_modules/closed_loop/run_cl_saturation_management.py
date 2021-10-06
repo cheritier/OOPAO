@@ -24,7 +24,7 @@ from AO_modules.mis_registration_identification_algorithm.applyMisRegistration i
 #     # #   # # #     #     # # #   # # #           # # #     #       #     #
 #####################################################################################################################################################
 
-def run_cl(param,obj):
+def run_cl_saturation_management(param,obj):
         
     nLoop = param['nLoop']
     gain_cl = param['gainCL']
@@ -47,10 +47,7 @@ def run_cl(param,obj):
     
     
     #% ------------------------------------ Calibration ------------------------------------
-    if obj.calib.D.shape[1] != param['nModes']:
-        calib_cl    = calibrationVault(obj.calib.D[:,:param['nModes']])
-    else:
-        calib_cl = obj.calib
+    calib_cl    = calibrationVault(obj.calib.D[:,:param['nModes']])
     M2C_cl      = obj.M2C_cl
         
     #%% ------------------------------------ mis-registrations  ------------------------------------
@@ -171,7 +168,9 @@ def run_cl(param,obj):
         
 #%%   
     wfsSignal = np.zeros(obj.wfs.nSignal)
+    forces    = np.zeros(dm_cl.nValidAct)
     
+    Fmax = 1.2
 
     for i_loop in range(nLoop):
         a= time.time()
@@ -191,23 +190,45 @@ def run_cl(param,obj):
             save_modal_coef = False
             if i_loop == 0:
                 print('Error - no projector for the modal basis..')
+ 
+                
+                
         # propagate to the WFS with the CL commands applied
         obj.tel*dm_cl*obj.wfs
+        G = np.eye(param['nModes'])
+        
+        absolute_command = dm_cl.coefs - gain_cl*np.matmul(np.matmul(np.matmul(M2C_cl,G),calib_cl.M),wfsSignal)
+        forces = np.matmul(obj.P2F_full,absolute_command)
+        criterion = np.max(forces)>Fmax
+        count=0
+        
+        while criterion:
+            count+=1
+            nModes = count*100
+            G[-nModes:,-nModes:] = 0
+            absolute_command = dm_cl.coefs - gain_cl*np.matmul(np.matmul(np.matmul(M2C_cl,G),calib_cl.M),wfsSignal)
+            forces = np.matmul(obj.P2F_full,absolute_command)
+
+            criterion = np.max(forces)>Fmax
+            print(str(nModes) +' nModes Clipped -- criterion:' + str(criterion))
+    
+        dm_cl.coefs  = absolute_command   
             
-        dm_cl.coefs=dm_cl.coefs-gain_cl*np.matmul(reconstructor,wfsSignal)
         
         dm_commands[i_loop,:] = dm_cl.coefs
+        
+        
 
-        # # petal kicker
-        # if i_loop==100:
-        #     # compute the mean value of the recorded commands
-        #     mean_command_value = np.zeros(6)
-        #     for i_petal in range(6):
-                
-        #         mean_command_value[i_petal] = np.mean(dm_commands[50:i_loop,i_petal*892:(i_petal*892+811)])
-        #         print(mean_command_value[i_petal])
-        #         dm_cl.coefs[i_petal*892:(i_petal*892+811)] -= mean_command_value[i_petal]
-                
+        # petal kicker
+#        if i_loop==100:
+#            # compute the mean value of the recorded commands
+#            mean_command_value = np.zeros(6)
+#            for i_petal in range(6):
+#                
+#                mean_command_value[i_petal] = np.mean(dm_commands[50:i_loop,i_petal*892:(i_petal*892+811)])
+#                print(mean_command_value[i_petal])
+#                dm_cl.coefs[i_petal*892:(i_petal*892+811)] -= mean_command_value[i_petal]
+#                
             
         if obj.tel.isPetalFree:
             dm_cl.OPD = obj.tel.removePetalling(dm_cl.OPD)
