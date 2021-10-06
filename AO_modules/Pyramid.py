@@ -30,7 +30,8 @@ except:
         mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
         mkl_set_num_threads(6)
     except:
-        print('Could not optimize the parallelisation of the code ')
+        import mkl
+        mkl_set_num_threads = mkl.set_num_threads
 
 
 
@@ -145,11 +146,14 @@ class Pyramid:
         # Select the valid pixels
         print('Selection of the valid pixels...')
         self.initialization(self.telescope)
+
         print('Done!')        
         print('Acquisition of the reference slopes and units calibration...')
         # set the modulation radius and propagate light
         self.modulation = modulation
+        
         self.wfs_calibration(self.telescope)
+
         self.telescope.resetOPD()
         self.pyramid_propagation(telescope)
         print('Done!')
@@ -355,7 +359,7 @@ class Pyramid:
             self.initFrame = self.cam.frame
             
             # save the number of signals depending on the case    
-            if self.postProcessing == 'slopesMaps':
+            if self.postProcessing == 'slopesMaps' or self.postProcessing == 'slopesMaps_incidence_flux':
                 # select the valid pixels of the detector according to the flux (case slopes-maps)
                 I1 = self.grabQuadrant(1)
                 I2 = self.grabQuadrant(2)
@@ -417,6 +421,7 @@ class Pyramid:
                 em_field     = self.maskAmplitude*np.exp(1j*(self.telescope.src.phase+phase_in))
         else:
             em_field     = self.maskAmplitude*np.exp(1j*phase_in)
+            
         # zero-padding for the FFT computation
         support[self.center-self.telescope.resolution//2:self.center+self.telescope.resolution//2,self.center-self.telescope.resolution//2:self.center+self.telescope.resolution//2] = em_field
         
@@ -435,10 +440,41 @@ class Pyramid:
         self.modulation_camera_frame.append(em_field_ft)
 
         return I    
+    
+#        def pyramid_transform_spatial_filter(self,phase_in):
+#            # copy of the support for the zero-padding
+#            support = np.copy(self.supportPadded)
+#            # em field corresponding to phase_in
+#            if np.ndim(self.telescope.OPD)==2:  
+#                if self.modulation==0:
+#                    em_field     = self.maskAmplitude*np.exp(1j*(phase_in))
+#                else:
+#                    em_field     = self.maskAmplitude*np.exp(1j*(self.telescope.src.phase+phase_in))
+#            else:
+#                em_field     = self.maskAmplitude*np.exp(1j*phase_in)
+#                
+#            # zero-padding for the FFT computation
+#            support[self.center-self.telescope.resolution//2:self.center+self.telescope.resolution//2,self.center-self.telescope.resolution//2:self.center+self.telescope.resolution//2] = em_field
+#            
+#            # case with mask centered on 4 pixels
+#            if self.psfCentering:
+#                em_field_ft     = np.fft.fft2(support*self.phasor)
+#                em_field_pwfs   = np.fft.ifft2(em_field_ft*self.mask)
+#                I               = np.abs(em_field_pwfs)**2
+#           
+#            # case with mask centered on 1 pixel
+#            else:
+#                em_field_ft     = np.fft.fftshift(np.fft.fft2(support)) 
+#                em_field_pwfs   = np.fft.ifft2(em_field_ft*self.mask)
+#                I               = np.abs(em_field_pwfs)**2
+#            
+#            self.modulation_camera_frame.append(em_field_ft)
+#    
+#            return I  
         
         
     def setPhaseBuffer(self,phaseIn):
-        B=self.phaseBuffModulationLowres+phaseIn
+        B=self.phaseBuffModulationLowres+phaseIn                  
         return B    
     
         
@@ -446,14 +482,25 @@ class Pyramid:
         
     def pyramid_propagation(self,telescope):
         # mask amplitude for the light propagation
-        self.maskAmplitude=self.telescope.pupil
+        self.maskAmplitude=self.telescope.pupilReflectivity
+        
+        if self.spatialFilter is not None:
+            if np.ndim(telescope.OPD)==2:
+                support_spatial_filter = np.copy(self.supportPadded)   
+                em_field = self.maskAmplitude*np.exp(1j*(self.telescope.src.phase))
+                support_spatial_filter[self.center-self.telescope.resolution//2:self.center+self.telescope.resolution//2,self.center-self.telescope.resolution//2:self.center+self.telescope.resolution//2] = em_field
+                self.em_field_spatial_filter       = (np.fft.fft2(support_spatial_filter*self.phasor))
+                self.pupil_plane_spatial_filter    = (np.fft.ifft2(self.em_field_spatial_filter*self.spatialFilter))
+                
+
         
         # modulation camera
         self.modulation_camera_frame=[]
 
         if self.modulation==0:
             if np.ndim(telescope.OPD)==2:
-                self.pyramidFrame = self.pyramid_transform(telescope.src.phase)
+                self.pyramidFrame = self.pyramid_transform(telescope.src.phase)               
+                
     #            self.pyramidFrame*=(self.telescope.src.fluxMap.sum())/self.pyramidFrame.sum()
                 self*self.cam
                 if self.isInitialized and self.isCalibrated:
@@ -481,27 +528,32 @@ class Pyramid:
                     
         else:
             if np.ndim(telescope.OPD)==2:       
+
                 #define the parallel jobs
                 def job_loop_single_mode_modulated():
                     Q = Parallel(n_jobs=self.nJobs,prefer='threads')(delayed(self.pyramid_transform)(i) for i in self.phaseBuffModulationLowres)
                     return Q 
+
                 # applt the pyramid transform in parallel
                 maps=job_loop_single_mode_modulated()
                 
                 # compute the sum of the pyramid frames for each modulation points
                 self.pyramidFrame=np.sum(maps,axis=0)/self.nTheta
+
                 #propagate to the detector
                 self*self.cam
                 
                 if self.isInitialized and self.isCalibrated:
                     self.pyramidSignal_2D,self.pyramidSignal=self.signalProcessing()
                 # case with multiple modes simultaneously
+
             else:
                 if np.ndim(telescope.OPD)==3:
+
                     nModes=telescope.OPD.shape[2]
                     # move axis to get the number of modes first
                     self.phase_buffer=np.moveaxis(telescope.src.phase,-1,0)
-                    
+
                     def jobLoop_setPhaseBuffer():
                         Q = Parallel(n_jobs=2,prefer='threads')(delayed(self.setPhaseBuffer)(i) for i in self.phase_buffer)
                         return Q                   
@@ -537,25 +589,48 @@ class Pyramid:
 #            self.cam.frame = self.cam.frame *(self.telescope.src.fluxMap.sum())/self.cam.frame.sum()
 
             
-        if self.postProcessing == 'slopesMaps':
-            # slopes-maps computation
-            I1              = self.grabQuadrant(1,cameraFrame=0)*self.validI4Q
-            I2              = self.grabQuadrant(2,cameraFrame=0)*self.validI4Q
-            I3              = self.grabQuadrant(3,cameraFrame=0)*self.validI4Q
-            I4              = self.grabQuadrant(4,cameraFrame=0)*self.validI4Q
-            # global normalisation
-            I4Q        = I1+I2+I3+I4
-            norma      = np.mean(I4Q[self.validI4Q])
-#            norma = np.mean(I4Q)
-            # slopesMaps computation cropped to the valid pixels
-            Sx         = (I1-I2+I4-I3)            
-            Sy         = (I1-I4+I2-I3)         
-            # 2D slopes maps      
-            slopesMaps = (np.concatenate((Sx,Sy)/norma) - self.referenceSignal_2D) *self.slopesUnits
-            
-            # slopes vector
-            slopes     = slopesMaps[np.where(self.validSignal==1)]
-            return slopesMaps,slopes
+            if self.postProcessing == 'slopesMaps':
+                # slopes-maps computation
+                I1              = self.grabQuadrant(1,cameraFrame=0)*self.validI4Q
+                I2              = self.grabQuadrant(2,cameraFrame=0)*self.validI4Q
+                I3              = self.grabQuadrant(3,cameraFrame=0)*self.validI4Q
+                I4              = self.grabQuadrant(4,cameraFrame=0)*self.validI4Q
+                # global normalisation
+                I4Q        = I1+I2+I3+I4
+                norma      = np.mean(I4Q[self.validI4Q])
+    #            norma = np.mean(I4Q)
+                # slopesMaps computation cropped to the valid pixels
+                Sx         = (I1-I2+I4-I3)            
+                Sy         = (I1-I4+I2-I3)         
+                # 2D slopes maps      
+                slopesMaps = (np.concatenate((Sx,Sy)/norma) - self.referenceSignal_2D) *self.slopesUnits
+                
+                # slopes vector
+                slopes     = slopesMaps[np.where(self.validSignal==1)]
+                return slopesMaps,slopes
+        
+            if self.postProcessing == 'slopesMaps_incidence_flux':
+                # slopes-maps computation
+                I1              = self.grabQuadrant(1,cameraFrame=0)*self.validI4Q
+                I2              = self.grabQuadrant(2,cameraFrame=0)*self.validI4Q
+                I3              = self.grabQuadrant(3,cameraFrame=0)*self.validI4Q
+                I4              = self.grabQuadrant(4,cameraFrame=0)*self.validI4Q
+                # global normalisation
+                I4Q        = I1+I2+I3+I4
+                #norma      = np.mean(I4Q[self.validI4Q])
+                #pdb.set_trace()
+                subArea  = (self.telescope.D / self.nSubap)**2
+                norma = np.float64(self.telescope.src.nPhoton*self.telescope.samplingTime*subArea)
+    #            norma = np.mean(I4Q)
+                # slopesMaps computation cropped to the valid pixels
+                Sx         = (I1-I2+I4-I3)            
+                Sy         = (I1-I4+I2-I3)         
+                # 2D slopes maps      
+                slopesMaps = (np.concatenate((Sx,Sy)/norma) - self.referenceSignal_2D) *self.slopesUnits
+                
+                # slopes vector
+                slopes     = slopesMaps[np.where(self.validSignal==1)]
+                return slopesMaps,slopes
         
         if self.postProcessing == 'fullFrame':
             # global normalization
@@ -624,7 +699,7 @@ class Pyramid:
         self._spatialFilter = val
         if self.isInitialized:
             if val is None:         
-                print('No spatial filter attached to the mask')
+                print('No spatial filter considered')
                 self.mask = self.initial_mask
                 if self.isCalibrated:
                     print('Updating the reference slopes and Wavelength Calibration for the new modulation...')
@@ -634,12 +709,20 @@ class Pyramid:
                     self.wfs_calibration(self.telescope)
                     print('Done!')
             else:
+                tmp                             = np.ones([self.nRes,self.nRes])
+                tmp[:,0]                        = 0
+                Tip                             = (sp.morphology.distance_transform_edt(tmp))
+                Tilt                            = (sp.morphology.distance_transform_edt(np.transpose(tmp)))
+                
+                # normalize the TT to apply the modulation in terms of lambda/D
+                self.Tip_spatial_filter                        = (((Tip/Tip.max())-0.5)*2*np.pi)
+                self.Tilt_spatial_filter                       = (((Tilt/Tilt.max())-0.5)*2*np.pi)
                 if val.shape == self.mask.shape:
-                    print('Adding a spatial filter to the WFS mask')
+                    print('A spatial filter is now considered')
                     self.mask = self.initial_mask * val
                     plt.figure()
                     plt.imshow(np.real(self.mask))
-                    plt.title('PWFS mask + spatial filter')
+                    plt.title('Spatial Filter considered')
                     if self.isCalibrated:
                         print('Updating the reference slopes and Wavelength Calibration for the new modulation...')
                         self.slopesUnits                = 1     
@@ -712,8 +795,8 @@ class Pyramid:
                 obj.frame = rs.poisson(obj.frame)
                 
             if obj.readoutNoise!=0:
-                obj.frame += np.random.rand(obj.resolution,obj.resolution)*obj.cam.readoutNoise
-                obj.frame = np.round(obj.frame)
+                obj.frame += np.int64(np.round(np.random.randn(obj.resolution,obj.resolution)*obj.readoutNoise))
+#                obj.frame = np.round(obj.frame)
                 
             if self.backgroundNoise is True:    
                 rs=np.random.RandomState(seed=int(time.time()))
@@ -746,5 +829,4 @@ class Pyramid:
 
 
 
-                                   
-        
+  
