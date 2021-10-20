@@ -214,7 +214,7 @@ def run_cl(param,obj):
         ao_residuals[i_loop]=np.std(obj.tel.OPD[np.where(obj.tel.pupil>0)])*1e9
 
         # store the slopes after computing the commands => 2 frames delay
-        wfsSignal=obj.wfs.pyramidSignal
+        wfsSignal=obj.wfs.signal
         b= time.time()
         
         res_OPD = np.reshape(obj.tel.OPD,obj.tel.resolution**2)

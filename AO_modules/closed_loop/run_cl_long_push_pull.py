@@ -108,10 +108,10 @@ def run_cl_long_push_pull(param,obj):
             # control law
             dm_cl.coefs -= np.matmul(M2C_cl,obj.push_pull_gains@np.matmul(reconstructor,wfsSignal))  
             # buffer of the wfs signal to simulate delay
-            wfsSignal = obj.wfs.pyramidSignal
+            wfsSignal = obj.wfs.signal
             if i_length>=obj.start_pp:
                 print('saving wfs signal')
-                sp+=obj.wfs.pyramidSignal
+                sp+=obj.wfs.signal
             print('Loop '+str(i_loop+i_length)+'/'+str(cl_data.nLoop)+' Turbulence: '+str(cl_data.ao_turbulence[i_loop+i_length])+' -- Residual:' +str(cl_data.ao_residuals[i_loop+i_length])+ '\n')
             print('Elapsed Time: ' + str(b-a) + ' s ')
             if obj.display==True:
@@ -141,10 +141,10 @@ def run_cl_long_push_pull(param,obj):
                 cl_data.dm_forces[i_loop,:] = obj.P2F_full@dm_cl.coefs
                 
             # buffer of the wfs signal to simulate delay
-            wfsSignal = obj.wfs.pyramidSignal
+            wfsSignal = obj.wfs.signal
             if i_length>=obj.start_pp:
                 print('saving wfs signal')
-                sm+=obj.wfs.pyramidSignal
+                sm+=obj.wfs.signal
             print('Loop '+str(i_loop+i_length+obj.push_pull_duration)+'/'+str(cl_data.nLoop)+' Turbulence: '+str(cl_data.ao_turbulence[i_loop+i_length+obj.push_pull_duration])+' -- Residual:' +str(cl_data.ao_residuals[i_loop+i_length+obj.push_pull_duration])+ '\n')
             print('Elapsed Time: ' + str(b-a) + ' s ')
             if obj.display==True:
@@ -231,7 +231,7 @@ def run_cl_long_push_pull(param,obj):
             cl_data.dm_forces[i_loop,:] = obj.P2F_full@dm_cl.coefs
             
         # store the slopes after computing the commands => 2 frames delay
-        wfsSignal=obj.wfs.pyramidSignal
+        wfsSignal=obj.wfs.signal
         b= time.time()
           
         if obj.display==True:

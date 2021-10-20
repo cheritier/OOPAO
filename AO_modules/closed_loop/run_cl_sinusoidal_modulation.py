@@ -291,7 +291,7 @@ def run_cl_sinusoidal_modulation(param,obj):
         if i_loop>=param['nLoop']:
             if count_bootstrap>= obj.n_iteration_per_period[0]:
                 print('Acquirring WFS signal')
-                buffer_wfs[:,count] = obj.wfs.pyramidSignal
+                buffer_wfs[:,count] = obj.wfs.signal
             dm_perturbation_out = np.zeros(obj.dm.nValidAct)
 
             for i_mode in range(obj.n_multiplexed_modulated_modes):
@@ -303,7 +303,7 @@ def run_cl_sinusoidal_modulation(param,obj):
         ao_residuals[i_loop]=np.std(obj.tel.OPD[np.where(obj.tel.pupil>0)])*1e9
 
         # store the slopes after computing the commands => 2 frames delay
-        wfsSignal=obj.wfs.pyramidSignal
+        wfsSignal=obj.wfs.signal
         b= time.time()
         
         res_OPD = np.reshape(obj.tel.OPD,obj.tel.resolution**2)
