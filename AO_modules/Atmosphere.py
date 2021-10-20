@@ -113,6 +113,7 @@ class Atmosphere:
                 layer.phase         = ft_phase_screen(self,layer.resolution,layer.D/layer.resolution,seed=i_layer)
 
         layer.initialPhase = layer.phase
+        layer.seed = i_layer
         b=time.time()
         print('initial phase screen : ' +str(b-a) +' s')
         
@@ -306,9 +307,21 @@ class Atmosphere:
         P = np.zeros([self.tel.resolution,self.tel.resolution])
         for i_layer in range(self.nLayer):
             tmpLayer=getattr(self,'layer_'+str(i_layer+1))
-            tmpLayer.phase         = ft_phase_screen(self,tmpLayer.resolution,tmpLayer.D/tmpLayer.resolution,seed=seed)
+            
+            if self.mode ==1:
+                import aotools as ao
+                phaseScreen   = ao.turbulence.infinitephasescreen.PhaseScreenVonKarman(tmpLayer.resolution,tmpLayer.D/(tmpLayer.resolution),self.r0,self.L0,random_seed=seed+i_layer)
+                phase         = phaseScreen.scrn
+            else:
+                if self.mode == 2:
+                    from AO_modules.phaseStats import ft_sh_phase_screen
+                    phase         = ft_sh_phase_screen(self,tmpLayer.resolution,tmpLayer.D/tmpLayer.resolution,seed=seed+i_layer)                
+                else: 
+                    phase         = ft_phase_screen(self,tmpLayer.resolution,tmpLayer.D/tmpLayer.resolution,seed=seed+i_layer)
+            
+            tmpLayer.phase = phase
             tmpLayer.randomState    = RandomState(42+i_layer*1000)
-           
+            
             Z = tmpLayer.phase[tmpLayer.innerMask[1:-1,1:-1]!=0]
             X = np.matmul(tmpLayer.A,Z) + np.matmul(tmpLayer.B,tmpLayer.randomState.normal( size=tmpLayer.B.shape[1]))
             
@@ -340,6 +353,7 @@ class Atmosphere:
 
     def __mul__(self,obj):
         obj.OPD=self.OPD
+        obj.OPD_no_pupil=self.OPD_no_pupil
         obj.isPaired=True
         return obj
  # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATM PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
