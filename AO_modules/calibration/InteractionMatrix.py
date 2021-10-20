@@ -53,16 +53,16 @@ def interactionMatrix(ngs,atm,tel,dm,wfs,M2C,stroke,phaseOffset=0,nMeasurements=
         dm.coefs = intMatCommands*stroke
         tel*dm
         tel.src.phase+=phaseBuffer
-        tel*wfs
-        sp=wfs.pyramidSignal
+        tel*wfs:
+        sp = wfs.signal
+            
 
 #       pull
         dm.coefs=-intMatCommands*stroke
         tel*dm
         tel.src.phase+=phaseBuffer
         tel*wfs
-        sm=wfs.pyramidSignal        
-        
+        sm = wfs.signal
         if i==nCycle-1:
             if nExtra !=0:
                 if nMeasurements==1:
@@ -145,14 +145,12 @@ def interactionMatrixFromPhaseScreen(ngs,atm,tel,wfs,phasScreens,stroke,phaseOff
         tel.OPD = modes_in*stroke
         tel.src.phase+=phaseBuffer
         tel*wfs
-        sp=wfs.pyramidSignal
-
+        sp = wfs.signal
 #       pull
         tel.OPD=-modes_in*stroke
         tel.src.phase+=phaseBuffer
         tel*wfs
-        sm=wfs.pyramidSignal        
-        
+        sm = wfs.signal        
         if i==nCycle-1:
             if nExtra !=0:
                 if nMeasurements==1:
@@ -236,8 +234,7 @@ def interactionMatrixOnePass(ngs,atm,tel,dm,wfs,M2C,stroke,phaseOffset=0,nMeasur
         tel*dm
         tel.src.phase+=phaseBuffer
         tel*wfs
-        sp=wfs.pyramidSignal    
-        
+        sp = wfs.signal        
         if i==nCycle-1:
             if nExtra !=0:
                 if nMeasurements==1:
