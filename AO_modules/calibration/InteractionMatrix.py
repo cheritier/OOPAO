@@ -53,7 +53,7 @@ def interactionMatrix(ngs,atm,tel,dm,wfs,M2C,stroke,phaseOffset=0,nMeasurements=
         dm.coefs = intMatCommands*stroke
         tel*dm
         tel.src.phase+=phaseBuffer
-        tel*wfs:
+        tel*wfs
         sp = wfs.signal
             
 
