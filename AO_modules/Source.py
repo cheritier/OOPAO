@@ -48,6 +48,7 @@ class Source:
         self.zeroPoint  = tmp[2]/368                            # zero point
         self.magnitude  = magnitude                             # magnitude
         self.phase      = []                                    # phase of the source 
+        self.phase_no_pupil      = []                                    # phase of the source 
         self.fluxMap    = []                                    # 2D flux map of the source
         self.nPhoton    = self.zeroPoint*10**(-0.4*magnitude)   # number of photon per m2 per s
         self.tag        = 'source'                              # tag of the object
@@ -65,6 +66,8 @@ class Source:
     def __mul__(self,telObject):
         # update the phase of the source
         self.phase      = telObject.OPD*2*np.pi/self.wavelength
+        self.phase_no_pupil      = telObject.OPD_no_pupil*2*np.pi/self.wavelength
+
         # compute the variance in the pupil
         self.var        = np.var(self.phase[np.where(telObject.pupil==1)])
         # assign the source object to the telescope object

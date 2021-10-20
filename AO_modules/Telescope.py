@@ -102,6 +102,7 @@ class Telescope:
         self.pupilLogical                = np.where(np.reshape(self.pupil,resolution*resolution)>0)     # index of valid pixels in the pupil
         self.src                         = Source(optBand = 'V', magnitude = 0)                                                # temporary source object associated to the telescope object
         self.OPD                         = self.pupil.astype(float)                                     # set the initial OPD
+        self.OPD_no_pupil                = 1+self.pupil.astype(float)*0                                     # set the initial OPD
         self.em_field                    = self.pupilReflectivity*np.exp(1j*self.src.phase)
         self.tag                         = 'telescope'                                                  # tag of the object
         self.isPaired                    = False                                                        # indicate if telescope object is paired with an atmosphere object
@@ -189,10 +190,20 @@ class Telescope:
     def OPD(self,val):
         self._OPD = val
         self.src.phase = self._OPD*2*np.pi/self.src.wavelength
-        if np.ndim(self.src.phase)==2: 
-            self.em_field  = self.pupilReflectivity*np.exp(1j*self.src.phase)
-        else:
-            self.em_field  = np.tile(self.pupilReflectivity[...,None],(1,1,self.src.phase.shape[2]))*np.exp(1j*self.src.phase)
+        
+    @property        
+    def OPD_no_pupil(self):
+        return self._OPD_no_pupil
+    
+    @OPD_no_pupil.setter
+    def OPD_no_pupil(self,val):
+        self._OPD_no_pupil = val
+        self.src.phase_no_pupil = self._OPD_no_pupil*2*np.pi/self.src.wavelength
+        
+        # if np.ndim(self.src.phase)==2: 
+        #     self.em_field  = self.pupilReflectivity*np.exp(1j*self.src.phase)
+        # else:
+        #     self.em_field  = np.tile(self.pupilReflectivity[...,None],(1,1,self.src.phase.shape[2]))*np.exp(1j*self.src.phase)
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TELESCOPE INTERACTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def __mul__(self,obj): 
@@ -201,6 +212,10 @@ class Telescope:
             obj.telescope=self              # assign the telescope object to the pyramid-telescope object
             obj.pyramid_propagation(self)    # propagation of the telescope-source phase screen to the pyramid-detector
         
+        if obj.tag=='shackHartmann':
+            obj.telescope=self              # assign the telescope object to the pyramid-telescope object
+            obj.sh_measure()
+
         # interaction with detector: computation of the PSF
         if obj.tag=='detector':
             self.computePSF()
@@ -223,9 +238,12 @@ class Telescope:
                 telPupil  = self.pupil                      
                 if np.ndim(obj.OPD)==2:                    
                     self.OPD = ne.evaluate('telOPD+dmOPD*telPupil')
+                    self.OPD_no_pupil = self.OPD_no_pupil+obj.OPD
+
                 else:
                     self.OPD = np.tile(self.OPD[...,None],(1,1,obj.OPD.shape[2]))+obj.OPD*np.tile(self.pupil[...,None],(1,1,obj.OPD.shape[2]))
-                    
+                    self.OPD_no_pupil = np.tile(self.OPD_no_pupil[...,None],(1,1,obj.OPD.shape[2])) + obj.OPD
+ 
             # case where the telescope is separated from a telescope object
             else:
                 dmOPD =obj.OPD
@@ -234,11 +252,13 @@ class Telescope:
                     self.OPD = ne.evaluate('dmOPD*telPupil')
                 else:
                     self.OPD = obj.OPD*np.tile(self.pupil[...,None],(1,1,obj.OPD.shape[2]))
+                self.OPD_no_pupil = obj.OPD
         return self
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TELESCOPE METHODS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def resetOPD(self):
         # re-initialize the telescope OPD to a flat wavefront
         self.OPD = self.pupil.astype(float)
+        self.OPD_no_pupil = 1+0*self.pupil.astype(float)
     
     def removePetalling(self,image = None):
         try:
@@ -321,6 +341,8 @@ class Telescope:
     def __add__(self,atmObject):
         self.isPaired   = True
         self.OPD  = atmObject.OPD
+        self.OPD_no_pupil  = atmObject.OPD_no_pupil
+
         if self.isPetalFree:
                     self.removePetalling()  
         print('Telescope and Atmosphere combined!')
@@ -329,6 +351,8 @@ class Telescope:
     def __sub__(self,atmObject):
         self.isPaired   = False  
         self.OPD  = self.pupil.astype(float)
+        self.OPD_no_pupil  =1+ self.pupil.astype(float)*0    
+
         print('Telescope and Atmosphere separated!')
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% END %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
