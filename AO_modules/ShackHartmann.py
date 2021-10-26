@@ -40,47 +40,39 @@ except:
 
 class ShackHartmann:
     def __init__(self,nSubap,telescope,lightRatio,threshold_cog = 0,is_geometric = False ):
-        self.tag            = 'shackHartmann'
-        self.telescope      = telescope
-        self.is_geometric   = is_geometric
-        self.nSubap         = nSubap
-        self.lightRatio     = lightRatio
-        self.pupil          = telescope.pupil.astype(float)     
-        self.zero_padding   = 2
-        self.n_pix_subap    = self.telescope.resolution// self.nSubap 
-        self.n_pix_lenslet  = self.n_pix_subap*self.zero_padding 
-        self.center         = self.n_pix_lenslet//2 
-        self.threshold_cog  = threshold_cog
-        
-        self.cam                = Detector(round(nSubap*self.n_pix_subap))                     # WFS detector object
-        self.cam.photonNoise    = 0
-        self.cam.readoutNoise   = 0        # single lenslet 
-        self.lenslet_frame  = np.zeros([self.n_pix_subap*self.zero_padding,self.n_pix_subap*self.zero_padding], dtype =complex)
-        
+        self.tag                    = 'shackHartmann'
+        self.telescope              = telescope
+        self.is_geometric           = is_geometric
+        self.nSubap                 = nSubap
+        self.lightRatio             = lightRatio
+        self.pupil                  = telescope.pupil.astype(float)     
+        self.zero_padding           = 2
+        self.n_pix_subap            = self.telescope.resolution// self.nSubap 
+        self.n_pix_lenslet          = self.n_pix_subap*self.zero_padding 
+        self.center                 = self.n_pix_lenslet//2 
+        self.threshold_cog          = threshold_cog
+        self.get_camera_frame_multi = False
+        self.cam                    = Detector(round(nSubap*self.n_pix_subap))                     # WFS detector object
+        self.cam.photonNoise        = 0
+        self.cam.readoutNoise       = 0        # single lenslet 
+        self.lenslet_frame          = np.zeros([self.n_pix_subap*self.zero_padding,self.n_pix_subap*self.zero_padding], dtype =complex)
+        self.photon_per_subaperture = np.zeros(self.nSubap**2)
+
         # camera frame 
-        self.camera_frame   = np.zeros([self.n_pix_subap*(self.nSubap),self.n_pix_subap*(self.nSubap)], dtype =float)
+        self.camera_frame           = np.zeros([self.n_pix_subap*(self.nSubap),self.n_pix_subap*(self.nSubap)], dtype =float)
         
         # cube of lenslet zero padded
-        self.cube           = np.zeros([self.nSubap**2,self.n_pix_lenslet,self.n_pix_lenslet])
+        self.cube                   = np.zeros([self.nSubap**2,self.n_pix_lenslet,self.n_pix_lenslet])
         
         self.index_x                = []
         self.index_y                = []
-        # reference signal
-        self.sx0                    = np.zeros([self.nSubap,self.nSubap])
-        self.sy0                    = np.zeros([self.nSubap,self.nSubap])
-        # signal vector
-        self.sx                     = np.zeros([self.nSubap,self.nSubap])
-        self.sy                     = np.zeros([self.nSubap,self.nSubap])
-        # signal map
-        self.SX                     = np.zeros([self.nSubap,self.nSubap])
-        self.SY                     = np.zeros([self.nSubap,self.nSubap])
-        # flux per subaperture
-        self.photon_per_subaperture = np.zeros(self.nSubap**2)
-        self.reference_slopes_maps = np.zeros([self.nSubap*2,self.nSubap])
-        self.get_camera_frame_multi = False
-        count=0
-        print('Selecting valid subapertures based on flux considerations..')
 
+        # phasor to center spots in the center of the lenslets
+        [xx,yy]                    = np.meshgrid(np.linspace(0,self.n_pix_lenslet-1,self.n_pix_lenslet),np.linspace(0,self.n_pix_lenslet-1,self.n_pix_lenslet))
+        self.phasor                = np.exp(-(1j*np.pi*(self.n_pix_lenslet+1)/self.n_pix_lenslet)*(xx+yy))
+
+        count=0
+        # Get subapertures index and fluix per subaperture
         for i in range(self.nSubap):
             for j in range(self.nSubap):
                 self.index_x.append(i)
@@ -91,15 +83,13 @@ class ShackHartmann:
                 self.cube[count,self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2,self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2] = mask_amp_SH
                 self.photon_per_subaperture[count] = mask_amp_SH.sum()
                 count+=1
-        [xx,yy]                    = np.meshgrid(np.linspace(0,self.n_pix_lenslet-1,self.n_pix_lenslet),np.linspace(0,self.n_pix_lenslet-1,self.n_pix_lenslet))
-        self.phasor                = np.exp(-(1j*np.pi*(self.n_pix_lenslet+1)/self.n_pix_lenslet)*(xx+yy))
         self.index_x = np.asarray(self.index_x)
         self.index_y = np.asarray(self.index_y)
         
-        
+        print('Selecting valid subapertures based on flux considerations..')
+
         self.photon_per_subaperture_2D = np.reshape(self.photon_per_subaperture,[self.nSubap,self.nSubap])
                 
-        
         self.valid_subapertures = np.reshape(self.photon_per_subaperture >= self.lightRatio*np.max(self.photon_per_subaperture), [self.nSubap,self.nSubap])
         
         self.valid_subapertures_1D = np.reshape(self.valid_subapertures,[self.nSubap**2])
@@ -114,13 +104,46 @@ class ShackHartmann:
         
         self.nSignal = 2*self.nValidSubaperture
         
+        # WFS initialization
+        self.initialize_wfs()
+
+        
+    def initialize_wfs(self):
         self.isInitialized = False
+        # reference signal
+        self.sx0                    = np.zeros([self.nSubap,self.nSubap])
+        self.sy0                    = np.zeros([self.nSubap,self.nSubap])
+        # signal vector
+        self.sx                     = np.zeros([self.nSubap,self.nSubap])
+        self.sy                     = np.zeros([self.nSubap,self.nSubap])
+        # signal map
+        self.SX                     = np.zeros([self.nSubap,self.nSubap])
+        self.SY                     = np.zeros([self.nSubap,self.nSubap])
+        # flux per subaperture
+        self.reference_slopes_maps  = np.zeros([self.nSubap*2,self.nSubap])
+        self.slopes_units           = 1
         print('Acquiring reference slopes..')        
         self.telescope.resetOPD()    
         self.sh_measure()        
         self.reference_slopes_maps[self.valid_slopes_maps] = np.concatenate((self.sx0,self.sy0))[self.valid_slopes_maps]
         self.isInitialized = True
         print('Done!')
+        
+        print('Setting slopes units..')        
+        [Tip,Tilt]                         = np.meshgrid(np.linspace(0,self.telescope.resolution-1,self.telescope.resolution),np.linspace(0,self.telescope.resolution-1,self.telescope.resolution))
+        Tip                                = (((Tip/Tip.max())-0.5)*2*np.pi)
+        mean_slope = np.zeros(5)
+        amp = 1e-9
+        for i in range(5):
+            self.telescope.OPD = self.telescope.pupil*Tip*(i-2)*amp
+            self.telescope.OPD_no_pupil = Tip*(i-2)*amp
+
+            self.sh_measure()        
+            mean_slope[i] = np.mean(self.signal[:self.nSignal//2])
+        self.p = np.polyfit(np.linspace(-2,2,5)*amp,mean_slope,deg = 1)
+        self.slopes_units = self.p[0]
+        print('Done!')
+        self.telescope.resetOPD()
 
     def centroid(self,im, threshold = 0):
         im[im<threshold*im.max()]=0
@@ -239,7 +262,7 @@ class ShackHartmann:
                 self.SX[self.validLenslets_x,self.validLenslets_y] = self.sx[self.validLenslets_x,self.validLenslets_y]
                 self.SY[self.validLenslets_x,self.validLenslets_y] = self.sy[self.validLenslets_x,self.validLenslets_y]
                         
-                self.signal = np.concatenate([self.sx[self.validLenslets_x,self.validLenslets_y],self.sy[self.validLenslets_x,self.validLenslets_y]])
+                self.signal = np.concatenate([self.sx[self.validLenslets_x,self.validLenslets_y],self.sy[self.validLenslets_x,self.validLenslets_y]])/self.slopes_units
                         
                 self.signal_2D = np.concatenate([self.SX,self.SY])
                         
@@ -286,14 +309,14 @@ class ShackHartmann:
                     self.SY[self.validLenslets_x,self.validLenslets_y] = self.centroid_multi[i*self.nValidSubaperture:(i+1)*self.nValidSubaperture,1]
                     signal_2D = np.concatenate((self.SX,self.SY)) - self.reference_slopes_maps
                     signal_2D[~self.valid_slopes_maps] = 0
-                    self.signal_2D[i,:,:] = signal_2D
+                    self.signal_2D[i,:,:] = signal_2D/self.slopes_units
                     
                 self.signal = self.signal_2D[:,self.valid_slopes_maps].T
                 self*self.cam
 
         else:
             if np.ndim(self.telescope.src.phase)==2:
-                self.signal_2D = self.lenslet_propagation_geometric(self.telescope.src.phase_no_pupil)*self.valid_slopes_maps
+                self.signal_2D = self.lenslet_propagation_geometric(self.telescope.src.phase_no_pupil)*self.valid_slopes_maps/self.slopes_units
                     
                 self.signal = self.signal_2D[self.valid_slopes_maps]
                 
@@ -304,15 +327,63 @@ class ShackHartmann:
                     Q=Parallel(n_jobs=1,prefer='processes')(delayed(self.lenslet_propagation_geometric)(i) for i in self.phase_buffer)
                     return Q
                 maps = compute_diffractive_signals()
-                self.signal_2D = np.asarray(maps)
+                self.signal_2D = np.asarray(maps)/self.slopes_units
+                self.signal = self.signal_2D[:,self.valid_slopes_maps].T
 
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         
+    @property
+    def is_geometric(self):
+        return self._is_geometric
+    
+    @is_geometric.setter
+    def is_geometric(self,val):
+        self._is_geometric = val
+        if hasattr(self,'isInitialized'):
+            if self.isInitialized:
+                print('Re-initializing WFS...')
+                self.initialize_wfs()
+            
+            
+    @property
+    def lightRatio(self):
+        return self._lightRatio
+    
+    @lightRatio.setter
+    def lightRatio(self,val):
+        self._lightRatio = val
+        if hasattr(self,'isInitialized'):
+            if self.isInitialized:
+                print('Selecting valid subapertures based on flux considerations..')
+
+                self.valid_subapertures = np.reshape(self.photon_per_subaperture >= self.lightRatio*np.max(self.photon_per_subaperture), [self.nSubap,self.nSubap])
+        
+                self.valid_subapertures_1D = np.reshape(self.valid_subapertures,[self.nSubap**2])
+
+                [self.validLenslets_x , self.validLenslets_y] = np.where(self.photon_per_subaperture_2D >= self.lightRatio*np.max(self.photon_per_subaperture))
+        
+                # index of valid slopes X and Y
+                self.valid_slopes_maps = np.concatenate((self.valid_subapertures,self.valid_subapertures))
+        
+                # number of valid lenslet
+                self.nValidSubaperture = int(np.sum(self.valid_subapertures))
+        
+                self.nSignal = 2*self.nValidSubaperture
+                
+                print('Re-initializing WFS...')
+                self.initialize_wfs()
+                print('Done!')
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS INTERACTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
     def __mul__(self,obj): 
         if obj.tag=='detector':
             obj.frame = self.camera_frame
         else:
             print('Error light propagated to the wrong type of object')
-        return -1# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% END %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+        return -1
+    
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% END %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
  
     def show(self):
         attributes = inspect.getmembers(self, lambda a:not(inspect.isroutine(a)))

@@ -120,7 +120,7 @@ class Telescope:
     def computePSF(self,zeroPaddingFactor):
         if hasattr(self,'src'): 
             # number of pixel considered 
-            N       = zeroPaddingFactor * self.resolution            
+            N       = int(zeroPaddingFactor * self.resolution)        
             center = N//2           
             norma   = N
             
@@ -145,7 +145,7 @@ class Telescope:
             # self.PSF  = self.PSF
             
             # zoom on the core of the PSF 
-            self.indPSF     = [self.resolution*zeroPaddingFactor//2-self.resolution//2-1,self.resolution*zeroPaddingFactor//2+self.resolution//2-1]
+            self.indPSF     = [N//2-self.resolution//2-1,N//2+self.resolution//2-1]
             self.PSF_trunc  = self.PSF[self.indPSF[0]:self.indPSF[-1],self.indPSF[0]:self.indPSF[-1]]
             self.xPSF_trunc = [-206265*(np.fix(max(self.indPSF)/2))*(self.src.wavelength/self.D) * (self.resolution/N),206265*(np.fix(max(self.indPSF)/2))*(self.src.wavelength/self.D) * (self.resolution/N)]
             self.yPSF_trunc = [-206265*(np.fix(max(self.indPSF)/2))*(self.src.wavelength/self.D) * (self.resolution/N),206265*(np.fix(max(self.indPSF)/2))*(self.src.wavelength/self.D) * (self.resolution/N)]

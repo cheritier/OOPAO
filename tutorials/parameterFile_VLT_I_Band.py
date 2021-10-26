@@ -16,7 +16,7 @@ def initializeParameterFile():
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
-    param['r0'                   ] = 0.13                                           # value of r0 in the visibile in [m]
+    param['r0'                   ] = 0.15                                           # value of r0 in the visibile in [m]
     param['L0'                   ] = 30                                             # value of L0 in the visibile in [m]
     param['fractionnalR0'        ] = [0.2,0.2,0.2,0.2,0.2]                                            # Cn2 profile
     param['windSpeed'            ] = [10,10,10,10,10]                                           # wind speed of the different layers in [m.s-1]
@@ -28,7 +28,7 @@ def initializeParameterFile():
     
     param['diameter'             ] = 8                                             # diameter in [m]
     param['nSubaperture'         ] = 20                                             # number of PWFS subaperture along the telescope diameter
-    param['nPixelPerSubap'       ] = 4                                            # sampling of the PWFS subapertures
+    param['nPixelPerSubap'       ] = 8                                            # sampling of the PWFS subapertures
     param['resolution'           ] = param['nSubaperture']*param['nPixelPerSubap']  # resolution of the telescope driven by the PWFS
     param['sizeSubaperture'      ] = param['diameter']/param['nSubaperture']        # size of a sub-aperture projected in the M1 space
     param['samplingTime'         ] = 1/1000                                         # loop sampling time in [s]
@@ -45,7 +45,7 @@ def initializeParameterFile():
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% DM PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     param['nActuator'            ] = param['nSubaperture']+1                                             # number of actuators 
     param['mechanicalCoupling'   ] = 0.45
-    param['isM4'                 ] = True                                           # tag for the deformable mirror class
+    param['isM4'                 ] = False                                           # tag for the deformable mirror class
     param['dm_coordinates'       ] = None                                           # tag for the eformable mirror class
     
     # mis-registrations                                                             

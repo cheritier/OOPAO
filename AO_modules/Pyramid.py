@@ -463,7 +463,7 @@ class Pyramid:
             em_field_pwfs   = np_cp.fft.ifft2(em_field_ft*self.mask)
             I               = np_cp.abs(em_field_pwfs)**2
         
-        # self.modulation_camera_frame.append(em_field_ft)
+        self.modulation_camera_frame.append(em_field_ft)
 
         return I    
     
@@ -573,7 +573,7 @@ class Pyramid:
                 if self.isInitialized and self.isCalibrated:
                     self.pyramidSignal_2D,self.pyramidSignal=self.signalProcessing()
                 del maps
-
+                
                 # case with multiple modes simultaneously
 
             else:

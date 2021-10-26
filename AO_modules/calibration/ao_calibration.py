@@ -80,12 +80,23 @@ def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = Non
 #%    get the interaction matrix : 
         
     if nameIntMat is None:
-        try:
-            # case where the system name has an extra attribute
-            nameIntMat = 'zonal_interaction_matrix_'+str(ao_obj.param['resolution'])+'_res_'+str(ao_obj.param['modulation'])+'_mod_'+str(ao_obj.param['postProcessing'])+'_psfCentering_'+str(ao_obj.param['psfCentering'])+ao_obj.param['extra']
-        except:
-            nameIntMat = 'zonal_interaction_matrix_'+str(ao_obj.param['resolution'])+'_res_'+str(ao_obj.param['modulation'])+'_mod_'+str(ao_obj.param['postProcessing'])+'_psfCentering_'+str(ao_obj.param['psfCentering'])
-    
+        if ao_obj.wfs.tag == 'pyramid':
+            try:
+                # case where the system name has an extra attribute
+                nameIntMat = 'zonal_interaction_matrix_'+str(ao_obj.param['resolution'])+'_res_'+str(ao_obj.param['modulation'])+'_mod_'+str(ao_obj.param['postProcessing'])+'_psfCentering_'+str(ao_obj.param['psfCentering'])+ao_obj.param['extra']
+            except:
+                nameIntMat = 'zonal_interaction_matrix_'+str(ao_obj.param['resolution'])+'_res_'+str(ao_obj.param['modulation'])+'_mod_'+str(ao_obj.param['postProcessing'])+'_psfCentering_'+str(ao_obj.param['psfCentering'])
+       
+        if ao_obj.wfs.tag == 'shackHartmann':
+            if ao_obj.wfs.is_geometric: 
+                nature = 'geometric'
+            else:
+                nature = 'diffractive'
+            try:
+                # case where the system name has an extra attribute
+                nameIntMat = 'zonal_interaction_matrix_'+str(ao_obj.param['resolution'])+'_res_'+str(ao_obj.wfs.nValidSubaperture)+'_subap_'+nature+'_'+ao_obj.param['extra']
+            except:
+                nameIntMat = 'zonal_interaction_matrix_'+str(ao_obj.param['resolution'])+'_res_'+str(ao_obj.wfs.nValidSubaperture)+'_subap_'+nature      
     try:
         print('Loading Interaction matrix '+nameIntMat+'...')
         imat = read_fits(nameFolderIntMat+nameIntMat+'.fits')
@@ -207,11 +218,29 @@ def ao_calibration(ngs, tel, atm, dm, wfs, param, nameFolderIntMat = None, nameI
 #%    get the interaction matrix : 
         
     if nameIntMat is None:
-        try:
-            # case where the system name has an extra attribute
-            nameIntMat = 'zonal_interaction_matrix_'+str(param['resolution'])+'_res_'+str(param['modulation'])+'_mod_'+str(param['postProcessing'])+'_psfCentering_'+str(param['psfCentering'])+param['extra']
-        except:
-            nameIntMat = 'zonal_interaction_matrix_'+str(param['resolution'])+'_res_'+str(param['modulation'])+'_mod_'+str(param['postProcessing'])+'_psfCentering_'+str(param['psfCentering'])
+        
+        
+        if wfs.tag == 'pyramid':
+            try:
+                # case where the system name has an extra attribute
+                nameIntMat = 'zonal_interaction_matrix_'+str(param['resolution'])+'_res_'+str(param['modulation'])+'_mod_'+str(param['postProcessing'])+'_psfCentering_'+str(param['psfCentering'])+param['extra']
+            except:
+                nameIntMat = 'zonal_interaction_matrix_'+str(param['resolution'])+'_res_'+str(param['modulation'])+'_mod_'+str(param['postProcessing'])+'_psfCentering_'+str(param['psfCentering'])
+       
+        if wfs.tag == 'shackHartmann':
+            if wfs.is_geometric: 
+                nature = 'geometric'
+            else:
+                nature = 'diffractive'
+            try:
+                # case where the system name has an extra attribute
+                nameIntMat = 'zonal_interaction_matrix_'+str(param['resolution'])+'_res_'+str(wfs.nValidSubaperture)+'_subap_'+nature+'_'+param['extra']
+            except:
+                nameIntMat = 'zonal_interaction_matrix_'+str(param['resolution'])+'_res_'+str(wfs.nValidSubaperture)+'_subap_'+nature     
+
+            
+            
+            
     try:
         print('Loading Interaction matrix '+nameIntMat+'...')
         imat = read_fits(nameFolderIntMat+nameIntMat+'.fits')
