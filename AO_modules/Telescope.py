@@ -222,8 +222,18 @@ class Telescope:
             obj.frame = obj.rebin(self.PSF,(obj.resolution,obj.resolution))
             
         if obj.tag=='spatialFilter':
-            self.computePSF()
-            obj.frame = obj.rebin(self.PSF,(obj.resolution,obj.resolution))
+            N = obj.resolution
+            EF_in = np.zeros([N,N],dtype='complex')
+            
+            EF_in [obj.center-self.resolution//2:obj.center+self.resolution//2,obj.center-self.resolution//2:obj.center+self.resolution//2] = self.pupil*self.pupilReflectivity*np.sqrt(self.src.fluxMap)* np.exp(1j*self.src.phase)
+            
+            FP_in = np.fft.fft2(EF_in)/N
+            
+            FP_filtered = FP_in*obj.mask
+            
+            em_field = np.fft.ifft2(FP_filtered)
+            self.em_field = em_field[obj.center-self.resolution//2:obj.center+self.resolution//2,obj.center-self.resolution//2:obj.center+self.resolution//2]
+            return self
         
         # interaction with deformable mirror object: update of the of the phase screen
         if obj.tag=='deformableMirror':

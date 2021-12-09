@@ -57,20 +57,26 @@ class ShackHartmann:
         self.cam.readoutNoise       = 0        # single lenslet 
         self.lenslet_frame          = np.zeros([self.n_pix_subap*self.zero_padding,self.n_pix_subap*self.zero_padding], dtype =complex)
         self.photon_per_subaperture = np.zeros(self.nSubap**2)
-
+        
+        # joblib parameter
+        self.nJobs = 1
+        self.joblib_prefer = 'processes'
+        
         # camera frame 
         self.camera_frame           = np.zeros([self.n_pix_subap*(self.nSubap),self.n_pix_subap*(self.nSubap)], dtype =float)
         
         # cube of lenslet zero padded
         self.cube                   = np.zeros([self.nSubap**2,self.n_pix_lenslet,self.n_pix_lenslet])
         
+        self.cube_flux                   = np.zeros([self.nSubap**2,self.n_pix_subap,self.n_pix_subap],dtype=(complex))
+
         self.index_x                = []
         self.index_y                = []
 
         # phasor to center spots in the center of the lenslets
         [xx,yy]                    = np.meshgrid(np.linspace(0,self.n_pix_lenslet-1,self.n_pix_lenslet),np.linspace(0,self.n_pix_lenslet-1,self.n_pix_lenslet))
         self.phasor                = np.exp(-(1j*np.pi*(self.n_pix_lenslet+1)/self.n_pix_lenslet)*(xx+yy))
-
+    
         count=0
         # Get subapertures index and fluix per subaperture
         for i in range(self.nSubap):
@@ -81,6 +87,8 @@ class ShackHartmann:
                 mask_amp_SH = np.sqrt(self.telescope.src.fluxMap[i*self.n_pix_subap:(i+1)*self.n_pix_subap,j*self.n_pix_subap:(j+1)*self.n_pix_subap]).astype(float)
                 # define the cube of lenslet arrays
                 self.cube[count,self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2,self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2] = mask_amp_SH
+                self.cube_flux[count,:,:] = mask_amp_SH*self.phasor[self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2,self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2]
+
                 self.photon_per_subaperture[count] = mask_amp_SH.sum()
                 count+=1
         self.index_x = np.asarray(self.index_x)
@@ -125,7 +133,7 @@ class ShackHartmann:
         print('Acquiring reference slopes..')        
         self.telescope.resetOPD()    
         self.sh_measure()        
-        self.reference_slopes_maps[self.valid_slopes_maps] = np.concatenate((self.sx0,self.sy0))[self.valid_slopes_maps]
+        self.reference_slopes_maps = np.copy(self.signal_2D) 
         self.isInitialized = True
         print('Done!')
         
@@ -152,41 +160,15 @@ class ShackHartmann:
 #%% DIFFRACTIVE 
 
 # single measurement 
-    def lenslet_propagation_diffractive(self,mask,ind_x,ind_y):
+    def fill_cube(self,mask,ind_x,ind_y):
         
         support = np.copy(self.lenslet_frame)
         
         lenslet_phase = self.telescope.src.phase[ind_x*self.n_pix_subap:(ind_x+1)*self.n_pix_subap,ind_y*self.n_pix_subap:(ind_y+1)*self.n_pix_subap]
         
-        support[self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2,self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2] = lenslet_phase
+        support[self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2,self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2] = mask*np.exp(1j*lenslet_phase)
         
-        norma = mask.shape[0]
-        
-        ft_em_field_lenslet = (np.fft.fft2((mask*np.exp(1j*support)) * self.phasor))/norma
-        
-        I = np.abs(ft_em_field_lenslet)**2
-        
-        I = bin_ndarray(I, [self.n_pix_subap,self.n_pix_subap], operation='sum')
-        
-        if self.cam.photonNoise!=0:
-            rs = np.random.RandomState(seed=int(time.time()))
-            I  = rs.poisson(I)
-                
-        if self.cam.readoutNoise!=0:
-            I += np.int64(np.round(np.random.randn(I.shape[0],I.shape[1])*self.cam.readoutNoise))
-        
-        self.camera_frame[ind_x*self.n_pix_subap:(ind_x+1)*self.n_pix_subap,ind_y*self.n_pix_subap:(ind_y+1)*self.n_pix_subap] = I
-
-        if self.isInitialized:
-            [x,y] = self.centroid(I,threshold=self.threshold_cog)
-            self.sx[ind_x,ind_y] = (x-self.sx0[ind_x,ind_y] )
-            self.sy[ind_x,ind_y] = (y-self.sy0[ind_x,ind_y] )
-        else:
-            [x,y] = self.centroid(I,threshold=self.threshold_cog)
-            self.sx0[ind_x,ind_y] = x
-            self.sy0[ind_x,ind_y] = y
-            
-        return I
+        return support
     
 # multiple measurements
     def get_phase_buffer(self,amp,ind_x,ind_y):
@@ -207,8 +189,11 @@ class ShackHartmann:
         
         return out
         
-    def fill_camera_frame(self,ind_x,ind_y,index_frame,I):
-        self.camera_frame[index_frame,ind_x*self.n_pix_subap:(ind_x+1)*self.n_pix_subap,ind_y*self.n_pix_subap:(ind_y+1)*self.n_pix_subap] = I
+    def fill_camera_frame(self,ind_x,ind_y,I,index_frame=None):
+        if index_frame is None:
+            self.camera_frame[ind_x*self.n_pix_subap:(ind_x+1)*self.n_pix_subap,ind_y*self.n_pix_subap:(ind_y+1)*self.n_pix_subap] = I        
+        else:
+            self.camera_frame[index_frame,ind_x*self.n_pix_subap:(ind_x+1)*self.n_pix_subap,ind_y*self.n_pix_subap:(ind_y+1)*self.n_pix_subap] = I
 
     def compute_camera_frame_multi(self,maps_intensisty):   
         self.ind_frame =np.zeros(maps_intensisty.shape[0],dtype=(int))
@@ -220,7 +205,7 @@ class ShackHartmann:
             self.ind_frame[i*self.nValidSubaperture:(i+1)*self.nValidSubaperture]=i
         
         def joblib_fill_camera_frame():
-            Q=Parallel(n_jobs=1,prefer='processes')(delayed(self.fill_camera_frame)(i,j,k,l) for i,j,k,l in zip(index_x,index_y,self.ind_frame,self.maps_intensisty))
+            Q=Parallel(n_jobs=1,prefer='processes')(delayed(self.fill_camera_frame)(i,j,k,l) for i,j,k,l in zip(index_x,index_y,self.maps_intensisty,self.ind_frame))
             return Q
         
         joblib_fill_camera_frame()
@@ -253,20 +238,34 @@ class ShackHartmann:
             if np.ndim(self.telescope.src.phase)==2:
                 # reset camera frame
                 self.camera_frame   = np.zeros([self.n_pix_subap*(self.nSubap),self.n_pix_subap*(self.nSubap)], dtype =float)
+                
+                def fill_em_cube():
+                    Q=Parallel(n_jobs=self.nJobs,prefer=self.joblib_prefer)(delayed(self.fill_cube)(i,j,k) for i,j,k in zip(self.cube_flux[self.valid_subapertures_1D,:,:],self.index_x[self.valid_subapertures_1D],self.index_y[self.valid_subapertures_1D]))
+                    return Q
+                norma = self.cube_flux.shape[1]
 
-                def compute_diffractive_signals():
-                    Q=Parallel(n_jobs=1,prefer='processes')(delayed(self.lenslet_propagation_diffractive)(i,j,k) for i,j,k in zip(self.cube,self.index_x,self.index_y))
+                I = np.abs(np.fft.fft2(np.asarray(fill_em_cube())))**2
+                
+                self.maps_intensity =  bin_ndarray(I, [I.shape[0], self.n_pix_subap,self.n_pix_subap], operation='sum')
+                
+                def joblib_fill_camera_frame():
+                    Q=Parallel(n_jobs=1,prefer='processes')(delayed(self.fill_camera_frame)(i,j,k) for i,j,k in zip(self.index_x[self.valid_subapertures_1D],self.index_y[self.valid_subapertures_1D],self.maps_intensity))
+                    return Q
+        
+                joblib_fill_camera_frame()
+                
+                def joblib_centroid():
+                    Q=Parallel(n_jobs=1,prefer='processes')(delayed(self.centroid)(i) for i in self.maps_intensity)
                     return Q
                 
-                self.maps_intensity = np.asarray(compute_diffractive_signals())
-                self.SX[self.validLenslets_x,self.validLenslets_y] = self.sx[self.validLenslets_x,self.validLenslets_y]
-                self.SY[self.validLenslets_x,self.validLenslets_y] = self.sy[self.validLenslets_x,self.validLenslets_y]
-                        
-                self.signal = np.concatenate([self.sx[self.validLenslets_x,self.validLenslets_y],self.sy[self.validLenslets_x,self.validLenslets_y]])/self.slopes_units
-                        
-                self.signal_2D = np.concatenate([self.SX,self.SY])
-                        
-                self.signal_2D[np.isnan(self.signal_2D)] = 0
+                centroid_single = np.asarray(joblib_centroid())
+                self.SX[self.validLenslets_x,self.validLenslets_y] = centroid_single[:,0]
+                self.SY[self.validLenslets_x,self.validLenslets_y] = centroid_single[:,1]
+                
+                signal_2D                           = np.concatenate((self.SX,self.SY)) - self.reference_slopes_maps
+                signal_2D[~self.valid_slopes_maps]  = 0
+                self.signal_2D                      = signal_2D/self.slopes_units
+                self.signal                         = self.signal_2D[self.valid_slopes_maps]
                 
                 self*self.cam
                         
@@ -279,7 +278,7 @@ class ShackHartmann:
                 def compute_diffractive_signals_multi():
                     Q=Parallel(n_jobs=1,prefer='processes')(delayed(self.get_lenslet_phase_buffer)(i) for i in self.phase_buffer)
                     return Q 
-                self.maps_intensity = np.reshape(np.asarray(compute_diffractive_signals_multi()),[self.phase_buffer.shape[0]*np.sum(self.valid_subapertures_1D),16,16])
+                self.maps_intensity = np.reshape(np.asarray(compute_diffractive_signals_multi()),[self.phase_buffer.shape[0]*np.sum(self.valid_subapertures_1D),self.n_pix_lenslet,self.n_pix_lenslet])
                 norma = self.maps_intensity.shape[1]
                 
                 F = np.abs(np.fft.fft2(self.maps_intensity)/norma)**2

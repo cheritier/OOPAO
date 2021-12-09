@@ -46,7 +46,7 @@ except:
 class Pyramid:
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     
-    def __init__(self,nSubap,telescope,modulation,lightRatio,pupilSeparationRatio=1.2,calibModulation=50,extraModulationFactor=0,zeroPadding=0,psfCentering=True,edgePixel=2,unitCalibration=0,binning =1, postProcessing='slopesMaps',userValidSignal=None,old_mask=True):
+    def __init__(self,nSubap,telescope,modulation,lightRatio,pupilSeparationRatio=1.2,calibModulation=50,extraModulationFactor=0,zeroPadding=0,psfCentering=True,edgePixel=2,unitCalibration=0,binning =1,nTheta_user_defined=None, postProcessing='slopesMaps',userValidSignal=None,old_mask=True):
         try:
             error
             import cupy as np_cp
@@ -64,6 +64,7 @@ class Pyramid:
             self.convert_for_numpy = no_function
         # initialize the Pyramid Object 
         self.telescope                  = telescope
+        self.nTheta_user_defined        = nTheta_user_defined
         self.extraModulationFactor      = extraModulationFactor                             # Extra Factor to increase/reduce the number of modulation point
         self.nSubap                     = nSubap                                            # Number of subaperture
         self.telRes                     = self.telescope.resolution                         # Resolution of the telescope pupil
@@ -792,8 +793,12 @@ class Pyramid:
         self._modulation = val
         if val !=0:
             # define the modulation point
-            perimeter                       = np.pi*2*self._modulation            
-            self.nTheta                     = 4*int((self.extraModulationFactor+np.ceil(perimeter/4)))
+            perimeter                       = np.pi*2*self._modulation    
+            if self.nTheta_user_defined is None:
+                self.nTheta                     = 4*int((self.extraModulationFactor+np.ceil(perimeter/4)))
+            else:
+                self.nTheta = self.nTheta_user_defined   
+                
             self.thetaModulation            = np.linspace(0,2*np.pi,self.nTheta,endpoint=False)
             self.phaseBuffModulation        = np.zeros([self.nTheta,self.nRes,self.nRes]).astype(np_cp.float32)    
             self.phaseBuffModulationLowres  = np.zeros([self.nTheta,self.telRes,self.telRes]).astype(np_cp.float32)          
