@@ -185,7 +185,7 @@ def run_cl(param,obj):
         turbPhase=obj.tel.src.phase
         turb_OPD = np.reshape(obj.tel.OPD,obj.tel.resolution**2)
         try:
-            modal_coefficients_turb[i_loop,:] = obj.projector @ turb_OPD
+            modal_coefficients_turb[i_loop,:] = np.matmul(obj.projector, turb_OPD)
             save_modal_coef = True
         except:
             save_modal_coef = False
@@ -219,7 +219,7 @@ def run_cl(param,obj):
         
         res_OPD = np.reshape(obj.tel.OPD,obj.tel.resolution**2)
         try:
-            modal_coefficients_res[i_loop,:] = obj.projector @ res_OPD
+            modal_coefficients_res[i_loop,:] = np.matmul(obj.projector, res_OPD)
         except:
             if i_loop==0:
                 print('Error - no projector for the modal basis..')

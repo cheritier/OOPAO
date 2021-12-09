@@ -144,6 +144,7 @@ def run_cl_sinusoidal_modulation(param,obj):
     ao_residuals            = np.zeros(nLoop)
     ao_turbulence           = np.zeros(nLoop)
     petalling_nm            = np.zeros([6,nLoop])
+    res_OPD_buff            = np.zeros([nLoop,obj.tel.resolution,obj.tel.resolution])
     # buffer for demodulations
     buffer_dm               = np.zeros([obj.dm.nValidAct,N])
     buffer_wfs              = np.zeros([obj.wfs.nSignal,N])
@@ -282,6 +283,8 @@ def run_cl_sinusoidal_modulation(param,obj):
 
             if count_bootstrap>= obj.n_iteration_per_period[0]:
                 	buffer_dm[:,count]  = obj.dm.coefs
+                    
+        res_OPD_buff[i_loop,:,:] = obj.tel.OPD.copy()                 
         obj.dm.coefs=obj.dm.coefs-gain_cl*np.matmul(M2C_cl,np.matmul(reconstructor,wfsSignal))
         
         if get_forces:
@@ -475,7 +478,14 @@ def run_cl_sinusoidal_modulation(param,obj):
     dataCL['dm_commands']         = buffer_dm
 
 
-    
+    try:
+        if obj.save_residual_phase:
+            dataCL['residual_phase']      = res_OPD_buff
+    except:
+            dataCL['residual_phase']      = None
+        
+            
+        
     if save_modal_coef:
         dataCL['modal_coeff_res']      = modal_coefficients_res
         dataCL['modal_coeff_turb']     = modal_coefficients_turb

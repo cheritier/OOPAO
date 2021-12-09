@@ -89,7 +89,7 @@ def run_cl_long_push_pull(param,obj):
         for i_length in range(obj.push_pull_duration):
             # update of the atmosphere
             obj.atm.update()
-            cl_data.ao_turbulence[i_loop+i_length ]=np.std(obj.tel.OPD[np.where(obj.tel.pupil>0)])*1e9
+            cl_data.ao_turbulence[i_loop+i_length ]=np.std(obj.atm.OPD[np.where(obj.tel.pupil>0)])*1e9
 
             # get modal coefficients from DM        
             modal_coeffs = M2C_cl_inv @ dm_cl.coefs
@@ -102,7 +102,7 @@ def run_cl_long_push_pull(param,obj):
             obj.tel*dm_cl*obj.wfs
             
             if obj.get_forces:
-                cl_data.dm_forces[i_loop,:] = obj.P2F_full@dm_cl.coefs
+                cl_data.dm_forces[i_loop+i_length,:] = obj.P2F_full@dm_cl.coefs
             
             cl_data.ao_residuals[i_loop+i_length]=np.std(obj.tel.OPD[np.where(obj.tel.pupil>0)])*1e9
             # control law
@@ -124,6 +124,8 @@ def run_cl_long_push_pull(param,obj):
         for i_length in range(obj.push_pull_duration):
             # update of the atmosphere
             obj.atm.update()
+            cl_data.ao_turbulence[i_loop+i_length ]=np.std(obj.atm.OPD[np.where(obj.tel.pupil>0)])*1e9
+
             # get modal coefficients from DM        
             modal_coeffs = M2C_cl_inv @ dm_cl.coefs
             # force a push/pull on the desired mode
@@ -138,7 +140,7 @@ def run_cl_long_push_pull(param,obj):
             dm_cl.coefs -= np.matmul(M2C_cl,obj.push_pull_gains@np.matmul(reconstructor,wfsSignal))  
             
             if obj.get_forces:
-                cl_data.dm_forces[i_loop,:] = obj.P2F_full@dm_cl.coefs
+                cl_data.dm_forces[i_loop+i_length,:] = obj.P2F_full@dm_cl.coefs
                 
             # buffer of the wfs signal to simulate delay
             wfsSignal = obj.wfs.signal
