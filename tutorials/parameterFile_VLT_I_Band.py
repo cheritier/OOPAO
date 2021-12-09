@@ -89,15 +89,16 @@ def initializeParameterFile():
     param['name'] = 'VLT_' +  param['opticalBand'] +'_band_'+ str(param['nSubaperture'])+'x'+ str(param['nSubaperture'])  
     
     # location of the calibration data
-    param['pathInput'            ] = '/Disk3/cheritier/psim/data_calibration/' 
+    param['pathInput'            ] = 'C:/Users/cheritie/Desktop/OOPAO_data/data_calibration/'
     
     # location of the output data
-    param['pathOutput'            ] = '/diskb/cheritier/psim/data_cl'
+    param['pathOutput'            ] = 'C:/Users/cheritie/Desktop/OOPAO_data/data_output/'
     
 
     print('Reading/Writting calibration data from ' + param['pathInput'])
     print('Writting output data in ' + param['pathOutput'])
 
     createFolder(param['pathOutput'])
+    createFolder(param['pathInput'])
     
     return param

@@ -328,7 +328,7 @@ wfsSignal               = np.arange(0,wfs.nSignal)*0
 # loop parameters
 gainCL                  = 0.5
 wfs.cam.photonNoise     = False
-display                 = False
+display                 = True
 
 param['nLoop']          = 500
 
