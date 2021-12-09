@@ -9,11 +9,12 @@ import numpy as np
 
 from AO_modules.calibration.CalibrationVault  import calibrationVault
 from AO_modules.calibration.InteractionMatrix import interactionMatrix
-from AO_modules.tools.tools import emptyClass,createFolder, read_fits
+from AO_modules.tools.tools import emptyClass,createFolder, read_fits, write_fits
 
 
 
-def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = None, nameFolderBasis = None, nameBasis = None, nMeasurements=50, index_modes = None, get_basis = True):
+def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = None, nameFolderBasis = None, nameBasis = None,nameProjector = None, nMeasurements=50, index_modes = None, get_basis = True):
+    
     
     # check if the name of the basis is specified otherwise take the nominal name
     if nameBasis is None:
@@ -23,8 +24,12 @@ def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = Non
             initName = 'M2C_'
         try:
             nameBasis = initName+str(ao_obj.param['resolution'])+'_res'+ao_obj.param['extra']
+            nameProjector = '/projectors/'+nameBasis+str(ao_obj.tel.pupilArea)+'_pix_'+str(ao_obj.param['nModes'])+'_modes_'+ao_obj.param['extra']
+
         except:
             nameBasis = initName+str(ao_obj.param['resolution'])+'_res'
+            nameProjector = '/projectors/'+nameBasis+str(ao_obj.tel.pupilArea)+'_pix_'+str(ao_obj.param['nModes'])+'_modes_'
+
     
     ao_calib_object             = emptyClass()
     
@@ -32,19 +37,21 @@ def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = Non
     if nameFolderBasis is None:
         nameFolderBasis = ao_obj.param['pathInput']
     createFolder(nameFolderBasis)
+    createFolder(nameFolderBasis+'/projectors/')
 
 ## %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%       
 #    get the modal basis : 
     
     try:
         print('Loading the KL Modal Basis from: ' + nameFolderBasis+nameBasis )
-       
         M2C = read_fits(nameFolderBasis+ nameBasis+'.fits')
         if index_modes is None:
             M2C = M2C[:,:ao_obj.param['nModes']]
         else:
             M2C = M2C[:,index_modes]
-                    
+        
+        ao_obj.param['modal_basis_filename'] = nameFolderBasis+ nameBasis+'.fits'
+
         if get_basis:
             ao_obj.dm.coefs = M2C
             ao_obj.tel*ao_obj.dm
@@ -53,19 +60,25 @@ def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = Non
             ao_calib_object.basis = basis
         
         if ao_obj.param['getProjector']:
-            
-            print('Computing the pseudo-inverse of the modal basis...')
-
-            cross_product_basis = np.matmul(basis.T,basis) 
-            
-            non_diagonal_elements = np.sum(np.abs(cross_product_basis))-np.trace(cross_product_basis)
-            criteria = 1-np.abs(np.trace(cross_product_basis)-non_diagonal_elements)/np.trace(cross_product_basis)
-            if criteria <= 1e-3:
-                print('Diagonality criteria: ' + str(criteria) + ' -- using the fast computation')
-                projector = np.diag(1/np.diag(cross_product_basis))@basis.T
-            else:
-                print('Diagonality criteria: ' + str(criteria) + ' -- using the slow computation')
-                projector = np.linalg.pinv(basis)  
+            try:
+                projector = read_fits(nameFolderBasis+ nameProjector+'.fits')
+            except:
+                print('Computing the pseudo-inverse of the modal basis...')
+    
+                cross_product_basis = np.matmul(basis.T,basis) 
+                
+                non_diagonal_elements = np.sum(np.abs(cross_product_basis))-np.trace(cross_product_basis)
+                criteria = 1-np.abs(np.trace(cross_product_basis)-non_diagonal_elements)/np.trace(cross_product_basis)
+                if criteria <= 1e-3:
+                    print('Diagonality criteria: ' + str(criteria) + ' -- using the fast computation')
+                    projector = np.diag(1/np.diag(cross_product_basis))@basis.T
+                else:
+                    print('Diagonality criteria: ' + str(criteria) + ' -- using the slow computation')
+                    projector = np.linalg.pinv(basis)  
+                print('saving for later..')
+                write_fits(projector,nameFolderBasis+ nameProjector+'.fits')
+                print('Done!')
+                
             ao_calib_object.projector   = projector
         
     except:
@@ -102,6 +115,8 @@ def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = Non
         imat = read_fits(nameFolderIntMat+nameIntMat+'.fits')
         calib = calibrationVault(imat@M2C)    
         print('Done!')
+        ao_obj.param['interaction_matrix_filename'] = nameFolderIntMat+nameIntMat+'.fits'
+
 
         
     except:  
@@ -120,6 +135,7 @@ def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = Non
 
         hdu = pfits.HDUList([empty_primary, primary_hdu])
         hdu.writeto(nameFolderIntMat + nameIntMat + '.fits', overwrite=True)
+        calib = calibrationVault(calib.D@M2C)    
 
 ## %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%       
    
@@ -182,7 +198,7 @@ def ao_calibration(ngs, tel, atm, dm, wfs, param, nameFolderIntMat = None, nameI
         print('Loading the KL Modal Basis from: ' + nameFolderBasis+nameBasis )
        
         M2C = read_fits(nameFolderBasis+ nameBasis+'.fits')
-
+        param['modal_basis_filename'] = nameFolderBasis+ nameBasis+'.fits'
         if index_modes is None:
             M2C = M2C[:,:param['nModes']]
         else:
@@ -246,6 +262,7 @@ def ao_calibration(ngs, tel, atm, dm, wfs, param, nameFolderIntMat = None, nameI
         imat = read_fits(nameFolderIntMat+nameIntMat+'.fits')
         calib = calibrationVault(imat@M2C)      
         print('Done!')
+        param['interaction_matrix_filename'] = nameFolderIntMat+nameIntMat+'.fits'
 
         
     except:  
@@ -325,14 +342,15 @@ def get_modal_gains_from_ao_obj(ao_obj, nameFolderIntMat = None):
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
 
-def get_modal_gains(ngs, tel, atm, dm, wfs, param, nameFolderIntMat = None):
-
+def get_modal_gains(param, nameFolderIntMat = None,r0 =None):
+    if r0 is None:
+        r0 = param['r0']
 ## %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%       
     if nameFolderIntMat is None:
         nameFolderIntMat = param['pathInput']+param['name']+'/'
     createFolder(nameFolderIntMat)
 #%    get the modal gains matrix :   
-    nameExtra = '_r0_'+str(100*atm.r0)+'_cm_'+param['opticalBand']+'_band_fitting_'+str(param['nModes'])+'_KL'
+    nameExtra = '_r0_'+str(100*r0)+'_cm_'+param['opticalBand']+'_band_fitting_'+str(param['nModes'])+'_KL'
     try:
         nameModalGains = 'modal_gains'+param['extra']+nameExtra
     except:
