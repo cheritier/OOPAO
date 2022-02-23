@@ -7,13 +7,13 @@ The project was initially intended for personal use, i tried to make it user-fri
 This project is licensed under the terms of the MIT license.
 
 # MODULES REQUIRED
-The code is written for Python 3 and requires the following modules
+The code is written for Python 3 (version 3.8.8) and requires the following modules
 
-    numba => required in aotools
-    joblib => paralleling computing
-    scikit-image => 2D interpolations
-    numexpr => memory optimized simple operations
-    astropy => handling of fits files
+    numba 0.53.1        => required in aotools
+    joblib 1.01         => paralleling computing
+    scikit-image 0.18.3 => 2D interpolations
+    numexpr 2.7.3       => memory optimized simple operations
+    astropy 4.2.1       => handling of fits files
     
 # CONTRIBUTORS
 C.T. Heritier
