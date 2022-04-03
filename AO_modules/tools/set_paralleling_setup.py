@@ -23,8 +23,6 @@ def set_paralleling_setup(wfs,ELT = True, nThread = None, nJob = None):
             except:
                 print('Could not optimize the parallelisation of the code ')
 
-                    
-        
     
     if ELT is True:
         

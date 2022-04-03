@@ -17,7 +17,7 @@ import scipy.ndimage as sp
 from users.cheritie.model_LBT.lbt_tools import get_influence_functions
 
 
-def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis_registration = None):
+def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis_registration = None,print_dm_properties=True,floating_precision=64):
         if extra_dm_mis_registration is None:
             extra_dm_mis_registration = MisRegistration()
         if wfs is None:
@@ -42,13 +42,14 @@ def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis
                                         coordinates  = coordinates,\
                                         pitch        = 0,\
                                         misReg       = misRegistration_tmp + extra_dm_mis_registration,\
-                                        M4_param     = param)
-                    
-                    print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-                    print('Mis-Registrations Applied on M4!')
+                                        M4_param     = param,\
+                                        print_dm_properties = print_dm_properties,\
+                                        floating_precision =floating_precision)
+                    if print_dm_properties:
+                        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                        print('Mis-Registrations Applied on M4!')
             
                 else:
-                    param['isM4'] = False
                 
                     modes, coord, M2C, validAct =  get_influence_functions(telescope             = tel,\
                                                                             misReg               = misRegistration_tmp + extra_dm_mis_registration,\
@@ -56,6 +57,7 @@ def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis
                                                                             filename_mir_modes   = param['filename_mir_modes'],\
                                                                             filename_coordinates = param['filename_coord'],\
                                                                             filename_M2C         = param['filename_m2c'])
+                    param['isM4'] = False
                     
                     dm_tmp = DeformableMirror(telescope    = tel,\
                         nSubap       = param['nSubaperture'],\
@@ -64,24 +66,27 @@ def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis
                         pitch        = 0,\
                         misReg       = misRegistration_tmp + extra_dm_mis_registration,\
                         modes        = np.reshape(modes,[tel.resolution**2,modes.shape[2]]),\
-                        M4_param     = param)
-                    print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-                    print('Mis-Registrations Applied on user-defined DM!')
+                        M4_param     = param,\
+                        print_dm_properties = print_dm_properties)
+                    if print_dm_properties:
+                        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                        print('Mis-Registrations Applied on user-defined DM!')
                         
                     
             except:
                     # default case
                         
-                param['isM4'] = False
                 dm_tmp = DeformableMirror(telescope    = tel,\
                         nSubap       = param['nSubaperture'],\
                         mechCoupling = param['mechanicalCoupling'],\
                         coordinates  = coordinates,\
                         pitch        = 0,\
                         misReg       = misRegistration_tmp + extra_dm_mis_registration,\
-                        M4_param     = param)
-                print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-                print('Mis-Registrations Applied on Synthetic DM!')
+                        M4_param     = param,\
+                        print_dm_properties = print_dm_properties)
+                if print_dm_properties:
+                    print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                    print('Mis-Registrations Applied on Synthetic DM!')
         else:
             if wfs.tag == 'pyramid':
                 misRegistration_wfs                 = MisRegistration()
@@ -97,9 +102,9 @@ def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis
                 misRegistration_dm.radialScaling     = misRegistration_tmp.radialScaling
                 
                 dm_tmp = applyMisRegistration(tel,misRegistration_dm + extra_dm_mis_registration, param, wfs = None)
-                
-                print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-                print('Mis-Registrations Applied on both DM and WFS!')
+                if print_dm_properties:
+                    print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                    print('Mis-Registrations Applied on both DM and WFS!')
             else:
                 print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
                 print('Wrong object passed as a wfs.. aplying the mis-registrations to the DM only')
@@ -113,15 +118,16 @@ def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis
     
 
 def apply_shift_wfs(wfs,sx,sy):
-    sx *= (wfs.telescope.resolution/wfs.nSubap)
-    sy *= (wfs.telescope.resolution/wfs.nSubap)
-    tmp                             = np.ones([wfs.nRes,wfs.nRes])
-    tmp[:,0]                        = 0
-    Tip                             = (sp.morphology.distance_transform_edt(tmp))
-    Tilt                            = (sp.morphology.distance_transform_edt(np.transpose(tmp)))
-    
-    # normalize the TT to apply the modulation in terms of lambda/D
-    Tip                        = (wfs.telRes/wfs.nSubap)*(((Tip/Tip.max())-0.5)*2*np.pi)
-    Tilt                       = (wfs.telRes/wfs.nSubap)*(((Tilt/Tilt.max())-0.5)*2*np.pi)
-    
-    wfs.mask = np.exp(1j*(wfs.initial_m+sx*Tip+sy*Tilt))
+    if wfs.tag =='pyramid':
+        sx *= (wfs.telescope.resolution/wfs.nSubap)
+        sy *= (wfs.telescope.resolution/wfs.nSubap)
+        tmp                             = np.ones([wfs.nRes,wfs.nRes])
+        tmp[:,0]                        = 0
+        Tip                             = (sp.morphology.distance_transform_edt(tmp))
+        Tilt                            = (sp.morphology.distance_transform_edt(np.transpose(tmp)))
+        
+        # normalize the TT to apply the modulation in terms of lambda/D
+        Tip                        = (wfs.telRes/wfs.nSubap)*(((Tip/Tip.max())-0.5)*2*np.pi)
+        Tilt                       = (wfs.telRes/wfs.nSubap)*(((Tilt/Tilt.max())-0.5)*2*np.pi)
+        
+        wfs.mask = np.exp(1j*(wfs.initial_m+sx*Tip+sy*Tilt))

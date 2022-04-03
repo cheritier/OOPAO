@@ -97,7 +97,7 @@ def anamorphosis(coord,angle,mNorm,mRad):
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% START OF THE FUNCTION   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-def interpolateGeometricalTransformation(data,misReg=0):
+def interpolateGeometricalTransformation(data,misReg=0, order =3):
 
     # size of influence functions and number of actuators
     nx, ny, nData = data.shape
@@ -121,7 +121,7 @@ def interpolateGeometricalTransformation(data,misReg=0):
     data = np.moveaxis(np.asarray(data),-1,0)
 
     def globalTransformation(image):
-            output  = sk.warp(image,(transformationMatrix).inverse,order=3,mode='constant',cval = 0)
+            output  = sk.warp(image,(transformationMatrix).inverse,order=order,mode='constant',cval = 0)
             return output
     
     def joblib_transformation():

@@ -212,6 +212,10 @@ class Telescope:
             obj.telescope=self              # assign the telescope object to the pyramid-telescope object
             obj.pyramid_propagation(self)    # propagation of the telescope-source phase screen to the pyramid-detector
         
+        if  obj.tag == 'double_wfs':
+            obj.telescope = self              # assign the telescope object to the pyramid-telescope object
+            obj.wfs_measure(self)    # propagation of the telescope-source phase screen to the pyramid-detector
+
         if obj.tag=='shackHartmann':
             obj.telescope=self              # assign the telescope object to the pyramid-telescope object
             obj.sh_measure()
@@ -296,7 +300,8 @@ class Telescope:
             else:
                 petalFreeOPD = image
                 try:
-                    for i in range(6):
+                    N = self.index_pixel_petals.shape[2]
+                    for i in range(N):
                         petalFreeOPD[np.where(np.squeeze(self.index_pixel_petals[:,:,i])==1)]-=np.mean(petalFreeOPD[np.where(np.squeeze(self.index_pixel_petals[:,:,i])==1)])
                 except:
                     petalFreeOPD[np.where(np.squeeze(self.index_pixel_petals)==1)]-=np.mean(petalFreeOPD[np.where(np.squeeze(self.index_pixel_petals)==1)])

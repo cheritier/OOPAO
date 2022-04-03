@@ -23,13 +23,12 @@ def load_psim():
             path = glob.glob(nameTest,recursive = True)
             
             print(path)
-            counter += 1 
-
             
         nameFolder =path[0] 
 #        os.chdir(nameFolder[:-10])
 
         sys.path.append(nameFolder[:-10])
+        counter += 1 
     
     print('AO_Modules found! Loading the main modules:')
 

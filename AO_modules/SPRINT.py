@@ -12,14 +12,15 @@ from AO_modules.calibration.CalibrationVault import calibrationVault
 import numpy as np
 
 class SPRINT:
-    def __init__(self,obj, basis, nameFolder = None, nameSystem = None, mis_registration_zero_point = None, wfs_mis_registered= None, fast_algorithm = False, n_iteration = 3):
+    def __init__(self, obj, basis, nameFolder = None, nameSystem = None, mis_registration_zero_point = None, wfs_mis_registered= None, fast_algorithm = False, n_mis_reg = 3):
         print('Setting up SPRINT..')
         # modal basis considered
         self.basis              = basis
+        self.n_mis_reg          = n_mis_reg
         # consider the case when only one signal is used
-        if len(basis.indexModes)==1:
-            self.basis.indexModes    = [basis.indexModes,basis.indexModes]
-            self.basis.modes         = np.asarray([basis.modes,basis.modes]).T           
+        # if len(basis.indexModes)==1:
+            # self.basis.indexModes    = [basis.indexModes,basis.indexModes]
+            # self.basis.modes         = np.asarray([basis.modes,basis.modes]).T           
         
         # Case where the shifts are applied in the WFS space            
         self.wfs_mis_registered = wfs_mis_registered
@@ -33,10 +34,12 @@ class SPRINT:
             self.mis_registration_zero_point = mis_registration_zero_point
 
         # epsilon mis-registration for the computation of the directional gradients
-        self.epsilonMisRegistration                  = MisRegistration()
-        self.epsilonMisRegistration.shiftX           = np.round(obj.dm.pitch /10,4)
-        self.epsilonMisRegistration.shiftY           = np.round(obj.dm.pitch /10,4)
-        self.epsilonMisRegistration.rotationAngle    = np.round(np.rad2deg(np.arctan(self.epsilonMisRegistration.shiftX)/(obj.tel.D/2)),4)
+        self.epsilonMisRegistration                   = MisRegistration()
+        self.epsilonMisRegistration.shiftX            = np.round(obj.dm.pitch /100,4)
+        self.epsilonMisRegistration.shiftY            = np.round(obj.dm.pitch /100,4)
+        self.epsilonMisRegistration.rotationAngle     = np.round(np.rad2deg(np.arctan(self.epsilonMisRegistration.shiftX)/(obj.tel.D/2)),4)
+        self.epsilonMisRegistration.radialScaling     = 0.01
+        self.epsilonMisRegistration.tangentialScaling = 0.01
         
         # folder name to save the sensitivity matrices
         if nameFolder is None:
@@ -63,12 +66,17 @@ class SPRINT:
                                                          misRegistrationZeroPoint   = self.mis_registration_zero_point,\
                                                          epsilonMisRegistration     = self.epsilonMisRegistration,\
                                                          param                      = obj.param,\
-                                                         wfs_mis_registrated        = wfs_mis_registered)
-        
+                                                         wfs_mis_registrated        = wfs_mis_registered,\
+                                                         n_mis_reg                  = self.n_mis_reg,\
+                                                         fast                       = self.fast_algorithm)
+
+            
+        self.metaMatrix_init = calibrationVault(self.metaMatrix.D)
+        self.mis_registration_zero_point_init = mis_registration_zero_point
         
         print('Done!')
 
-    def estimate(self,obj,on_sky_slopes, n_iteration = 3):
+    def estimate(self,obj,on_sky_slopes, n_iteration = 3, n_update_zero_point = 0 ,precision = 3, gain_estimation = 1):
         """
         Method of SPRINT to estimate the mis-registrations parameters
             - obj           : a class containing the different objects, tel, dm, atm, ngs and wfs
@@ -82,13 +90,45 @@ class SPRINT:
             Sprint.mis_registration_out.shift_y  ---- shift in m 
             Sprint.mis_registration_out.rotation ---- rotation in degree
         """
-        if np.ndim(on_sky_slopes)==1:
-            calib_misReg_in = calibrationVault(np.squeeze(np.asarray([on_sky_slopes.T,on_sky_slopes.T]).T))
-        else:
-            calib_misReg_in = calibrationVault(on_sky_slopes)
-            
 
-        [self.mis_registration_out ,self.scaling_factor ,self.mis_registration_buffer] = estimateMisRegistration( nameFolder                 = self.nameFolder_sensitivity_matrice,\
+        calib_misReg_in = calibrationVault(on_sky_slopes,invert = False)
+        # reinitialize the  meta matrix
+        self.metaMatrix = calibrationVault(self.metaMatrix_init.D)
+        self.mis_registration_zero_point = self.mis_registration_zero_point_init 
+        
+        for i_update in range(n_update_zero_point+1):
+            if i_update>0:
+                print('----------------------------------')
+
+                print('Mis-Registrations Intermediate Value:')
+                self.mis_registration_out.print_()
+                print('----------------------------------')
+
+                print('Updating the set of sensitivity matrices...',end=' ')
+                # update zero point:
+                self.mis_registration_zero_point = self.mis_registration_out
+                # pre-compute the sensitivity matrices
+                [self.metaMatrix,self.calib_0] = computeMetaSensitivityMatrix(nameFolder    = self.nameFolder_sensitivity_matrice,\
+                                                                 nameSystem                 = self.name_system,\
+                                                                 tel                        = obj.tel,\
+                                                                 atm                        = obj.atm,\
+                                                                 ngs                        = obj.ngs,\
+                                                                 dm_0                       = obj.dm,\
+                                                                 pitch                      = obj.dm.pitch,\
+                                                                 wfs                        = obj.wfs,\
+                                                                 basis                      = self.basis,\
+                                                                 misRegistrationZeroPoint   = self.mis_registration_zero_point,\
+                                                                 epsilonMisRegistration     = self.epsilonMisRegistration,\
+                                                                 param                      = obj.param,\
+                                                                 wfs_mis_registrated        = self.wfs_mis_registered,\
+                                                                 save_sensitivity_matrices  = False,\
+                                                                 n_mis_reg                  = self.n_mis_reg,\
+                                                                 fast                       = self.fast_algorithm)
+
+                print('Done!')
+
+            # estimate mis-registrations
+            [self.mis_registration_out ,self.scaling_factor ,self.mis_registration_buffer,self.validity_flag] = estimateMisRegistration( nameFolder  = self.nameFolder_sensitivity_matrice,\
                                                              nameSystem                 = self.name_system,\
                                                              tel                        = obj.tel,\
                                                              atm                        = obj.atm,\
@@ -100,10 +140,18 @@ class SPRINT:
                                                              misRegistrationZeroPoint   = self.mis_registration_zero_point,\
                                                              epsilonMisRegistration     = self.epsilonMisRegistration,\
                                                              param                      = obj.param,\
-                                                             precision                  = 5,\
                                                              return_all                 = True,\
                                                              nIteration                 = n_iteration,\
                                                              fast                       = self.fast_algorithm,\
                                                              wfs_mis_registrated        = self.wfs_mis_registered,\
-                                                             sensitivity_matrices       = self.metaMatrix )
-        
+                                                             sensitivity_matrices       = self.metaMatrix,\
+                                                             precision                  = precision,\
+                                                             gainEstimation             = gain_estimation)
+                
+                
+        print('----------------------------------')
+
+        print('Final Mis-Registrations identified:')
+        self.mis_registration_out.print_()
+        print('Mis-registration Validity Flag: '+ str(self.validity_flag))
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')

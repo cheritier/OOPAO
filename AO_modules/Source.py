@@ -40,7 +40,8 @@ class Source:
         
         """
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
-  
+        self.is_initialized = False
+
         tmp             = self.photometry(optBand)              # get the photometry properties
         self.optBand    = optBand
         self.wavelength = tmp[0]                                # wavelength in m
@@ -60,6 +61,7 @@ class Source:
         print('Magnitude \t' + str(self.magnitude))
         print('Flux \t\t'+ str(np.round(self.nPhoton)) + str('\t [photons/m2/s]'))
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        self.is_initialized = True
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOURCE INTERACTION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
         
@@ -103,11 +105,16 @@ class Source:
         phot.R4     = [ 0.670e-6 , 0.300e-6 , 7.92e12 ]
         phot.I8     = [ 0.750e-6 , 0.100e-6 , 2.7e12 ]
         phot.I9     = [ 0.850e-6 , 0.300e-6 , 7.36e12 ]
+        phot.I10    = [ 0.900e-6 , 0.300e-6 , 2.7e12 ]
         phot.J      = [ 1.215e-6 , 0.260e-6 , 1.9e12 ]
         phot.H      = [ 1.654e-6 , 0.290e-6 , 1.1e12 ]
         phot.Kp     = [ 2.1245e-6 , 0.351e-6 , 6e11 ]
         phot.Ks     = [ 2.157e-6 , 0.320e-6 , 5.5e11 ]
         phot.K      = [ 2.179e-6 , 0.410e-6 , 7.0e11 ]
+        phot.K0     = [ 2.000e-6  , 0.410e-6 , 7.0e11 ]
+        phot.K1     = [ 2.400e-6 , 0.410e-6 , 7.0e11 ]
+
+
         phot.L      = [ 3.547e-6 , 0.570e-6 , 2.5e11 ]
         phot.M      = [ 4.769e-6 , 0.450e-6 , 8.4e10 ]
         phot.Na     = [ 0.589e-6 , 0        , 3.3e12 ]
@@ -132,13 +139,15 @@ class Source:
     def nPhoton(self,val):
         self._nPhoton  = val
         self.magnitude = -2.5*np.log10(val/self.zeroPoint)
-        print('NGS flux updated!')
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOURCE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        print('Wavelength \t'+str(round(self.wavelength*1e6,3)) + ' \t [microns]') 
-        print('Optical Band \t'+self.optBand) 
-        print('Magnitude \t' + str(self.magnitude))
-        print('Flux \t\t'+ str(np.round(self.nPhoton)) + str('\t [photons/m2/s]'))
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        if self.is_initialized:
+
+            print('NGS flux updated!')
+            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOURCE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+            print('Wavelength \t'+str(round(self.wavelength*1e6,3)) + ' \t [microns]') 
+            print('Optical Band \t'+self.optBand) 
+            print('Magnitude \t' + str(self.magnitude))
+            print('Flux \t\t'+ str(np.round(self.nPhoton)) + str('\t [photons/m2/s]'))
+            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         
 #    @property
 #    def magnitude(self):

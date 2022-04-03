@@ -472,10 +472,10 @@ def run_cl_sinusoidal_modulation(param,obj):
     dataCL['demodulated_wfs_signal' ] = demodulated_wfs_signal
     dataCL['fft_modal_coefs'        ] = fft_modal_coefs
     dataCL['fft_frequency_vector'   ] = fft_frequency_vector
-    dataCL['dm_forces']           = dm_forces
-    dataCL['wfs_signals']         = buffer_wfs
+    # dataCL['dm_forces']           = dm_forces
+    # dataCL['wfs_signals']         = buffer_wfs
     dataCL['modal_coeff']         = modal_coefs
-    dataCL['dm_commands']         = buffer_dm
+    # dataCL['dm_commands']         = buffer_dm
 
 
     try:

@@ -8,12 +8,12 @@ Created on Wed Oct 21 10:51:32 2020
 import matplotlib.pyplot as plt
 import numpy             as np 
 import time
-
+plt.ion()
 import __load__psim
 __load__psim.load_psim()
 
 from AO_modules.Atmosphere       import Atmosphere
-from AO_modules.Pyramid          import Pyramid
+from AO_modules.ShackHartmann          import ShackHartmann
 from AO_modules.DeformableMirror import DeformableMirror
 from AO_modules.MisRegistration  import MisRegistration
 from AO_modules.Telescope        import Telescope
@@ -25,8 +25,9 @@ from AO_modules.calibration.ao_calibration import ao_calibration
 from AO_modules.tools.displayTools           import displayMap
 
 #%% -----------------------     read parameter file   ----------------------------------
-from parameterFile_VLT_I_Band import initializeParameterFile
+from parameter_files.parameterFile_VLT_I_Band_SHWFS import initializeParameterFile
 param = initializeParameterFile()
+
 
 #%% -----------------------     TELESCOPE   ----------------------------------
 
@@ -44,9 +45,12 @@ ngs=Source(optBand   = param['opticalBand'],\
 # combine the NGS to the telescope using '*' operator:
 ngs*tel
 
-tel.computePSF(zeroPaddingFactor = 4)
+tel.computePSF(zeroPaddingFactor = 6)
 plt.figure()
-plt.imshow(np.log(np.abs(tel.PSF)),extent = [tel.xPSF_arcsec[0],tel.xPSF_arcsec[1],tel.xPSF_arcsec[0],tel.xPSF_arcsec[1]])
+plt.imshow(np.log10(np.abs(tel.PSF)),extent = [tel.xPSF_arcsec[0],tel.xPSF_arcsec[1],tel.xPSF_arcsec[0],tel.xPSF_arcsec[1]])
+plt.clim([-1,3])
+plt.xlabel('[Arcsec]')
+plt.ylabel('[Arcsec]')
 plt.colorbar()
 #%% -----------------------     ATMOSPHERE   ----------------------------------
 
@@ -72,9 +76,12 @@ plt.colorbar()
 tel+atm
 tel.computePSF(8)
 plt.figure()
-plt.imshow((np.abs(tel.PSF)),extent = [tel.xPSF_arcsec[0],tel.xPSF_arcsec[1],tel.xPSF_arcsec[0],tel.xPSF_arcsec[1]])
+plt.imshow((np.log10(tel.PSF)),extent = [tel.xPSF_arcsec[0],tel.xPSF_arcsec[1],tel.xPSF_arcsec[0],tel.xPSF_arcsec[1]])
+plt.clim([-1,3])
+
 plt.xlabel('[Arcsec]')
 plt.ylabel('[Arcsec]')
+plt.colorbar()
 
 #%% -----------------------     DEFORMABLE MIRROR   ----------------------------------
 # mis-registrations object
@@ -89,143 +96,129 @@ plt.figure()
 plt.plot(dm.coordinates[:,0],dm.coordinates[:,1],'x')
 plt.xlabel('[m]')
 plt.ylabel('[m]')
+plt.title('DM Actuator Coordinates')
 
-#%% -----------------------     PYRAMID WFS   ----------------------------------
+#%% -----------------------     SH WFS   ----------------------------------
 
 # make sure tel and atm are separated to initialize the PWFS
 tel-atm
 
-wfs = Pyramid(nSubap                = param['nSubaperture'],\
+wfs = ShackHartmann(nSubap                = param['nSubaperture'],\
               telescope             = tel,\
-              modulation            = param['modulation'],\
               lightRatio            = param['lightThreshold'],\
-              pupilSeparationRatio  = param['pupilSeparationRatio'],\
-              calibModulation       = param['calibrationModulation'],\
-              psfCentering          = param['psfCentering'],\
-              edgePixel             = param['edgePixel'],\
-              extraModulationFactor = param['extraModulationFactor'],\
-              postProcessing        = param['postProcessing'])
-
-
-
+              is_geometric = True)
 
 
 #%%
-wfs.nJobs = 4
 tel*wfs
 plt.close('all')
 plt.figure()
-plt.imshow(wfs.cam.frame)
+plt.imshow(wfs.signal_2D)
 plt.title('WFS Camera Frame')
-
 
 #%% -----------------------     Modal Basis   ----------------------------------
 # compute the modal basis
-foldername_M2C  = None  # name of the folder to save the M2C matrix, if None a default name is used 
-filename_M2C    = None  # name of the filename, if None a default name is used 
+# foldername_M2C  = None  # name of the folder to save the M2C matrix, if None a default name is used 
+# filename_M2C    = None  # name of the filename, if None a default name is used 
+# # KL Modal basis
+# M2C_KL = compute_M2C(telescope            = tel,\
+#                                  atmosphere         = atm,\
+#                                  deformableMirror   = dm,\
+#                                  param              = param,\
+#                                  nameFolder         = None,\
+#                                  nameFile           = None,\
+#                                  remove_piston      = True,\
+#                                  HHtName            = None,\
+#                                  baseName           = None ,\
+#                                  mem_available      = 8.1e9,\
+#                                  minimF             = False,\
+#                                  nmo                = 300,\
+#                                  ortho_spm          = True,\
+#                                  SZ                 = np.int(2*tel.OPD.shape[0]),\
+#                                  nZer               = 3,\
+#                                  NDIVL              = 1)
+#
+# ao_calib =  ao_calibration(param            = param,\
+#                            ngs              = ngs,\
+#                            tel              = tel,\
+#                            atm              = atm,\
+#                            dm               = dm,\
+#                            wfs              = wfs,\
+#                            nameFolderIntMat = None,\
+#                            nameIntMat       = None,\
+#                            nameFolderBasis  = None,\
+#                            nameBasis        = None,\
+#                            nMeasurements    = 100)
 
+#%% ZERNIKE Polynomials
+from AO_modules.Zernike import Zernike
+# create Zernike Object
+Z = Zernike(tel,300)
+# compute polynomials for given telescope
+Z.computeZernike(tel)
 
-M2C_KL = compute_M2C(telescope            = tel,\
-                                 atmosphere         = atm,\
-                                 deformableMirror   = dm,\
-                                 param              = param,\
-                                 nameFolder         = None,\
-                                 nameFile           = None,\
-                                 remove_piston      = True,\
-                                 HHtName            = None,\
-                                 baseName           = None ,\
-                                 mem_available      = 8.1e9,\
-                                 minimF             = False,\
-                                 nmo                = 300,\
-                                 ortho_spm          = True,\
-                                 SZ                 = np.int(2*tel.OPD.shape[0]),\
-                                 nZer               = 3,\
-                                 NDIVL              = 1)
+# mode to command matrix to project Zernike Polynomials on DM
+M2C_zernike = np.linalg.pinv(np.squeeze(dm.modes[tel.pupilLogical,:]))@Z.modes
 
-
-#%%
-ao_calib =  ao_calibration(param            = param,\
-                           ngs              = ngs,\
-                           tel              = tel,\
-                           atm              = atm,\
-                           dm               = dm,\
-                           wfs              = wfs,\
-                           nameFolderIntMat = None,\
-                           nameIntMat       = 'test',\
-                           nameFolderBasis  = None,\
-                           nameBasis        = None,\
-                           nMeasurements    = 100)
-
-
-
-
-
-#%%
-
-
-
-from AO_modules.tools.displayTools import displayPyramidSignals
-
-
-displayPyramidSignals(wfs, ao_calib.calib.D[:,:9])
-
+# show the first 10 zernikes
+dm.coefs = M2C_zernike[:,:10]
+tel*dm
+displayMap(tel.OPD)
 
 #%% to manually measure the interaction matrix
-#
-## amplitude of the modes in m
-#stroke=1e-9
-## Modal Interaction Matrix 
-#M2C = M2C[:,:param['nModes']]
-#from AO_modules.calibration.InteractionMatrix import interactionMatrix
-#
-#calib = interactionMatrix(ngs            = ngs,\
-#                             atm            = atm,\
-#                             tel            = tel,\
-#                             dm             = dm,\
-#                             wfs            = wfs,\
-#                             M2C            = M2C,\
-#                             stroke         = stroke,\
-#                             phaseOffset    = 0,\
-#                             nMeasurements  = 100,\
-#                             noise          = False)
-#
-#plt.figure()
-#plt.plot(np.std(calib.D,axis=0))
-#plt.xlabel('Mode Number')
-#plt.ylabel('WFS slopes STD')
-#plt.ylabel('Optical Gain')
+
+# amplitude of the modes in m
+stroke=1e-9
+# Modal Interaction Matrix 
+from AO_modules.calibration.InteractionMatrix import interactionMatrix
 
 
 #%%
-#
-# project the mode on the DM
-dm.coefs = ao_calib.M2C[:,:100]
-
-tel*dm
-#
-# show the modes projected on the dm, cropped by the pupil and normalized by their maximum value
-displayMap(tel.OPD,norma=True)
-plt.title('Basis projected on the DM')
-
-KL_dm = np.reshape(tel.OPD,[tel.resolution**2,tel.OPD.shape[2]])
-
-covMat = (KL_dm.T @ KL_dm) / tel.resolution**2
+M2C_zonal = np.eye(dm.nValidAct)
+# zonal interaction matrix
+calib_zonal = interactionMatrix(  ngs            = ngs,\
+                            atm            = atm,\
+                            tel            = tel,\
+                            dm             = dm,\
+                            wfs            = wfs,\
+                            M2C            = M2C_zonal,\
+                            stroke         = stroke,\
+                            nMeasurements  = 100,\
+                            noise          = 'off')
 
 plt.figure()
-plt.imshow(covMat)
-plt.title('Orthogonality')
-plt.show()
+plt.plot(np.std(calib_zonal.D,axis=0))
+plt.xlabel('Mode Number')
+plt.ylabel('WFS slopes STD')
+
+#%%
+# Modal interaction matrix
+calib_zernike = interactionMatrix(  ngs            = ngs,\
+                            atm            = atm,\
+                            tel            = tel,\
+                            dm             = dm,\
+                            wfs            = wfs,\
+                            M2C            = M2C_zernike,\
+                            stroke         = stroke,\
+                            nMeasurements  = 100,\
+                            noise          = 'off')
 
 plt.figure()
-plt.plot(np.round(np.std(np.squeeze(KL_dm[tel.pupilLogical,:]),axis = 0),5))
-plt.title('KL mode normalization projected on the DM')
-plt.show()
+plt.plot(np.std(calib_zernike.D,axis=0))
+plt.xlabel('Mode Number')
+plt.ylabel('WFS slopes STD')
 
+
+#%% switch to a diffractive SH-WFS
+
+wfs.is_geometric = False
 
 #%%
 # These are the calibration data used to close the loop
-calib_CL    = ao_calib.calib
-M2C_CL      = ao_calib.M2C
+calib_CL    = calib_zernike
+M2C_CL      = M2C_zernike
+
+
 
 plt.close('all')
 
@@ -264,7 +257,7 @@ plt.title('Residual phase [rad]')
 ax5         = plt.subplot(2,3,4)
 im_wfs_CL   = ax5.imshow(wfs.cam.frame)
 plt.colorbar(im_wfs_CL)
-plt.title('Pyramid Frame CL')
+plt.title('SH Frame CL')
 
 ax6         = plt.subplot(2,3,6)
 im_PSF      = ax6.imshow(tel.PSF_trunc)
@@ -273,6 +266,7 @@ plt.title('CL PSF')
 
 plt.show()
 
+param['nLoop'] = 100
 # allocate memory to save data
 SR                      = np.zeros(param['nLoop'])
 total                   = np.zeros(param['nLoop'])
@@ -280,9 +274,11 @@ residual                = np.zeros(param['nLoop'])
 wfsSignal               = np.arange(0,wfs.nSignal)*0
 
 # loop parameters
-gainCL                  = 0.6
+gainCL                  = 0.4
 wfs.cam.photonNoise     = True
 display                 = True
+
+reconstructor = M2C_CL@calib_CL.M
 
 for i in range(param['nLoop']):
     a=time.time()
@@ -304,9 +300,9 @@ for i in range(param['nLoop']):
      # save the DM OPD shape
     dmOPD=tel.pupil*dm.OPD*2*np.pi/ngs.wavelength
     
-    dm.coefs=dm.coefs-gainCL*M2C_CL@calib_CL.M@wfsSignal
+    dm.coefs=dm.coefs-gainCL*np.matmul(reconstructor,wfsSignal)
      # store the slopes after computing the commands => 2 frames delay
-    wfsSignal=wfs.pyramidSignal
+    wfsSignal=wfs.signal
     b= time.time()
     print('Elapsed time: ' + str(b-a) +' s')
     # update displays if required
@@ -350,4 +346,4 @@ plt.plot(residual)
 plt.xlabel('Time')
 plt.ylabel('WFE [nm]')
 
-plt.pause(10)
+

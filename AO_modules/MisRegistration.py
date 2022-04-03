@@ -22,7 +22,7 @@ class MisRegistration:
             self.radialScaling        = 0                    # radial scaling in % of diameter
         else:              
             if isinstance(param,dict):
-                print('MisRegistration object created from a ditionnary')
+                # print('MisRegistration object created from a ditionnary')
                 self.rotationAngle        = param['rotationAngle']                    # rotation angle in degrees
                 self.shiftX               = param['shiftX']                           # shift X in m
                 self.shiftY               = param['shiftY']                           # shift Y in m
@@ -32,7 +32,7 @@ class MisRegistration:
             else:
                 if  inspect.isclass(type(param)):
                     if param.tag == 'misRegistration':
-                        print('MisRegistration object created from an existing Misregistration object')
+                        # print('MisRegistration object created from an existing Misregistration object')
 
                         self.rotationAngle        = param.rotationAngle                   # rotation angle in degrees
                         self.shiftX               = param.shiftX                           # shift X in m
@@ -247,7 +247,10 @@ class MisRegistration:
                   
                   
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% END %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
- 
+    def print_(self):
+            print('{: ^14s}'.format('Rotation [deg]') + '\t' + '{: ^11s}'.format('Shift X [m]')+ '\t' + '{: ^11s}'.format('Shift Y [m]')+ '\t' + '{: ^18s}'.format('Radial Scaling [%]')+ '\t' + '{: ^22s}'.format('Tangential Scaling [%]'))
+            print("{: ^14s}".format(str(self.rotationAngle) )  + '\t' +'{: ^11s}'.format(str(self.shiftX))+'\t' + '{: ^11s}'.format(str(self.shiftY)) +'\t' +'{: ^18s}'.format(str(self.radialScaling))+'\t' + '{: ^22s}'.format(str(self.tangentialScaling)))
+     
     def show(self):
         attributes = inspect.getmembers(self, lambda a:not(inspect.isroutine(a)))
         print(self.tag+':')

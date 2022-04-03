@@ -19,7 +19,7 @@ try:
 
 except:
     import numpy as np_cp
-    print('NO GPU available!')
+    # print('NO GPU available!')
 try:
     from joblib import Parallel, delayed
 except:
@@ -46,7 +46,7 @@ except:
 class Pyramid:
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     
-    def __init__(self,nSubap,telescope,modulation,lightRatio,pupilSeparationRatio=1.2,calibModulation=50,extraModulationFactor=0,zeroPadding=0,psfCentering=True,edgePixel=2,unitCalibration=0,binning =1,nTheta_user_defined=None, postProcessing='slopesMaps',userValidSignal=None,old_mask=True):
+    def __init__(self,nSubap,telescope,modulation,lightRatio,pupilSeparationRatio=1.2,calibModulation=50,extraModulationFactor=0,zeroPadding=0,psfCentering=True,edgePixel=2,unitCalibration=0,binning =1,nTheta_user_defined=None, postProcessing='slopesMaps',userValidSignal=None,old_mask=True,rooftop = None):
         try:
             error
             import cupy as np_cp
@@ -78,6 +78,7 @@ class Pyramid:
         self.binning                    = binning                                           # binning factor for the detector
         self.old_mask                   = old_mask
         self.joblib_setting             = 'threads'
+        self.rooftop                    = rooftop      
         # Case where the zero-padding is not specificed => taking the smallest value ensuring to get edgePixel space from the edge.
         count =0
         if zeroPadding==0:
@@ -159,7 +160,8 @@ class Pyramid:
         # Creating the PWFS mask by adding two rooftops.
         # Each rooftop is created by computing the distance to the central pixel line
         self.mask_computation()
-        
+        self.user_mask = np.ones([self.nRes,self.nRes])
+
         # initialize the reference slopes and units 
         self.slopesUnits                = 1     
         self.referenceSignal            = 0
@@ -201,7 +203,12 @@ class Pyramid:
                 M[:,-1+self.nRes//2] = 0
                 M[:,self.nRes//2] = 0
                 m = sp.morphology.distance_transform_edt(M) 
-                m += np.transpose(m)
+                if self.rooftop is None:
+                    m += np.transpose(m)
+                else:
+                    if self.rooftop == 'H':
+                        m = np.transpose(m)
+                    
                 
                 # normalization of the mask 
                 m[-1+self.nRes//2:self.nRes//2,-1+self.nRes//2:self.nRes//2] = m[-1+self.nRes//2:self.nRes//2,-1+self.nRes//2:self.nRes//2]/2   
@@ -217,7 +224,12 @@ class Pyramid:
             else:
                 M[:,self.nRes//2] = 0
                 m = sp.morphology.distance_transform_edt(M) 
-                m += np.transpose(m)
+                if self.rooftop is None:
+                    m += np.transpose(m)
+                else:
+                    if self.rooftop == 'H':
+                        m = np.transpose(m)
+                # m += np.transpose(m)
                 # normalization of the mask 
                 m[self.nRes//2,self.nRes//2] = m[self.nRes//2,self.nRes//2]/2   
                 m /= np.sqrt(2) 
@@ -680,18 +692,40 @@ class Pyramid:
         nExtraPix   = int(np.round((np.max(self.pupilSeparationRatio)-1)*self.telescope.resolution/(self.telescope.resolution/self.nSubap)/2/self.binning))
         centerPixel = int(np.round((self.cam.resolution/self.binning)/2))
         n_pixels    = int(np.ceil(self.nSubap/self.binning))
-        
         if cameraFrame==0:
             cameraFrame=self.cam.frame
-        if n==3:
-            I=cameraFrame[nExtraPix+centerPixel:(nExtraPix+centerPixel+n_pixels),nExtraPix+centerPixel:(nExtraPix+centerPixel+n_pixels)]
-        if n==4:
-            I=cameraFrame[nExtraPix+centerPixel:(nExtraPix+centerPixel+n_pixels),-nExtraPix+centerPixel-n_pixels:(-nExtraPix+centerPixel)]
-        if n==1:
-            I=cameraFrame[-nExtraPix+centerPixel-n_pixels:(-nExtraPix+centerPixel),-nExtraPix+centerPixel-n_pixels:(-nExtraPix+centerPixel)]
-        if n==2:
-            I=cameraFrame[-nExtraPix+centerPixel-n_pixels:(-nExtraPix+centerPixel),nExtraPix+centerPixel:(nExtraPix+centerPixel+n_pixels)]
+            
+        if self.rooftop is None:
+            if n==3:
+                I=cameraFrame[nExtraPix+centerPixel:(nExtraPix+centerPixel+n_pixels),nExtraPix+centerPixel:(nExtraPix+centerPixel+n_pixels)]
+            if n==4:
+                I=cameraFrame[nExtraPix+centerPixel:(nExtraPix+centerPixel+n_pixels),-nExtraPix+centerPixel-n_pixels:(-nExtraPix+centerPixel)]
+            if n==1:
+                I=cameraFrame[-nExtraPix+centerPixel-n_pixels:(-nExtraPix+centerPixel),-nExtraPix+centerPixel-n_pixels:(-nExtraPix+centerPixel)]
+            if n==2:
+                I=cameraFrame[-nExtraPix+centerPixel-n_pixels:(-nExtraPix+centerPixel),nExtraPix+centerPixel:(nExtraPix+centerPixel+n_pixels)]
+        else:
+            if self.rooftop == 'V':
+                if n==1:
+                    I=cameraFrame[centerPixel-n_pixels//2:(centerPixel)+n_pixels//2,(self.edgePixel//2):(self.edgePixel//2 +n_pixels)]
+                if n==2:
+                    I=cameraFrame[centerPixel-n_pixels//2:(centerPixel)+n_pixels//2,(self.edgePixel//2 +n_pixels+nExtraPix*2):(self.edgePixel//2+nExtraPix*2+2*n_pixels)]
+                if n==4:
+                    I=cameraFrame[centerPixel-n_pixels//2:(centerPixel)+n_pixels//2,(self.edgePixel//2):(self.edgePixel//2 +n_pixels)]
+                if n==3:
+                    I=cameraFrame[centerPixel-n_pixels//2:(centerPixel)+n_pixels//2,(self.edgePixel//2 +n_pixels+nExtraPix*2):(self.edgePixel//2+nExtraPix*2+2*n_pixels)]                    
+            else:
+                if n==1:
+                    I=cameraFrame[(self.edgePixel//2):(self.edgePixel//2 +n_pixels),centerPixel-n_pixels//2:(centerPixel)+n_pixels//2]
+                if n==2:
+                    I=cameraFrame[(self.edgePixel//2 +n_pixels+nExtraPix*2):(self.edgePixel//2+nExtraPix*2+2*n_pixels),centerPixel-n_pixels//2:(centerPixel)+n_pixels//2]
+                if n==4:
+                    I=cameraFrame[(self.edgePixel//2):(self.edgePixel//2 +n_pixels),centerPixel-n_pixels//2:(centerPixel)+n_pixels//2]
+                if n==3:
+                    I=cameraFrame[(self.edgePixel//2 +n_pixels+nExtraPix*2):(self.edgePixel//2+nExtraPix*2+2*n_pixels),centerPixel-n_pixels//2:(centerPixel)+n_pixels//2]
+  
         return I
+        
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     #properties required for backward compatibility (20/10/2020)

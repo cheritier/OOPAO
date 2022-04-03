@@ -16,6 +16,7 @@ import time
 
 from astropy.io import fits as pfits
 from AO_modules.M4_model.make_M4_influenceFunctions import makeM4influenceFunctions
+from AO_modules.tools.tools import print_
 #from AO_modules.tools.interpolateGeometricalTransformation import rotateImageMatrix,rotation,translationImageMatrix,translation,anamorphosis,anamorphosisImageMatrix
 
 try : 
@@ -34,13 +35,14 @@ except:
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
 class DeformableMirror:
-    def __init__(self,telescope,nSubap,mechCoupling = 0.35, coordinates=0, pitch=0, modes=0, misReg=0, M4_param = [], nJobs = 30, nThreads = 20 ):
-        
+    def __init__(self,telescope,nSubap,mechCoupling = 0.35, coordinates=0, pitch=0, modes=0, misReg=0, M4_param = [], nJobs = 30, nThreads = 20,print_dm_properties = True,floating_precision = 64 ):
+        self.print_dm_properties = print_dm_properties
+        self.floating_precision = floating_precision
         self.M4_param = M4_param
         if M4_param:
             if M4_param['isM4']:
 #                from AO_modules.M4_model.make_M4_influenceFunctions import makeM4influenceFunctions
-                print('Building the set of influence functions of M4...')
+                print_('Building the set of influence functions of M4...',print_dm_properties)
                 # generate the M4 influence functions            
 
                 pup = telescope.pupil
@@ -50,22 +52,25 @@ class DeformableMirror:
                 a = time.time()
                 # compute M4 influence functions
                 try:
-                    coordinates_M4 = makeM4influenceFunctions(pup       = pup,\
-                                                              filename  = filename,\
-                                                              misReg    = misReg,\
-                                                              dm        = self,\
-                                                              nAct      = nAct,\
-                                                              nJobs     = nJobs,\
-                                                              nThreads  = nThreads,\
-                                                              order     = M4_param['order_m4_interpolation'])
+                    coordinates_M4 = makeM4influenceFunctions(pup                   = pup,\
+                                                              filename              = filename,\
+                                                              misReg                = misReg,\
+                                                              dm                    = self,\
+                                                              nAct                  = nAct,\
+                                                              nJobs                 = nJobs,\
+                                                              nThreads              = nThreads,\
+                                                              order                 = M4_param['order_m4_interpolation'],\
+                                                              floating_precision    = floating_precision)
                 except:
-                    coordinates_M4 = makeM4influenceFunctions(pup       = pup,\
-                                                              filename  = filename,\
-                                                              misReg    = misReg,\
-                                                              dm        = self,\
-                                                              nAct      = nAct,\
-                                                              nJobs     = nJobs,\
-                                                              nThreads  = nThreads)                
+                    coordinates_M4 = makeM4influenceFunctions(pup                   = pup,\
+                                                              filename              = filename,\
+                                                              misReg                = misReg,\
+                                                              dm                    = self,\
+                                                              nAct                  = nAct,\
+                                                              nJobs                 = nJobs,\
+                                                              nThreads              = nThreads,\
+                                                              floating_precision    = floating_precision)
+
     #            selection of the valid M4 actuators
                 if M4_param['validActCriteria']!=0:
                     IF_STD = np.std(np.squeeze(self.modes[telescope.pupilLogical,:]), axis=0)
@@ -78,10 +83,10 @@ class DeformableMirror:
 
                 self.M4_param = M4_param
                 self.isM4 = True
-                print ('Done!')
+                print_ ('Done!',print_dm_properties)
                 b = time.time()
 
-                print('Done! M4 influence functions computed in ' + str(b-a) + ' s!')
+                print_('Done! M4 influence functions computed in ' + str(b-a) + ' s!',print_dm_properties)
             else:
                 self.isM4 = False
         else:
@@ -109,7 +114,7 @@ class DeformableMirror:
 # If no coordinates are given, the DM is in a Cartesian Geometry
         
         if np.ndim(coordinates)==0:  
-            print('No coordinates loaded.. taking the cartesian geometry as a default')
+            print_('No coordinates loaded.. taking the cartesian geometry as a default',print_dm_properties)
             self.nAct                               = nSubap+1                            # In that case corresponds to the number of actuator along the diameter            
             self.nActAlongDiameter                  = self.nAct-1
             
@@ -132,7 +137,7 @@ class DeformableMirror:
         # If the coordinates are specified
             
         else:
-            print('Coordinates loaded...')
+            print_('Coordinates loaded...',print_dm_properties)
 
             self.xIF0 = coordinates[:,0]
             self.yIF0 = coordinates[:,1]
@@ -173,9 +178,9 @@ class DeformableMirror:
         self.coordinates[:,1]   = yIF
         
         if self.isM4==False:
-            print('Generating a Deformable Mirror: ')
+            print_('Generating a Deformable Mirror: ',print_dm_properties)
             if np.ndim(modes)==0:
-                print('Computing the 2D zonal modes...')
+                print_('Computing the 2D zonal modes...',print_dm_properties)
     #                FWHM of the gaussian depends on the anamorphosis
                 def joblib_construction():
                     Q=Parallel(n_jobs=8,prefer='threads')(delayed(self.modesComputation)(i,j) for i,j in zip(u0x,u0y))
@@ -183,15 +188,19 @@ class DeformableMirror:
                 self.modes=np.squeeze(np.moveaxis(np.asarray(joblib_construction()),0,-1))
                     
             else:
-                print('Loading the 2D zonal modes...')
+                print_('Loading the 2D zonal modes...',print_dm_properties)
                 self.modes = modes
-                print('Done!')
+                print_('Done!',print_dm_properties)
 
         else:
-            print('Using M4 Influence Functions')
-
-        self.coefs=np.zeros(self.nValidAct)
-        self.print_properties()
+            print_('Using M4 Influence Functions',print_dm_properties)
+        if floating_precision==32:            
+            self.coefs = np.zeros(self.nValidAct,dtype=np.float32)
+        else:
+            self.coefs = np.zeros(self.nValidAct,dtype=np.float64)
+            
+        if self.print_dm_properties:
+            self.print_properties()
     
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% GEOMETRICAL FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     
@@ -269,16 +278,16 @@ class DeformableMirror:
 #                case of a single mode at a time
                 if np.ndim(val)==1:
                     try:
-                        self.OPD = np.reshape(np.matmul(self.modes,self._coefs),[self.resolution,self.resolution])
+                        self.OPD = np.float64(np.reshape(np.matmul(self.modes,self._coefs),[self.resolution,self.resolution]))
                     except:
-                        self.OPD = np.reshape(self.modes@self._coefs,[self.resolution,self.resolution])
+                        self.OPD = np.float64(np.reshape(self.modes@self._coefs,[self.resolution,self.resolution]))
 
 #                case of multiple modes at a time
                 else:
                     try:
-                        self.OPD = np.reshape(np.matmul(self.modes,self._coefs),[self.resolution,self.resolution,val.shape[1]])
+                        self.OPD =  np.float64(np.reshape(np.matmul(self.modes,self._coefs),[self.resolution,self.resolution,val.shape[1]]))
                     except:
-                        self.OPD=np.reshape(self.modes@self._coefs,[self.resolution,self.resolution,val.shape[1]])
+                        self.OPD =  np.float64(np.reshape(self.modes@self._coefs,[self.resolution,self.resolution,val.shape[1]]))
 
             else:
                 print('Error: wrong value for the coefficients')    

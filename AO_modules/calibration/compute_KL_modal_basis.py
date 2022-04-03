@@ -266,4 +266,4 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param, nameFolder = Non
         hdu = pfits.HDUList([empty_primary, primary_hdu])
         hdu.writeto(nameFolder+nameFile+'.fits',overwrite=True)
  
-        return BASIS,SB
+        return np.asarray(BASIS),SB

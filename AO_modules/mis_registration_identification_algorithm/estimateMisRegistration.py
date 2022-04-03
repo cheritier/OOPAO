@@ -54,7 +54,7 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
     
     
 """
-def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, basis, calib_in, misRegistrationZeroPoint, epsilonMisRegistration, param, precision = 3, gainEstimation = 1, sensitivity_matrices = None, return_all = False, fast = False,nIteration = 3, wfs_mis_registrated = None):
+def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, basis, calib_in, misRegistrationZeroPoint, epsilonMisRegistration, param, precision = 3, gainEstimation = 1, sensitivity_matrices = None, return_all = False, fast = False, wfs_mis_registrated = None, nIteration = 3):
     
     #%%  ---------- LOAD/COMPUTE SENSITIVITY MATRICES --------------------
     # compute the sensitivity matrices. if the data already exits, the files will be loaded
@@ -83,9 +83,13 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
     #%%  ---------- ITERATIVE ESTIMATION OF THE PARAMETERS --------------------
     stroke                  = 1e-12
     criteria                = 0
-    misRegEstBuffer         = np.zeros(3)
-    scalingFactor_values    = []
-    misRegistration_values  = []
+    n_mis_reg               = metaMatrix.M.shape[0]
+    misRegEstBuffer         = np.zeros(n_mis_reg)
+    scalingFactor_values    = [1]
+    misRegistration_values  = [np.zeros(n_mis_reg)]
+    
+    epsilonMisRegistration_field = ['shiftX','shiftY','rotationAngle','radialScaling','tangentialScaling']
+
     i=0
     tel.isPaired = False
     misRegistration_out = MisRegistration(misRegistrationZeroPoint)
@@ -93,16 +97,15 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
     if fast:
         from AO_modules.calibration.InteractionMatrix import interactionMatrixFromPhaseScreen
 
-        dm_0.coefs = basis.modes
+        dm_0.coefs = np.squeeze(basis.modes)
         tel*dm_0
-        input_modes_0 = tel.OPD
+        input_modes_0 = dm_0.OPD
         input_modes_cp = input_modes_0.copy()
         while criteria ==0:
             i=i+1
             # temporary deformable mirror
-            for i_modes in range(input_modes_0.shape[2]):
-                if wfs_mis_registrated is None:
-
+            if np.ndim(input_modes_0)==2:
+                if wfs_mis_registrated is not None:
                     misRegistration_wfs                 = MisRegistration()
                     misRegistration_wfs.shiftX          = misRegistration_out.shiftX
                     misRegistration_wfs.shiftY          = misRegistration_out.shiftY
@@ -112,34 +115,50 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
                     
                     apply_shift_wfs(wfs, misRegistration_wfs.shiftX / (wfs.nSubap/wfs.telescope.D), misRegistration_wfs.shiftY/ (wfs.nSubap/wfs.telescope.D))
                     
-                    input_modes_cp[:,:,i_modes] = apply_mis_reg(tel,input_modes_0[:,:,i_modes], misRegistration_dm)   
+                    input_modes_cp =  tel.pupil*apply_mis_reg(tel,input_modes_0, misRegistration_dm)   
                 else:
-                    input_modes_cp[:,:,i_modes] = apply_mis_reg(tel,input_modes_0[:,:,i_modes], misRegistration_out)   
-            
+                    input_modes_cp = tel.pupil*apply_mis_reg(tel,input_modes_0, misRegistration_out) 
+            else:
+                    
+                for i_modes in range(input_modes_0.shape[2]):
+                    if wfs_mis_registrated is not None:
+    
+                        misRegistration_wfs                 = MisRegistration()
+                        misRegistration_wfs.shiftX          = misRegistration_out.shiftX
+                        misRegistration_wfs.shiftY          = misRegistration_out.shiftY
+                        
+                        misRegistration_dm               = MisRegistration()
+                        misRegistration_dm.rotationAngle = misRegistration_out.rotationAngle
+                        
+                        apply_shift_wfs(wfs, misRegistration_wfs.shiftX / (wfs.nSubap/wfs.telescope.D), misRegistration_wfs.shiftY/ (wfs.nSubap/wfs.telescope.D))
+                        
+                        input_modes_cp[:,:,i_modes] = tel.pupil*apply_mis_reg(tel,input_modes_0[:,:,i_modes], misRegistration_dm)   
+                    else:
+                        input_modes_cp[:,:,i_modes] = tel.pupil*apply_mis_reg(tel,input_modes_0[:,:,i_modes], misRegistration_out)   
+                
         
             # temporary interaction matrix
-            calib_tmp =  interactionMatrixFromPhaseScreen(ngs,atm,tel,wfs,input_modes_cp,stroke,phaseOffset=0,nMeasurements=50)
+            calib_tmp =  interactionMatrixFromPhaseScreen(ngs,atm,tel,wfs,input_modes_cp,stroke,phaseOffset=0,nMeasurements=50,invert=False,print_time=False)
             # temporary scaling factor    
-            scalingFactor_tmp   = np.round(np.diag(calib_tmp.D.T@calib_in.D)/ np.diag(calib_tmp.D.T@calib_tmp.D),precision)
-            
-            # temporary mis-registration
-            misReg_tmp          = gainEstimation*np.matmul(metaMatrix.M,np.reshape( calib_in.D@np.diag(1/scalingFactor_tmp) - calib_tmp.D ,calib_in.D.shape[0]*calib_in.D.shape[1]))
-            
+            try:
+                scalingFactor_tmp   = np.round(np.diag(calib_tmp.D.T@calib_in.D)/ np.diag(calib_tmp.D.T@calib_tmp.D),precision)
+                # temporary mis-registration
+                misReg_tmp          = gainEstimation*np.matmul(metaMatrix.M,np.reshape( calib_in.D@np.diag(1/scalingFactor_tmp) - calib_tmp.D ,calib_in.D.shape[0]*calib_in.D.shape[1]))
+            except:
+                scalingFactor_tmp = np.round(np.sum(np.squeeze(calib_tmp.D)*np.squeeze(calib_in.D))/ np.sum(np.squeeze(calib_tmp.D)*np.squeeze(calib_tmp.D)),precision)    
+                # temporary mis-registration 
+                misReg_tmp          = gainEstimation*np.matmul(metaMatrix.M,np.squeeze((np.squeeze(calib_in.D)*(1/scalingFactor_tmp)) - np.squeeze(calib_tmp.D)))
             # cumulative mis-registration
             misRegEstBuffer+= np.round(misReg_tmp,precision)
             
             # define the next working point to adjust the scaling factor
-            misRegistration_out.rotationAngle   += np.round(misReg_tmp[0],precision)
-            misRegistration_out.shiftX          += np.round(misReg_tmp[1],precision)
-            misRegistration_out.shiftY          += np.round(misReg_tmp[2],precision)
-            
+            for i_mis_reg in range(n_mis_reg):
+                    setattr(misRegistration_out, epsilonMisRegistration_field[i_mis_reg], getattr(misRegistration_out, epsilonMisRegistration_field[i_mis_reg]) + np.round(misReg_tmp[i_mis_reg],precision))                    
+                            
             # save the data for each iteration
             scalingFactor_values.append(np.copy(scalingFactor_tmp))
             misRegistration_values.append(np.copy(misRegEstBuffer))
-            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-            print('Mis-Registrations identified:')
-            print('Rotation [deg] \t Shift X [m] \t Shift Y [m]')
-            print(str(misRegistration_out.rotationAngle)   + '\t\t' +str(misRegistration_out.shiftX)+'\t\t' + str(misRegistration_out.shiftY))
+
 
             if i==nIteration:
                 criteria =1
@@ -148,40 +167,61 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
         while criteria ==0:
             i=i+1
             # temporary deformable mirror
-            dm_tmp = applyMisRegistration(tel,misRegistration_out,param, wfs = wfs_mis_registrated)
+            dm_tmp = applyMisRegistration(tel,misRegistration_out,param, wfs = wfs_mis_registrated,print_dm_properties=False,floating_precision=dm_0.floating_precision)
         
             # temporary interaction matrix
-            calib_tmp =  interactionMatrix(ngs,atm,tel,dm_tmp,wfs,basis.modes,stroke,phaseOffset=0,nMeasurements=50)
+            calib_tmp =  interactionMatrix(ngs,atm,tel,dm_tmp,wfs,basis.modes,stroke,phaseOffset=0,nMeasurements=50,invert=False,print_time=False)
             # erase dm_tmp to free memory
             del dm_tmp
-            # temporary scaling factor    
-            scalingFactor_tmp   = np.round(np.diag(calib_tmp.D.T@calib_in.D)/ np.diag(calib_tmp.D.T@calib_tmp.D),precision)
-            
-            # temporary mis-registration
-            misReg_tmp          = gainEstimation*np.matmul(metaMatrix.M,np.reshape( calib_in.D@np.diag(1/scalingFactor_tmp) - calib_tmp.D ,calib_in.D.shape[0]*calib_in.D.shape[1]))
+            # temporary scaling factor            
+            try:
+                scalingFactor_tmp   = np.round(np.diag(calib_tmp.D.T@calib_in.D)/ np.diag(calib_tmp.D.T@calib_tmp.D),precision)
+                # temporary mis-registration
+                misReg_tmp          = gainEstimation*np.matmul(metaMatrix.M,np.reshape( calib_in.D@np.diag(1/scalingFactor_tmp) - calib_tmp.D ,calib_in.D.shape[0]*calib_in.D.shape[1]))
+
+            except:
+                scalingFactor_tmp = np.round(np.sum(np.squeeze(calib_tmp.D)*np.squeeze(calib_in.D))/ np.sum(np.squeeze(calib_tmp.D)*np.squeeze(calib_tmp.D)),precision)    
+                # temporary mis-registration 
+                misReg_tmp          = gainEstimation*np.matmul(metaMatrix.M,np.squeeze((np.squeeze(calib_in.D)*(1/scalingFactor_tmp)) - np.squeeze(calib_tmp.D)))
             
             # cumulative mis-registration
             misRegEstBuffer+= np.round(misReg_tmp,precision)
             
             # define the next working point to adjust the scaling factor
-            misRegistration_out.rotationAngle   += np.round(misReg_tmp[0],precision)
-            misRegistration_out.shiftX          += np.round(misReg_tmp[1],precision)
-            misRegistration_out.shiftY          += np.round(misReg_tmp[2],precision)
+            for i_mis_reg in range(n_mis_reg):
+                setattr(misRegistration_out, epsilonMisRegistration_field[i_mis_reg], getattr(misRegistration_out, epsilonMisRegistration_field[i_mis_reg]) + np.round(misReg_tmp[i_mis_reg],precision))
+                            
             
             # save the data for each iteration
             scalingFactor_values.append(np.copy(scalingFactor_tmp))
             misRegistration_values.append(np.copy(misRegEstBuffer))
             
-            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-            print('Mis-Registrations identified:')
-            print('Rotation [deg] \t Shift X [m] \t Shift Y [m]')
-            print(str(misRegistration_out.rotationAngle)   + '\t\t' +str(misRegistration_out.shiftX)+'\t\t' + str(misRegistration_out.shiftY))
 
             if i==nIteration:
                 criteria =1
 
+    misRegistration_out.shiftX              = np.round(misRegistration_out.shiftX,precision)
+    misRegistration_out.shiftY              = np.round(misRegistration_out.shiftY,precision)
+    misRegistration_out.rotationAngle       = np.round(misRegistration_out.rotationAngle,precision)
+    misRegistration_out.radialScaling       = np.round(misRegistration_out.radialScaling,precision)
+    misRegistration_out.tangentialScaling   = np.round(misRegistration_out.tangentialScaling,precision)
+
+    # values for validity
+    
+    tolerance = [dm_0.pitch/50,dm_0.pitch/50,np.rad2deg(np.arctan((dm_0.pitch/50)/(tel.D/2))),0.05,0.05]                
+    
+    diff      =  np.abs(misRegistration_values[-1]-misRegistration_values[-2])
+    
+    # in case of nan
+    diff[np.where(np.isnan(diff))] = 10000
+    if np.argwhere(diff-tolerance[:n_mis_reg]>0).size==0:    
+        # validity of the mis-reg
+        validity_flag = True
+    else:
+        validity_flag = False
+    
     if return_all:
-        return misRegistration_out, scalingFactor_values, misRegistration_values
+        return misRegistration_out, scalingFactor_values, misRegistration_values,validity_flag
     else:
         return misRegistration_out
 

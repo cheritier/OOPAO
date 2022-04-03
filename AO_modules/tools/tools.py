@@ -12,15 +12,23 @@ from astropy.io import fits as pfits
 import json
 import jsonpickle
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% USEFUL FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+def print_(input_text,condition):
+    if condition:
+        print(input_text)
+        
+
 def createFolder(path):
     
+    if path.rfind('.') != -1:
+        path = path[:path.rfind('/')+1]
+        
     try:
         os.makedirs(path)
     except OSError:
-        print ("Creation of the directory %s failed:" % path)
         if path:
-            print('Directory already exists!')
+            path =path
         else:
+            print ("Creation of the directory %s failed:" % path)
             print('Maybe you do not have access to this location.')
     else:
         print ("Successfully created the directory %s !" % path)
@@ -92,6 +100,7 @@ def read_fits(filename , dim = 0):
     hdu.close()
     del hdu[0].data
     return data
+
     
 def write_fits(data, filename , header_name = '',overwrite=True):
     
