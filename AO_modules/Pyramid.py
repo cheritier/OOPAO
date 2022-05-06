@@ -28,19 +28,24 @@ except:
     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
 import ctypes
-try : 
-    mkl_rt = ctypes.CDLL('libmkl_rt.so')
-    mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
-    mkl_set_num_threads(6)
-except:
-    try:
-        mkl_rt = ctypes.CDLL('./mkl_rt.dll')
+try:
+    try : 
+        mkl_rt = ctypes.CDLL('libmkl_rt.so')
         mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
         mkl_set_num_threads(6)
     except:
-        import mkl
-        mkl_set_num_threads = mkl.set_num_threads
+        try:
+            mkl_rt = ctypes.CDLL('./mkl_rt.dll')
+            mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
+            mkl_set_num_threads(6)
+        except:
+            import mkl
+            mkl_set_num_threads = mkl.set_num_threads
+            mkl_set_num_threads(6)
 
+except:
+    print('Could not set the number of threads. Performance might not be optimal.')
+    
 
 
 class Pyramid:
