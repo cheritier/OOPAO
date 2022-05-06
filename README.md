@@ -14,6 +14,11 @@ The code is written for Python 3 (version 3.8.8) and requires the following modu
     scikit-image 0.18.3 => 2D interpolations
     numexpr 2.7.3       => memory optimized simple operations
     astropy 4.2.1       => handling of fits files
+    pyFFTW  0.12.0      => optimization of the FFT  
+    mpmath 1.2.1        => arithmetic with arbitrary precision
+    jsonpickle 1.4.1    => json files encoding
+    json       0.9.5    => json files
+    mkl        2022.1.0 => optimization of the parallized operations
     
 # CONTRIBUTORS
 C.T. Heritier
