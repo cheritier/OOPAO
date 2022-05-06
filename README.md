@@ -18,7 +18,7 @@ The code is written for Python 3 (version 3.8.8) and requires the following modu
     mpmath 1.2.1        => arithmetic with arbitrary precision
     jsonpickle 1.4.1    => json files encoding
     json       0.9.5    => json files
-    
+    mkl        2022.1.0 => optimization of the parallized operations
     
 # CONTRIBUTORS
 C.T. Heritier
