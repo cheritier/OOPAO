@@ -72,7 +72,7 @@ class SPRINT:
 
             
         self.metaMatrix_init = calibrationVault(self.metaMatrix.D)
-        self.mis_registration_zero_point_init = mis_registration_zero_point
+        self.mis_registration_zero_point_init = self.mis_registration_zero_point
         
         print('Done!')
 
@@ -152,6 +152,7 @@ class SPRINT:
         print('----------------------------------')
 
         print('Final Mis-Registrations identified:')
+        # self.mis_registration_out = self.mis_registration_out + self.mis_registration_zero_point
         self.mis_registration_out.print_()
         print('Mis-registration Validity Flag: '+ str(self.validity_flag))
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')

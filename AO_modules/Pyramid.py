@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import multiprocessing
 from AO_modules.Detector import Detector
 try:
-    error
+    # error
     import cupy as np_cp
     print('GPU available!')
 
@@ -28,24 +28,19 @@ except:
     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
 import ctypes
-try:
-    try : 
-        mkl_rt = ctypes.CDLL('libmkl_rt.so')
+try : 
+    mkl_rt = ctypes.CDLL('libmkl_rt.so')
+    mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
+    mkl_set_num_threads(6)
+except:
+    try:
+        mkl_rt = ctypes.CDLL('./mkl_rt.dll')
         mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
         mkl_set_num_threads(6)
     except:
-        try:
-            mkl_rt = ctypes.CDLL('./mkl_rt.dll')
-            mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
-            mkl_set_num_threads(6)
-        except:
-            import mkl
-            mkl_set_num_threads = mkl.set_num_threads
-            mkl_set_num_threads(6)
+        import mkl
+        mkl_set_num_threads = mkl.set_num_threads
 
-except:
-    print('Could not set the number of threads. Performance might not be optimal.')
-    
 
 
 class Pyramid:
@@ -53,12 +48,13 @@ class Pyramid:
     
     def __init__(self,nSubap,telescope,modulation,lightRatio,pupilSeparationRatio=1.2,calibModulation=50,extraModulationFactor=0,zeroPadding=0,psfCentering=True,edgePixel=2,unitCalibration=0,binning =1,nTheta_user_defined=None, postProcessing='slopesMaps',userValidSignal=None,old_mask=True,rooftop = None):
         try:
-            error
+            # error
             import cupy as np_cp
             self.gpu_available = True
             self.convert_for_gpu = np_cp.asarray
             self.convert_for_numpy = np_cp.asnumpy
             self.nJobs = 1
+            self.mempool = np_cp.get_default_memory_pool()
             
         except:
             import numpy as np_cp
@@ -82,7 +78,10 @@ class Pyramid:
         self.backgroundNoise            = False                                             # background noise in photon 
         self.binning                    = binning                                           # binning factor for the detector
         self.old_mask                   = old_mask
-        self.joblib_setting             = 'threads'
+        if self.gpu_available:
+            self.joblib_setting             = 'processes'
+        else:
+            self.joblib_setting             = 'threads'
         self.rooftop                    = rooftop      
         # Case where the zero-padding is not specificed => taking the smallest value ensuring to get edgePixel space from the edge.
         count =0
@@ -157,7 +156,7 @@ class Pyramid:
 
         # compute the phasor to center the PSF on 4 pixels
         [xx,yy]                         = np.meshgrid(np.linspace(0,self.nRes-1,self.nRes),np.linspace(0,self.nRes-1,self.nRes))
-        self.phasor                     = np.exp(-(1j*np.pi*(self.nRes+1)/self.nRes)*(xx+yy))
+        self.phasor                     = self.convert_for_gpu(np.exp(-(1j*np.pi*(self.nRes+1)/self.nRes)*(xx+yy)))
         
        
         
@@ -219,7 +218,8 @@ class Pyramid:
                 m[-1+self.nRes//2:self.nRes//2,-1+self.nRes//2:self.nRes//2] = m[-1+self.nRes//2:self.nRes//2,-1+self.nRes//2:self.nRes//2]/2   
                 m /= np.sqrt(2) 
                 m -= m.mean()
-                m*=(1+1/self.nSubap)
+                # if self.psfCentering is False:                       
+                    # m*=(1+self.nSubap)
              
     #        # create an amplitude mask for the debugging
     #            self.debugMask = np.ones([self.nRes,self.nRes])
@@ -380,7 +380,7 @@ class Pyramid:
         Tip                        = (self.telRes/self.nSubap)*(((Tip/Tip.max())-0.5)*2*np.pi)
         Tilt                       = (self.telRes/self.nSubap)*(((Tilt/Tilt.max())-0.5)*2*np.pi)
         
-        self.mask = np.exp(1j*(self.initial_m+sx*Tip+sy*Tilt))
+        self.mask = self.convert_for_gpu(np.exp(1j*(self.initial_m+sx*Tip+sy*Tilt)))
            
             
 
@@ -393,11 +393,8 @@ class Pyramid:
 
         if self.userValidSignal is None:
             print('The valid pixel are selected on flux considerations')
-
-            # calibrate the 
             self.modulation = self.calibModulation                  # set the modulation to a large value   
             self.pyramid_propagation(telescope)                      # propagate 
-
             # save initialization frame
             self.initFrame = self.cam.frame
             
@@ -468,7 +465,7 @@ class Pyramid:
             
         # zero-padding for the FFT computation
         support[self.center-self.telescope.resolution//2:self.center+self.telescope.resolution//2,self.center-self.telescope.resolution//2:self.center+self.telescope.resolution//2] = em_field
-        
+        del em_field
         # case with mask centered on 4 pixels
         if self.psfCentering:
             em_field_ft     = np_cp.fft.fft2(support*self.phasor)
@@ -477,13 +474,23 @@ class Pyramid:
        
         # case with mask centered on 1 pixel
         else:
-            em_field_ft     = np_cp.fft.fftshift(np_cp.fft.fft2(support)) 
+            if self.spatialFilter is not None:
+                em_field_ft     = np_cp.fft.fftshift(np_cp.fft.fft2(support))*self.spatialFilter 
+            else:
+                em_field_ft     = np_cp.fft.fftshift(np_cp.fft.fft2(support)) 
+
             em_field_pwfs   = np_cp.fft.ifft2(em_field_ft*self.mask)
             I               = np_cp.abs(em_field_pwfs)**2
+        del support
+        del em_field_pwfs
+        # self.modulation_camera_frame.append(em_field_ft)
+        del em_field_ft
+        del phase_in
         
-        self.modulation_camera_frame.append(em_field_ft)
 
         return I    
+    
+    
     
 #        def pyramid_transform_spatial_filter(self,phase_in):
 #            # copy of the support for the zero-padding
@@ -573,24 +580,56 @@ class Pyramid:
 
         else:
             if np.ndim(telescope.OPD)==2:       
+                # print(self.phaseBuffModulationLowres.shape)
+                n_max_ = 128
+                if self.nTheta>n_max_:
+                    # break problem in pieces: 
+                    # buffer_map = self.phaseBuffModulationLowres.copy()
+                    
+                    nCycle = int(np.ceil(self.nTheta/n_max_))
+                    # print(self.nTheta)
+                    maps = self.convert_for_numpy(np_cp.zeros([self.nRes,self.nRes]))
+                    for i in range(nCycle):
+                        
+                        if self.gpu_available:
+                            try:
+                                self.mempool = np_cp.get_default_memory_pool()
+                                self.mempool.free_all_blocks()
+                            except:
+                                print('could not free the memory')
+                            
+                        if i<nCycle-1:
+                            def job_loop_single_mode_modulated():
+                                Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.convert_for_gpu(self.phaseBuffModulationLowres[i*n_max_:(i+1)*n_max_,:,:]))
+                                return Q 
+                            maps+=self.convert_for_numpy(np_cp.sum(np_cp.asarray(job_loop_single_mode_modulated()),axis=0))
 
-                #define the parallel jobs
-                def job_loop_single_mode_modulated():
-                    Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.phaseBuffModulationLowres)
-                    return Q 
+                        else:
+                            def job_loop_single_mode_modulated():
+                                Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.convert_for_gpu(self.phaseBuffModulationLowres[i*n_max_:,:,:]))
+                                return Q 
+                            maps+=self.convert_for_numpy(np_cp.sum(np_cp.asarray(job_loop_single_mode_modulated()),axis=0))
 
-                # applt the pyramid transform in parallel
-                maps=job_loop_single_mode_modulated()
+                    self.pyramidFrame=maps/self.nTheta
+                    del maps
+
+                else:
+                    #define the parallel jobs
+                    def job_loop_single_mode_modulated():
+                        Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.phaseBuffModulationLowres)
+                        return Q 
+        
+                        # applt the pyramid transform in parallel
+                    maps=np_cp.asarray(job_loop_single_mode_modulated())
                 
-                # compute the sum of the pyramid frames for each modulation points
-                self.pyramidFrame=self.convert_for_numpy(np_cp.sum(np_cp.asarray(maps),axis=0))/self.nTheta
-
+                    # compute the sum of the pyramid frames for each modulation points
+                    self.pyramidFrame=self.convert_for_numpy(np_cp.sum((maps),axis=0))/self.nTheta
+                    del maps
                 #propagate to the detector
                 self*self.cam
                 
                 if self.isInitialized and self.isCalibrated:
                     self.pyramidSignal_2D,self.pyramidSignal=self.signalProcessing()
-                del maps
                 
                 # case with multiple modes simultaneously
 
@@ -602,26 +641,66 @@ class Pyramid:
                     self.phase_buffer = np.moveaxis(telescope.src.phase,-1,0)
 
                     def jobLoop_setPhaseBuffer():
-                        Q = Parallel(n_jobs=2,prefer=self.joblib_setting)(delayed(self.setPhaseBuffer)(i) for i in self.phase_buffer)
+                        Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.setPhaseBuffer)(i) for i in self.phase_buffer)
                         return Q                   
                     
                     self.phaseBuffer=self.convert_for_gpu(np.reshape(np_cp.asarray(jobLoop_setPhaseBuffer()),[nModes*self.nTheta,self.telRes,self.telRes]))
                     
-                    def job_loop_multiple_mode_modulated():
-                        Q = Parallel(n_jobs=4,prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.phaseBuffer)
-                        return Q 
+                    n_measurements = nModes*self.nTheta
+                    n_max = 128
                     
-                    self.bufferPyramidFrames  = job_loop_multiple_mode_modulated()
-                    
+                    n_measurement_max = int(np.floor(n_max/self.nTheta))
+
+                    maps = (np_cp.zeros([n_measurements,self.nRes,self.nRes]))
+                    if n_measurements >n_max:
+                        nCycle = int(np.ceil(nModes/n_measurement_max))
+                        for i in range(nCycle):
+                        
+                            if self.gpu_available:
+                                try:
+                                    self.mempool = np_cp.get_default_memory_pool()
+                                    self.mempool.free_all_blocks()
+                                except:
+                                    print('could not free the memory')
+                            
+                            if i<nCycle-1:
+                                def job_loop_multiple_mode_modulated():
+                                    Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.convert_for_gpu(self.phaseBuffer[i*n_measurement_max*self.nTheta:(i+1)*n_measurement_max*self.nTheta,:,:]))
+                                    return Q 
+                                maps[i*n_measurement_max*self.nTheta:(i+1)*n_measurement_max*self.nTheta,:,:]=(np_cp.asarray(job_loop_multiple_mode_modulated()))
+    
+                            else:
+                                def job_loop_multiple_mode_modulated():
+                                    Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.convert_for_gpu(self.phaseBuffer[i*n_measurement_max*self.nTheta:,:,:]))
+                                    return Q 
+                                maps[i*n_measurement_max*self.nTheta:,:,:]=(np_cp.asarray(job_loop_multiple_mode_modulated()))
+                        self.bufferPyramidFrames = self.convert_for_numpy(maps)
+                        del self.phaseBuffer
+                        del maps
+                        if self.gpu_available:
+                            try:
+                                self.mempool = np_cp.get_default_memory_pool()
+                                self.mempool.free_all_blocks()
+                            except:
+                                print('could not free the memory')
+
+                    else:
+                        def job_loop_multiple_mode_modulated():
+                            Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.phaseBuffer)
+                            return Q 
+                        
+                        self.bufferPyramidFrames  = self.convert_for_numpy(np_cp.asarray(job_loop_multiple_mode_modulated()))
+                        
                     self.pyramidSignal_2D     = np.zeros([self.validSignal.shape[0],self.validSignal.shape[1],nModes])
                     self.pyramidSignal        = np.zeros([self.nSignal,nModes])
-                
+                    
                     for i in range(nModes):
-                        self.pyramidFrame = self.convert_for_numpy(np_cp.sum(np_cp.asarray(self.bufferPyramidFrames[i*(self.nTheta):(self.nTheta)+i*(self.nTheta)]),axis=0))/self.nTheta
+                        self.pyramidFrame = np_cp.sum(self.bufferPyramidFrames[i*(self.nTheta):(self.nTheta)+i*(self.nTheta)],axis=0)/self.nTheta
                         self*self.cam
                         if self.isInitialized:
                             self.pyramidSignal_2D[:,:,i],self.pyramidSignal[:,i] = self.signalProcessing()                   
                     del self.bufferPyramidFrames
+      
 
                 else:
                     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
@@ -629,6 +708,12 @@ class Pyramid:
                     print('Aborting...')
                     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
                     sys.exit(0)
+                if self.gpu_available:
+                    try:
+                        self.mempool = np_cp.get_default_memory_pool()
+                        self.mempool.free_all_blocks()
+                    except:
+                        print('could not free the memory')
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS SIGNAL PROCESSING %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
             
@@ -848,7 +933,8 @@ class Pyramid:
                 self.phaseBuffModulation[i,self.center-self.telRes//2:self.center+self.telRes//2,self.center-self.telRes//2:self.center+self.telRes//2] = self.TT
                 self.phaseBuffModulationLowres[i,:,:]   = self.TT
             if self.gpu_available:
-                self.phaseBuffModulationLowres = self.convert_for_gpu(self.phaseBuffModulationLowres)
+                if self.nTheta<=32:                        
+                    self.phaseBuffModulationLowres = self.convert_for_gpu(self.phaseBuffModulationLowres)
         else:
             self.nTheta = 1
 

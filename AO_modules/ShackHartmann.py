@@ -39,7 +39,7 @@ except:
 
 
 class ShackHartmann:
-    def __init__(self,nSubap,telescope,lightRatio,LGS = None,threshold_cog = 0,is_geometric = False ):
+    def __init__(self,nSubap,telescope,lightRatio,LGS = None,threshold_cog = 0,is_geometric = False, binning_factor = 1 ):
         self.tag                    = 'shackHartmann'
         self.telescope              = telescope
         self.is_geometric           = is_geometric
@@ -57,6 +57,7 @@ class ShackHartmann:
         self.cam.readoutNoise       = 0        # single lenslet 
         self.lenslet_frame          = np.zeros([self.n_pix_subap*self.zero_padding,self.n_pix_subap*self.zero_padding], dtype =complex)
         self.photon_per_subaperture = np.zeros(self.nSubap**2)
+        self.binning_factor         = binning_factor
         if LGS is None:
             self.is_LGS                 = False
         else:
@@ -68,7 +69,7 @@ class ShackHartmann:
         self.joblib_prefer          = 'processes'
         
         # camera frame 
-        self.camera_frame           = np.zeros([self.n_pix_subap*(self.nSubap),self.n_pix_subap*(self.nSubap)], dtype =float)
+        self.camera_frame           = np.zeros([self.n_pix_subap*(self.nSubap)//self.binning_factor,self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype =float)
         
         # cube of lenslet zero padded
         self.cube                   = np.zeros([self.nSubap**2,self.n_pix_lenslet,self.n_pix_lenslet])
@@ -123,6 +124,13 @@ class ShackHartmann:
         
     def initialize_wfs(self):
         self.isInitialized = False
+
+        readoutNoise = np.copy(self.cam.readoutNoise)
+        photonNoise = np.copy(self.cam.photonNoise)
+        
+        self.cam.photonNoise        = 0
+        self.cam.readoutNoise       = 0       
+        
         # reference signal
         self.sx0                    = np.zeros([self.nSubap,self.nSubap])
         self.sy0                    = np.zeros([self.nSubap,self.nSubap])
@@ -156,6 +164,8 @@ class ShackHartmann:
         self.p = np.polyfit(np.linspace(-2,2,5)*amp,mean_slope,deg = 1)
         self.slopes_units = self.p[0]
         print('Done!')
+        self.cam.photonNoise        = readoutNoise
+        self.cam.readoutNoise       = photonNoise
         self.telescope.resetOPD()
 
     def centroid(self,im, threshold = 0):
@@ -211,9 +221,9 @@ class ShackHartmann:
         
     def fill_camera_frame(self,ind_x,ind_y,I,index_frame=None):
         if index_frame is None:
-            self.camera_frame[ind_x*self.n_pix_subap:(ind_x+1)*self.n_pix_subap,ind_y*self.n_pix_subap:(ind_y+1)*self.n_pix_subap] = I        
+            self.camera_frame[ind_x*self.n_pix_subap//self.binning_factor:(ind_x+1)*self.n_pix_subap//self.binning_factor,ind_y*self.n_pix_subap//self.binning_factor:(ind_y+1)*self.n_pix_subap//self.binning_factor] = I        
         else:
-            self.camera_frame[index_frame,ind_x*self.n_pix_subap:(ind_x+1)*self.n_pix_subap,ind_y*self.n_pix_subap:(ind_y+1)*self.n_pix_subap] = I
+            self.camera_frame[index_frame,ind_x*self.n_pix_subap//self.binning_factor:(ind_x+1)*self.n_pix_subap//self.binning_factor,ind_y*self.n_pix_subap//self.binning_factor:(ind_y+1)*self.n_pix_subap//self.binning_factor] = I
 
     def compute_camera_frame_multi(self,maps_intensisty):   
         self.ind_frame =np.zeros(maps_intensisty.shape[0],dtype=(int))
@@ -272,7 +282,7 @@ class ShackHartmann:
             
             if np.ndim(self.telescope.src.phase)==2:
                 # reset camera frame
-                self.camera_frame   = np.zeros([self.n_pix_subap*(self.nSubap),self.n_pix_subap*(self.nSubap)], dtype =float)
+                self.camera_frame   = np.zeros([self.n_pix_subap*(self.nSubap)//self.binning_factor,self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype =float)
                 
                 if self.is_LGS:
                     def fill_em_cube():
@@ -287,7 +297,7 @@ class ShackHartmann:
                     norma = self.lenslet_frame.shape[0]
                     I = np.abs(np.fft.fft2(np.asarray(fill_em_cube()))/norma)**2                
 
-                self.maps_intensity =  bin_ndarray(I, [I.shape[0], self.n_pix_subap,self.n_pix_subap], operation='sum')
+                self.maps_intensity =  bin_ndarray(I, [I.shape[0], self.n_pix_subap//self.binning_factor,self.n_pix_subap//self.binning_factor], operation='sum')
                 
                 if self.cam.photonNoise!=0:
                     rs = np.random.RandomState(seed=int(time.time()))
@@ -332,7 +342,7 @@ class ShackHartmann:
                 # set phase buffer
                 self.phase_buffer = np.moveaxis(self.telescope.src.phase_no_pupil,-1,0)
                 # reset camera frame
-                self.camera_frame   = np.zeros([self.phase_buffer.shape[0],self.n_pix_subap*(self.nSubap),self.n_pix_subap*(self.nSubap)], dtype =float)
+                self.camera_frame   = np.zeros([self.phase_buffer.shape[0],self.n_pix_subap*(self.nSubap)//self.binning_factor,self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype =float)
 
                 def compute_diffractive_signals_multi():
                     Q=Parallel(n_jobs=1,prefer='processes')(delayed(self.get_lenslet_phase_buffer)(i) for i in self.phase_buffer)

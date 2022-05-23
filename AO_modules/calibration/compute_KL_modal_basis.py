@@ -163,7 +163,7 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param, nameFolder = Non
 
 
         if alpha is None:
-            alpha = 1.e-12
+            alpha = 1.e-16
         if beta is None:
             beta=1.e-6
     

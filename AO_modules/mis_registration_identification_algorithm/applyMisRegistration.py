@@ -82,7 +82,6 @@ def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis
                         coordinates  = coordinates,\
                         pitch        = 0,\
                         misReg       = misRegistration_tmp + extra_dm_mis_registration,\
-                        M4_param     = param,\
                         print_dm_properties = print_dm_properties)
                 if print_dm_properties:
                     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
@@ -130,4 +129,4 @@ def apply_shift_wfs(wfs,sx,sy):
         Tip                        = (wfs.telRes/wfs.nSubap)*(((Tip/Tip.max())-0.5)*2*np.pi)
         Tilt                       = (wfs.telRes/wfs.nSubap)*(((Tilt/Tilt.max())-0.5)*2*np.pi)
         
-        wfs.mask = np.exp(1j*(wfs.initial_m+sx*Tip+sy*Tilt))
+        wfs.mask = wfs.convert_for_gpu(np.exp(1j*(wfs.initial_m+sx*Tip+sy*Tilt)))

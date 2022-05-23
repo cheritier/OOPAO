@@ -129,7 +129,7 @@ class DeformableMirror:
             # select valid actuators (central and outer obstruction)
             r = np.sqrt(self.xIF0**2 + self.yIF0**2)
             validActInner = r>(telescope.centralObstruction*self.D/2-0.5*self.pitch)
-            validActOuter = r<=(self.D/2+0.75*self.pitch)
+            validActOuter = r<=(self.D/2+0.7533*self.pitch)
     
             self.validAct = validActInner*validActOuter
             self.nValidAct = sum(self.validAct) 
@@ -263,12 +263,17 @@ class DeformableMirror:
     def coefs(self,val):
         if np.isscalar(val):
             if val==0:
-                self._coefs=np.arange(0,self.nValidAct)*val
+                if self.floating_precision==32:            
+                    self._coefs = np.zeros(self.nValidAct,dtype=np.float32)
+                else:
+                    self._coefs = np.zeros(self.nValidAct,dtype=np.float64)
+                    
+                # self._coefs=np.arange(0,self.nValidAct)*val
                 
                 try:
-                    self.OPD = np.reshape(np.matmul(self.modes,self._coefs),[self.resolution,self.resolution])
+                    self.OPD =  np.float64(np.reshape(np.matmul(self.modes,self._coefs),[self.resolution,self.resolution]))
                 except:
-                    self.OPD=np.reshape(self.modes@self._coefs,[self.resolution,self.resolution])
+                    self.OPD= np.float64(np.reshape(self.modes@self._coefs,[self.resolution,self.resolution]))
 
             else:
                 print('Error: wrong value for the coefficients')    

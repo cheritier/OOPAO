@@ -336,7 +336,18 @@ class Atmosphere:
         if self.tel.isPaired:
             self*self.tel
 
-    
+
+    def print_atm_at_wavelength(self,wavelength):
+
+        r0_wvl              = self.r0*((wavelength/self.wavelength)**(5/3))
+        seeingArcsec_wvl    = 206265*(wavelength/r0_wvl)
+
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE AT '+str(wavelength)+' nm %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        print('r0 \t\t'+str(r0_wvl) + ' \t [m]') 
+        print('Seeing \t' + str(np.round(seeingArcsec_wvl,2)) + str('\t ["]'))
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        return
+        
     def print_atm(self):
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         print('r0 \t\t'+str(self.r0) + ' \t [m]') 

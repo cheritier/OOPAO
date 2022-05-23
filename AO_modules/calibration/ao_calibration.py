@@ -10,7 +10,7 @@ import numpy as np
 from AO_modules.calibration.CalibrationVault  import calibrationVault
 from AO_modules.calibration.InteractionMatrix import interactionMatrix
 from AO_modules.tools.tools import emptyClass,createFolder, read_fits, write_fits
-
+import time
 
 
 def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = None, nameFolderBasis = None, nameBasis = None, nMeasurements=50, index_modes = None, get_basis = True):
@@ -112,7 +112,8 @@ def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = Non
         
     except:  
         print('ERROR! Computingh the zonal interaction matrix')
-
+        print('ERROR: No file found! computing imat..' )
+        time.sleep(5)
         M2C_zon = np.eye(ao_obj.dm.nValidAct)
 
         stroke =1e-9 # 1 nm amplitude
@@ -269,7 +270,7 @@ def ao_calibration(ngs, tel, atm, dm, wfs, param, nameFolderIntMat = None, nameI
             
             
     try:
-        print('Loading Interaction matrix '+nameIntMat+'...')
+        print('Loading Interaction matrix '+nameFolderIntMat+nameIntMat+'...')
         imat = read_fits(nameFolderIntMat+nameIntMat+'.fits')
         calib = calibrationVault(imat@M2C)      
         print('Done!')
@@ -277,6 +278,9 @@ def ao_calibration(ngs, tel, atm, dm, wfs, param, nameFolderIntMat = None, nameI
 
         
     except:  
+        
+        print('ERROR: No file found! computing imat..' )
+        time.sleep(5)
         M2C_zon = np.eye(dm.nValidAct)
         stroke =1e-9 # 1 nm amplitude
         calib = interactionMatrix(ngs, atm, tel, dm, wfs, M2C_zon, stroke, phaseOffset = 0, nMeasurements = nMeasurements)
