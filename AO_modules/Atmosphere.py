@@ -383,6 +383,14 @@ class Atmosphere:
              self.seeingArcsec           = 206265*(self.wavelength/val)
 
              self.hasNotBeenInitialized = True
+             del self.ZZt
+             del self.XXt
+             del self.ZXt
+             del self.ZZt_inv
+
+             # for i_layer in range(self.nLayer):
+                 # tmp_layer = getattr(self,'layer_'+str(i_layer+1) )
+                 # setattr(tmp_layer,'notDoneOnce', True)
              self.initializeAtmosphere(self.tel)
     @property
     def L0(self):
@@ -393,8 +401,13 @@ class Atmosphere:
          self._L0 = val
          if self.hasNotBeenInitialized is False:
              print('Updating the Atmosphere covariance matrices...')
+
              self.hasNotBeenInitialized = True
-             self.initializeAtmosphere(self.tel)    
+             del self.ZZt
+             del self.XXt
+             del self.ZXt
+             del self.ZZt_inv
+             self.initializeAtmosphere(self.tel)
     @property
     def windSpeed(self):
          return self._windSpeed
