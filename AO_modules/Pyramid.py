@@ -15,7 +15,10 @@ from AO_modules.Detector import Detector
 try:
     # error
     import cupy as np_cp
-    print('GPU available!')
+
+    
+# print(cupy.get_default_memory_pool().get_limit()/1024/1024/1024) 
+    
 
 except:
     import numpy as np_cp
@@ -55,7 +58,13 @@ class Pyramid:
             self.convert_for_numpy = np_cp.asnumpy
             self.nJobs = 1
             self.mempool = np_cp.get_default_memory_pool()
+            from AO_modules.tools.tools import get_gpu_memory
+            self.mem_gpu = get_gpu_memory()
             
+            print('GPU available!')    
+            for i in range(len(self.mem_gpu)):   
+                print('GPU device '+str(i)+' : '+str(self.mem_gpu[i]/1024)+ 'GB memory')
+        
         except:
             import numpy as np_cp
             def no_function(input_matrix):
@@ -139,6 +148,9 @@ class Pyramid:
                 self.nJobs                      = 32                                                                 # number of jobs for the joblib package
             else:
                 self.nJobs                      = 8
+        A = np.ones([self.nRes,self.nRes]) + 1j*np.ones([self.nRes,self.nRes])
+        self.n_max = int(0.75*(np.min(self.mem_gpu)/1024)/(A.nbytes/1024/1024/1024))
+        print(self.n_max)
         self.spatialFilter              = None
         self.supportPadded              = self.convert_for_gpu(np.pad(self.telescope.pupil.astype(complex),((self.zeroPadding,self.zeroPadding),(self.zeroPadding,self.zeroPadding)),'constant'))
 
@@ -581,7 +593,7 @@ class Pyramid:
         else:
             if np.ndim(telescope.OPD)==2:       
                 # print(self.phaseBuffModulationLowres.shape)
-                n_max_ = 128
+                n_max_ = self.n_max
                 if self.nTheta>n_max_:
                     # break problem in pieces: 
                     # buffer_map = self.phaseBuffModulationLowres.copy()
@@ -647,7 +659,7 @@ class Pyramid:
                     self.phaseBuffer=self.convert_for_gpu(np.reshape(np_cp.asarray(jobLoop_setPhaseBuffer()),[nModes*self.nTheta,self.telRes,self.telRes]))
                     
                     n_measurements = nModes*self.nTheta
-                    n_max = 128
+                    n_max = self.n_max
                     
                     n_measurement_max = int(np.floor(n_max/self.nTheta))
 
@@ -933,7 +945,7 @@ class Pyramid:
                 self.phaseBuffModulation[i,self.center-self.telRes//2:self.center+self.telRes//2,self.center-self.telRes//2:self.center+self.telRes//2] = self.TT
                 self.phaseBuffModulationLowres[i,:,:]   = self.TT
             if self.gpu_available:
-                if self.nTheta<=32:                        
+                if self.nTheta<=self.n_max:                        
                     self.phaseBuffModulationLowres = self.convert_for_gpu(self.phaseBuffModulationLowres)
         else:
             self.nTheta = 1

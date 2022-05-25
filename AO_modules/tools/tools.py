@@ -11,6 +11,7 @@ import skimage.transform as sk
 from astropy.io import fits as pfits
 import json
 import jsonpickle
+import subprocess 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% USEFUL FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 def print_(input_text,condition):
     if condition:
@@ -99,6 +100,8 @@ def read_fits(filename , dim = 0):
         data = hdu[dim].data
     hdu.close()
     del hdu[0].data
+    
+    
     return data
 
     
@@ -180,3 +183,11 @@ def bin_ndarray(ndarray, new_shape, operation='sum'):
         op = getattr(ndarray, operation)
         ndarray = op(-1*(i+1))
     return ndarray
+
+
+
+def get_gpu_memory():
+    command = "nvidia-smi --query-gpu=memory.free --format=csv"
+    memory_free_info = subprocess.check_output(command.split()).decode('ascii').split('\n')[:-1][1:]
+    memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
+    return memory_free_values
