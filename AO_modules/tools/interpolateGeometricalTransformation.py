@@ -195,7 +195,7 @@ def interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out, mis
     
     print('interpolating... ')    
     def joblib_reconstruction():
-        Q=Parallel(n_jobs=4,prefer='threads')(delayed(reconstruction_IF)(i) for i in cube_in)
+        Q=Parallel(n_jobs=1,prefer='processes')(delayed(reconstruction_IF)(i) for i in cube_in)
         return Q 
     
     cube_out =  np.asarray(joblib_reconstruction())
