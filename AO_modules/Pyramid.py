@@ -41,8 +41,11 @@ except:
         mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
         mkl_set_num_threads(6)
     except:
-        import mkl
-        mkl_set_num_threads = mkl.set_num_threads
+        try:
+            import mkl
+            mkl_set_num_threads = mkl.set_num_threads
+        except:
+            mkl_set_num_threads = None
 
 
 
@@ -148,8 +151,11 @@ class Pyramid:
                 self.nJobs                      = 32                                                                 # number of jobs for the joblib package
             else:
                 self.nJobs                      = 8
-        A = np.ones([self.nRes,self.nRes]) + 1j*np.ones([self.nRes,self.nRes])
-        self.n_max = int(0.75*(np.min(self.mem_gpu)/1024)/(A.nbytes/1024/1024/1024))
+                
+            self.n_max = 20*500
+        else:
+            A = np.ones([self.nRes,self.nRes]) + 1j*np.ones([self.nRes,self.nRes])
+            self.n_max = int(0.75*(np.min(self.mem_gpu)/1024)/(A.nbytes/1024/1024/1024))
         print(self.n_max)
         self.spatialFilter              = None
         self.supportPadded              = self.convert_for_gpu(np.pad(self.telescope.pupil.astype(complex),((self.zeroPadding,self.zeroPadding),(self.zeroPadding,self.zeroPadding)),'constant'))
@@ -379,10 +385,15 @@ class Pyramid:
 
                 
 
-    def apply_shift_wfs(self,sx,sy):
+    def apply_shift_wfs(self,sx,sy,units = 'pixels'):
         # apply a TIP/TILT of the PWFS mask to shift the pupils
         # sx and sy are the units of displacements in pixels
-        
+        if units == 'pixels':
+            sx*=1
+            sy*=1
+        if units == 'm':
+            sx*=1/(self.telescope.pixelSize*(self.telescope.resolution/self.nSubap))
+            sy*=1/(self.telescope.pixelSize*(self.telescope.resolution/self.nSubap))
         tmp                             = np.ones([self.nRes,self.nRes])
         tmp[:,0]                        = 0
         Tip                             = (sp.morphology.distance_transform_edt(tmp))
@@ -495,7 +506,7 @@ class Pyramid:
             I               = np_cp.abs(em_field_pwfs)**2
         del support
         del em_field_pwfs
-        # self.modulation_camera_frame.append(em_field_ft)
+        self.modulation_camera_frame.append(self.convert_for_numpy(em_field_ft))
         del em_field_ft
         del phase_in
         
@@ -537,7 +548,7 @@ class Pyramid:
         
         
     def setPhaseBuffer(self,phaseIn):
-        B=self.phaseBuffModulationLowres+self.convert_for_gpu(phaseIn)
+        B = self.phaseBuffModulationLowres_CPU+phaseIn
         return B    
     
         
@@ -656,14 +667,14 @@ class Pyramid:
                         Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.setPhaseBuffer)(i) for i in self.phase_buffer)
                         return Q                   
                     
-                    self.phaseBuffer=self.convert_for_gpu(np.reshape(np_cp.asarray(jobLoop_setPhaseBuffer()),[nModes*self.nTheta,self.telRes,self.telRes]))
+                    self.phaseBuffer=(np.reshape(np.asarray(jobLoop_setPhaseBuffer()),[nModes*self.nTheta,self.telRes,self.telRes]))
                     
                     n_measurements = nModes*self.nTheta
                     n_max = self.n_max
                     
                     n_measurement_max = int(np.floor(n_max/self.nTheta))
 
-                    maps = (np_cp.zeros([n_measurements,self.nRes,self.nRes]))
+                    maps = np_cp.zeros([n_measurements,self.nRes,self.nRes])
                     if n_measurements >n_max:
                         nCycle = int(np.ceil(nModes/n_measurement_max))
                         for i in range(nCycle):
@@ -679,13 +690,13 @@ class Pyramid:
                                 def job_loop_multiple_mode_modulated():
                                     Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.convert_for_gpu(self.phaseBuffer[i*n_measurement_max*self.nTheta:(i+1)*n_measurement_max*self.nTheta,:,:]))
                                     return Q 
-                                maps[i*n_measurement_max*self.nTheta:(i+1)*n_measurement_max*self.nTheta,:,:]=(np_cp.asarray(job_loop_multiple_mode_modulated()))
+                                maps[i*n_measurement_max*self.nTheta:(i+1)*n_measurement_max*self.nTheta,:,:] = np_cp.asarray(job_loop_multiple_mode_modulated())
     
                             else:
                                 def job_loop_multiple_mode_modulated():
                                     Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.convert_for_gpu(self.phaseBuffer[i*n_measurement_max*self.nTheta:,:,:]))
                                     return Q 
-                                maps[i*n_measurement_max*self.nTheta:,:,:]=(np_cp.asarray(job_loop_multiple_mode_modulated()))
+                                maps[i*n_measurement_max*self.nTheta:,:,:] = np_cp.asarray(job_loop_multiple_mode_modulated())
                         self.bufferPyramidFrames = self.convert_for_numpy(maps)
                         del self.phaseBuffer
                         del maps
@@ -698,7 +709,7 @@ class Pyramid:
 
                     else:
                         def job_loop_multiple_mode_modulated():
-                            Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.phaseBuffer)
+                            Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.convert_for_gpu(self.phaseBuffer))
                             return Q 
                         
                         self.bufferPyramidFrames  = self.convert_for_numpy(np_cp.asarray(job_loop_multiple_mode_modulated()))
@@ -944,6 +955,7 @@ class Pyramid:
                 self.TT                                 = (self.modulation*(np.cos(dTheta)*self.Tip+np.sin(dTheta)*self.Tilt))*self.telescope.pupil
                 self.phaseBuffModulation[i,self.center-self.telRes//2:self.center+self.telRes//2,self.center-self.telRes//2:self.center+self.telRes//2] = self.TT
                 self.phaseBuffModulationLowres[i,:,:]   = self.TT
+            self.phaseBuffModulationLowres_CPU = self.phaseBuffModulationLowres .copy()
             if self.gpu_available:
                 if self.nTheta<=self.n_max:                        
                     self.phaseBuffModulationLowres = self.convert_for_gpu(self.phaseBuffModulationLowres)

@@ -12,11 +12,12 @@ from AO_modules.calibration.CalibrationVault import calibrationVault
 import numpy as np
 
 class SPRINT:
-    def __init__(self, obj, basis, nameFolder = None, nameSystem = None, mis_registration_zero_point = None, wfs_mis_registered= None, fast_algorithm = False, n_mis_reg = 3):
+    def __init__(self, obj, basis, nameFolder = None, nameSystem = None, mis_registration_zero_point = None, wfs_mis_registered= None, fast_algorithm = False, n_mis_reg = 3, recompute_sensitivity = False):
         print('Setting up SPRINT..')
         # modal basis considered
         self.basis              = basis
         self.n_mis_reg          = n_mis_reg
+        self.recompute_sensitivity = recompute_sensitivity
         # consider the case when only one signal is used
         # if len(basis.indexModes)==1:
             # self.basis.indexModes    = [basis.indexModes,basis.indexModes]
@@ -68,7 +69,8 @@ class SPRINT:
                                                          param                      = obj.param,\
                                                          wfs_mis_registrated        = wfs_mis_registered,\
                                                          n_mis_reg                  = self.n_mis_reg,\
-                                                         fast                       = self.fast_algorithm)
+                                                         fast                       = self.fast_algorithm,\
+                                                         recompute_sensitivity      = self.recompute_sensitivity    )
 
             
         self.metaMatrix_init = calibrationVault(self.metaMatrix.D)
@@ -123,7 +125,8 @@ class SPRINT:
                                                                  wfs_mis_registrated        = self.wfs_mis_registered,\
                                                                  save_sensitivity_matrices  = False,\
                                                                  n_mis_reg                  = self.n_mis_reg,\
-                                                                 fast                       = self.fast_algorithm)
+                                                                 fast                       = self.fast_algorithm,\
+                                                                 recompute_sensitivity      = self.recompute_sensitivity    )
 
                 print('Done!')
 

@@ -10,7 +10,7 @@ import skimage.transform as sk
 from joblib import Parallel, delayed
 import numpy as np
 
-def interpolate_influence_functions(influence_functions_in, pixel_size_in, pixel_size_out, resolution_out, mis_registration, coordinates_in, order = 1):
+def interpolate_influence_functions(influence_functions_in, pixel_size_in, pixel_size_out, resolution_out, mis_registration, coordinates_in = None, order = 1):
     
     nAct,nx, ny = influence_functions_in.shape  
              
@@ -80,12 +80,14 @@ def interpolate_influence_functions(influence_functions_in, pixel_size_in, pixel
         return Q 
     
     influence_functions_out =  np.moveaxis(np.asarray(joblib_reconstruction()),0,-1)
+    if coordinates_in is not None:
+        # recenter the initial coordinates_ininates around 0
+        coordinates_out = ((coordinates_in-resolution_in/2)*ratio)    
         
-    # recenter the initial coordinates_ininates around 0
-    coordinates_out = ((coordinates_in-resolution_in/2)*ratio)    
-    
-    # apply the transformations and re-center them for the new resolution resolution_out
-    coordinates_out = translation(rotation(anamorphosis(coordinates_out,mis_registration.anamorphosisAngle*np.pi/180,mis_registration.radialScaling,mis_registration.tangentialScaling),-mis_registration.rotationAngle*np.pi/180),[mis_registration.shiftX/pixel_size_out,mis_registration.shiftY/pixel_size_out])+resolution_out/2
-    
-    
-    return influence_functions_out, coordinates_out
+        # apply the transformations and re-center them for the new resolution resolution_out
+        coordinates_out = translation(rotation(anamorphosis(coordinates_out,mis_registration.anamorphosisAngle*np.pi/180,mis_registration.radialScaling,mis_registration.tangentialScaling),-mis_registration.rotationAngle*np.pi/180),[mis_registration.shiftX/pixel_size_out,mis_registration.shiftY/pixel_size_out])+resolution_out/2
+        
+        
+        return influence_functions_out, coordinates_out
+    else:
+        return influence_functions_out

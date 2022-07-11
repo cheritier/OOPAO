@@ -100,7 +100,7 @@ def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis
                 misRegistration_dm.tangentialScaling = misRegistration_tmp.tangentialScaling
                 misRegistration_dm.radialScaling     = misRegistration_tmp.radialScaling
                 
-                dm_tmp = applyMisRegistration(tel,misRegistration_dm + extra_dm_mis_registration, param, wfs = None)
+                dm_tmp = applyMisRegistration(tel,misRegistration_dm + extra_dm_mis_registration, param, wfs = None, print_dm_properties = print_dm_properties)
                 if print_dm_properties:
                     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
                     print('Mis-Registrations Applied on both DM and WFS!')
@@ -118,8 +118,8 @@ def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis
 
 def apply_shift_wfs(wfs,sx,sy):
     if wfs.tag =='pyramid':
-        sx *= (wfs.telescope.resolution/wfs.nSubap)
-        sy *= (wfs.telescope.resolution/wfs.nSubap)
+        sx *= 1/(wfs.telescope.pixelSize*(wfs.telescope.resolution/wfs.nSubap))
+        sy *= 1/(wfs.telescope.pixelSize*(wfs.telescope.resolution/wfs.nSubap))
         tmp                             = np.ones([wfs.nRes,wfs.nRes])
         tmp[:,0]                        = 0
         Tip                             = (sp.morphology.distance_transform_edt(tmp))

@@ -44,22 +44,22 @@ def computeMetaSensitivityMatrix(nameFolder,nameSystem,tel,atm,ngs,dm_0,pitch,wf
     _ calib_0                   : interaction matrix corresponding to misRegistrationZeroPoint stored as a calibration object.
 
 """
-def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pitch, wfs, basis, misRegistrationZeroPoint, epsilonMisRegistration, param, wfs_mis_registrated = None,save_sensitivity_matrices=True,fast = False, n_mis_reg = 3):
+def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pitch, wfs, basis, misRegistrationZeroPoint, epsilonMisRegistration, param, wfs_mis_registrated = None,save_sensitivity_matrices=True,fast = False, n_mis_reg = 3, recompute_sensitivity = False):
     #%% --------------------  CREATION OF THE DESTINATION FOLDER --------------------
     homeFolder = misRegistrationZeroPoint.misRegName+'/'
-    intMat_name = 'interactionMatrix'
+    intMat_name = 'im'
     if basis.modes.shape == np.shape(np.eye(dm_0.nValidAct)):
         
         comparison = basis.modes == np.eye(dm_0.nValidAct)
         if comparison.all():
-            foldername  = nameFolder+nameSystem+homeFolder+'zonal/'
+            foldername  = nameFolder+nameSystem+homeFolder+'zon/'
             extraName   = '' 
 
         else:
-            foldername  = nameFolder+nameSystem+homeFolder+'modal/'
+            foldername  = nameFolder+nameSystem+homeFolder+'mod/'
             extraName   = '_'+basis.extra
     else:
-        foldername  = nameFolder+nameSystem+homeFolder+'modal/'
+        foldername  = nameFolder+nameSystem+homeFolder+'mod/'
         extraName   = '_'+basis.extra  
     
     if save_sensitivity_matrices:
@@ -86,15 +86,19 @@ def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pi
         stroke = 1e-12
 
 
-    #%% --------------------  CENTERED INTERACTION MATRIX --------------------
+    #%% --------------------  CENTERED INTERACTION MATRIX --------------------            
         try:
-            hdu = pfits.open(name_0)
-            calib_0 = calibrationVault(hdu[1].data,invert=False)
-            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-            print('WARNING: you are loading existing data from \n')
-            print(str(name_0)+'/n')
-            print('Make sure that the loaded data correspond to your AO system!')
-            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+            if recompute_sensitivity is False:
+
+                hdu = pfits.open(name_0)
+                calib_0 = calibrationVault(hdu[1].data,invert=False)
+                print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                print('WARNING: you are loading existing data from \n')
+                print(str(name_0)+'/n')
+                print('Make sure that the loaded data correspond to your AO system!')
+                print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+            else:
+                hdu = pfits.open(name_0+'_volontary_error')                
 
         except:
             calib_0 = interactionMatrix(ngs, atm, tel, dm_0, wfs, basis.modes ,stroke, phaseOffset=0, nMeasurements=50,invert=False,print_time=False)
@@ -110,8 +114,11 @@ def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pi
 
     #%% --------------------  POSITIVE MIS-REGISTRATION --------------------
         try:
-            hdu = pfits.open(name_p)
-            calib_tmp_p = calibrationVault(hdu[1].data,invert=False)
+            if recompute_sensitivity is False:
+                hdu = pfits.open(name_p)
+                calib_tmp_p = calibrationVault(hdu[1].data,invert=False)
+            else:
+                hdu = pfits.open(name_0+'_volontary_error')       
         except:
             # set the mis-registration value
             misRegistration_tmp = MisRegistration(misRegistrationZeroPoint)
@@ -144,8 +151,11 @@ def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pi
 
     #%% --------------------  NEGATIVE MIS-REGISTRATION --------------------
         try:
-            hdu = pfits.open(name_n)
-            calib_tmp_n = calibrationVault(hdu[1].data,invert=False)
+            if recompute_sensitivity is False:
+                hdu = pfits.open(name_n)
+                calib_tmp_n = calibrationVault(hdu[1].data,invert=False)
+            else:
+                hdu = pfits.open(name_0+'_volontary_error')    
         except:
             # set the mis-registration value
             misRegistration_tmp = MisRegistration(misRegistrationZeroPoint)

@@ -45,7 +45,8 @@ def getFittingError_dm(OPD, proj, tel,dm, M2C, display = True):
     tel.resetOPD()
     #    compute projector
     OPD_turb = np.reshape(OPD,OPD.shape[0]*OPD.shape[1])
-    dm.coefs = -M2C@np.matmul(proj,OPD_turb)
+    coefs_dm =M2C@np.matmul(proj,OPD_turb)
+    dm.coefs = -coefs_dm
     tel.isPaired = True
     tel.OPD = OPD
     
@@ -76,4 +77,4 @@ def getFittingError_dm(OPD, proj, tel,dm, M2C, display = True):
     
         plt.show()
 
-    return OPD_fitting_2D,OPD_corr_2D,OPD_turb_2D
+    return OPD_fitting_2D,OPD_corr_2D,OPD_turb_2D, coefs_dm

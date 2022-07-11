@@ -229,6 +229,7 @@ class Atmosphere:
         return onePixelShiftedPhaseScreen
 
     def updateLayer(self,layer):
+        # print([layer.vX,layer.vY])
         self.ps_loop = layer.D / (layer.resolution)
         ps_turb_x = layer.vX*self.tel.samplingTime
         ps_turb_y = layer.vY*self.tel.samplingTime
@@ -280,8 +281,7 @@ class Atmosphere:
             layer.buff[1]   =  (np.abs(layer.buff[1])%1)*np.sign(layer.buff[1])
                 
             shiftMatrix     = translationImageMatrix(layer.mapShift,[layer.buff[0],layer.buff[1]]) #units are in pixel of the M1            
-            tmp             = globalTransformation(layer.mapShift,shiftMatrix)
-            layer.phase     = tmp[1:-1,1:-1]
+            layer.phase     = globalTransformation(layer.mapShift,shiftMatrix)[1:-1,1:-1]
 
     def update(self):
         P = np.zeros([self.tel.resolution,self.tel.resolution])
@@ -349,19 +349,21 @@ class Atmosphere:
         return
         
     def print_atm(self):
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        print('r0 \t\t'+str(self.r0) + ' \t [m]') 
-        print('L0 \t\t'+str(self.L0) + ' \t [m]') 
-        print('Seeing(V) \t' + str(np.round(self.seeingArcsec,2)) + str('\t ["]'))
-        print('------------------------------------------------------------------------')
-        print('Layer \t Direction \t Speed \t\t Altitude')
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        print('{: ^18s}'.format('Layer') + '{: ^18s}'.format('Direction [deg]')+ '{: ^18s}'.format('Speed [m/s]')+ '{: ^18s}'.format('Altitude [m]')+ '{: ^18s}'.format('Cn2 [m-2/3]') )
+        print('------------------------------------------------------------------------------------------')
+        
         for i_layer in range(self.nLayer):
-            print(str(i_layer+1)+' \t ' + str(self.windDirection[i_layer])+' [deg] \t ' + str(self.windSpeed[i_layer])+' [m/s] \t' + str(self.altitude[i_layer]) + ' [m]')
-            print('------------------------------------------------------------------------')
-    
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-    
+            print('{: ^18s}'.format(str(i_layer+1)) + '{: ^18s}'.format(str(self.windDirection[i_layer]))+ '{: ^18s}'.format(str(self.windSpeed[i_layer]))+ '{: ^18s}'.format(str(self.altitude[i_layer]))+ '{: ^18s}'.format(str(self.fractionalR0[i_layer]) ))
+            print('------------------------------------------------------------------------------------------')
+        print('******************************************************************************************')
 
+        print('{: ^18s}'.format('r0') + '{: ^18s}'.format(str(self.r0)+' [m]' ))
+        print('{: ^18s}'.format('L0') + '{: ^18s}'.format(str(self.L0)+' [m]' ))
+        print('{: ^18s}'.format('Seeing (V)') + '{: ^18s}'.format(str(np.round(self.seeingArcsec,2))+' ["]'))
+        print('{: ^18s}'.format('Frequency') + '{: ^18s}'.format(str(np.round(1/self.tel.samplingTime,2))+' [Hz]' ))
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        
     def __mul__(self,obj):
         obj.OPD=self.OPD
         obj.OPD_no_pupil=self.OPD_no_pupil
@@ -423,6 +425,8 @@ class Atmosphere:
                 print('Updating the wing speed...')
                 for i_layer in range(self.nLayer):
                     tmpLayer = getattr(self,'layer_'+str(i_layer+1))
+                    tmpLayer.notDoneOnce = True
+
                     tmpLayer.windSpeed = val[i_layer]
                     tmpLayer.vY            = tmpLayer.windSpeed*np.cos(np.deg2rad(tmpLayer.direction))                    
                     tmpLayer.vX            = tmpLayer.windSpeed*np.sin(np.deg2rad(tmpLayer.direction))
@@ -431,7 +435,7 @@ class Atmosphere:
                     tmpLayer.ratio[0] = ps_turb_x/self.ps_loop
                     tmpLayer.ratio[1] = ps_turb_y/self.ps_loop
                     setattr(self,'layer_'+str(i_layer+1),tmpLayer )
-                    self.print_atm()
+                self.print_atm()
                 
     @property
     def windDirection(self):
@@ -448,6 +452,7 @@ class Atmosphere:
                 print('Updating the wind direction...')
                 for i_layer in range(self.nLayer):
                     tmpLayer = getattr(self,'layer_'+str(i_layer+1))
+                    tmpLayer.notDoneOnce = True
                     tmpLayer.direction = val[i_layer]
                     tmpLayer.vY            = tmpLayer.windSpeed*np.cos(np.deg2rad(tmpLayer.direction))                    
                     tmpLayer.vX            = tmpLayer.windSpeed*np.sin(np.deg2rad(tmpLayer.direction))
@@ -456,7 +461,7 @@ class Atmosphere:
                     tmpLayer.ratio[0] = ps_turb_x/self.ps_loop
                     tmpLayer.ratio[1] = ps_turb_y/self.ps_loop
                     setattr(self,'layer_'+str(i_layer+1),tmpLayer )
-                    self.print_atm()
+                self.print_atm()
 
 
                           

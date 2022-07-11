@@ -113,7 +113,7 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
                     misRegistration_dm               = MisRegistration()
                     misRegistration_dm.rotationAngle = misRegistration_out.rotationAngle
                     
-                    apply_shift_wfs(wfs, misRegistration_wfs.shiftX / (wfs.nSubap/wfs.telescope.D), misRegistration_wfs.shiftY/ (wfs.nSubap/wfs.telescope.D))
+                    apply_shift_wfs(wfs, misRegistration_wfs.shiftX , misRegistration_wfs.shiftY)
                     
                     input_modes_cp =  tel.pupil*apply_mis_reg(tel,input_modes_0, misRegistration_dm)   
                 else:
@@ -130,7 +130,7 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
                         misRegistration_dm               = MisRegistration()
                         misRegistration_dm.rotationAngle = misRegistration_out.rotationAngle
                         
-                        apply_shift_wfs(wfs, misRegistration_wfs.shiftX / (wfs.nSubap/wfs.telescope.D), misRegistration_wfs.shiftY/ (wfs.nSubap/wfs.telescope.D))
+                        apply_shift_wfs(wfs, misRegistration_wfs.shiftX, misRegistration_wfs.shiftY)
                         
                         input_modes_cp[:,:,i_modes] = tel.pupil*apply_mis_reg(tel,input_modes_0[:,:,i_modes], misRegistration_dm)   
                     else:

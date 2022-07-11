@@ -336,6 +336,8 @@ class Telescope:
     def getPetalOPD(self,petalIndex,image = None):
         if image is None:
             petal_OPD = np.copy(self.OPD)
+        else:
+            petal_OPD = image.copy()
         if self.index_pixel_petals is None:
             print('ERROR : the indexes of the petals have not been set yet!')
             print('Returning the current OPD..')

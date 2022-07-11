@@ -135,7 +135,8 @@ def findNextPowerOf2(n):
     # return next power of 2
     return n << 1
       
-def centroid(im, threshold = 0):
+def centroid(image, threshold = 0):
+    im = np.copy(image)
     im[im<threshold]=0
     x = 0
     y = 0

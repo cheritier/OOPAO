@@ -25,8 +25,12 @@ except:
         mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
         mkl_set_num_threads(8)
     except:
-        import mkl
-        mkl_set_num_threads = mkl.set_num_threads#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% START OF THE FUNCTION   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        try:
+            import mkl
+            mkl_set_num_threads = mkl.set_num_threads
+        except:
+            mkl_set_num_threads = None
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% START OF THE FUNCTION   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 def makeM4influenceFunctions(pup, filename, misReg = 0, dm = None, nAct = 0, nJobs = 30, nThreads = 20, order =1,floating_precision=64, D = 40):
     try:
