@@ -14,7 +14,6 @@ import time
 from AO_modules.MisRegistration  import MisRegistration
 import skimage.transform as sk
 import scipy.ndimage as sp
-from users.cheritie.model_LBT.lbt_tools import get_influence_functions
 
 
 def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis_registration = None,print_dm_properties=True,floating_precision=64):
@@ -50,7 +49,8 @@ def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis
                         print('Mis-Registrations Applied on M4!')
             
                 else:
-                
+                    from users.cheritie.model_LBT.lbt_tools import get_influence_functions
+
                     modes, coord, M2C, validAct =  get_influence_functions(telescope             = tel,\
                                                                             misReg               = misRegistration_tmp + extra_dm_mis_registration,\
                                                                             filename_IF          = param['filename_if'],\
