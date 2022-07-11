@@ -348,7 +348,7 @@ def prop_noll_zernikes(maxz, **kwargs):
 
                 for s in range(0, (n-m)//2 + 1):
                     term_top = int((-1)**s) * int(factorial(n-s))
-                    term_bottom = int(factorial(s)) * int(factorial((n+m)/2-s)) * int(factorial((n-m)/2 - s))
+                    term_bottom = int(factorial(s)) * int(factorial(int((n+m)/2-s))) * int(factorial(int((n-m)/2 - s)))
                     term_val = int(term_top / term_bottom)
                     term = str(np.abs(term_val)).strip() + ".0"
                     term_r = int(n - 2*s)
