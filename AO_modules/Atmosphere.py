@@ -16,6 +16,7 @@ from numpy.random import RandomState
 class Atmosphere:
     def __init__(self,telescope,r0,L0,windSpeed,fractionalR0,windDirection,altitude,mode=2, param = None):
         self.hasNotBeenInitialized  = True
+        self.r0_def                 = 0.15                # Fried Parameter in m 
         self.r0                     = r0                # Fried Parameter in m 
         self.fractionalR0           = fractionalR0      # Cn2 square profile
         self.L0                     = L0                # Outer Scale in m
@@ -34,16 +35,23 @@ class Atmosphere:
     def initializeAtmosphere(self,telescope):
         
         P=np.zeros([telescope.resolution,telescope.resolution])
-        
-        for i_layer in range(self.nLayer):       
-            # create the layer
-            if self.hasNotBeenInitialized:
+        if self.hasNotBeenInitialized:
+            self.initial_r0 = self.r0
+            for i_layer in range(self.nLayer):       
+                # create the layer
                 print('Creation of layer' + str(i_layer+1) + '/' + str(self.nLayer) + ' ...' )
-                tmpLayer=self.buildLayer(telescope,self.r0,self.L0,i_layer = i_layer)
-            else:
-                print('Re-setting layer' + str(i_layer+1) + ' to its initial state...' )
+                tmpLayer=self.buildLayer(telescope,self.r0_def,self.L0,i_layer = i_layer)
+                setattr(self,'layer_'+str(i_layer+1),tmpLayer) 
+            
+                P+= tmpLayer.phase* np.sqrt(self.fractionalR0[i_layer])
+                # wavelenfth scaling
+                tmpLayer.phase *= self.wavelength/2/np.pi
+        else:
+            print('Re-setting the atmosphere to its initial state...' )
+            self.r0 = self.initial_r0
+            for i_layer in range(self.nLayer):       
+                print('Updating layer' + str(i_layer+1) + '/' + str(self.nLayer) + ' ...' )
                 tmpLayer = getattr(self,'layer_'+str(i_layer+1))
-                
                 tmpLayer.phase          = tmpLayer.initialPhase/self.wavelength*2*np.pi
                 tmpLayer.randomState    = RandomState(42+i_layer*1000)
                
@@ -55,11 +63,11 @@ class Atmosphere:
                 
                 tmpLayer.notDoneOnce = True                
 
-            setattr(self,'layer_'+str(i_layer+1),tmpLayer) 
+                setattr(self,'layer_'+str(i_layer+1),tmpLayer) 
             
-            P+= tmpLayer.phase* np.sqrt(self.fractionalR0[i_layer])
-            # wavelenfth scaling
-            tmpLayer.phase *= self.wavelength/2/np.pi
+                P+= tmpLayer.phase* np.sqrt(self.fractionalR0[i_layer])
+                # wavelenfth scaling
+                tmpLayer.phase *= self.wavelength/2/np.pi
         self.hasNotBeenInitialized  = False        
         # save the resulting phase screen in OPD    
         self.OPD_no_pupil   = P*self.wavelength/2/np.pi
@@ -129,35 +137,35 @@ class Atmosphere:
         l = np.linspace(0,layer.resolution+1,layer.resolution+2) * layer.D/(layer.resolution-1)
         u,v = np.meshgrid(l,l)
         
-        innerZ = u[layer.innerMask!=0] + 1j*v[layer.innerMask!=0]
-        outerZ = u[layer.outerMask!=0] + 1j*v[layer.outerMask!=0]
+        layer.innerZ = u[layer.innerMask!=0] + 1j*v[layer.innerMask!=0]
+        layer.outerZ = u[layer.outerMask!=0] + 1j*v[layer.outerMask!=0]
 
         # Compute the covariance matrices
         try:
             c=time.time()        
-            ZZt = self.ZZt
+            self.ZZt_r0 = self.ZZt_r0
             d=time.time()
             print('ZZt.. : ' +str(d-c) +' s')
-            ZXt = self.ZXt
+            self.ZXt_r0 = self.ZXt_r0
             e=time.time()
             print('ZXt.. : ' +str(e-d) +' s')
-            XXt = self.XXt
+            self.XXt_r0 = self.XXt_r0
             f=time.time()
             print('XXt.. : ' +str(f-e) +' s')
-            ZZt_inv = self.ZZt_inv
+            self.ZZt_inv_r0 = self.ZZt_inv_r0
 
             print('covariance matrices were already computed!')
 
         except:
             c=time.time()        
-            ZZt = makeCovarianceMatrix(innerZ,innerZ,self)
+            self.ZZt = makeCovarianceMatrix(layer.innerZ,layer.innerZ,self)
             
             if self.param is None:
-                ZZt_inv = np.linalg.pinv(ZZt)
+                self.ZZt_inv = np.linalg.pinv(self.ZZt)
             else:
                 try:
                     print('Loading pre-computed data...')            
-                    name_data       = 'ZZt_inv_spider_L0_'+str(self.L0)+'_m_r0_'+str(self.r0)+'_shape_'+str(ZZt.shape[0])+'x'+str(ZZt.shape[1])+'.json'
+                    name_data       = 'ZZt_inv_spider_L0_'+str(self.L0)+'_m_r0_'+str(self.r0_def)+'_shape_'+str(self.ZZt.shape[0])+'x'+str(self.ZZt.shape[1])+'.json'
                     location_data   = self.param['pathInput'] + self.param['name'] + '/sk_v/'
                     try:
                         with open(location_data+name_data ) as f:
@@ -168,40 +176,40 @@ class Atmosphere:
                         with open(location_data+name_data ) as f:
                             C = json.load(f)
                         data_loaded = jsonpickle.decode(C)                    
-                    ZZt_inv = data_loaded['ZZt_inv']
+                    self.ZZt_inv = data_loaded['ZZt_inv']
                     
                 except: 
                     print('Something went wrong.. re-computing ZZt_inv ...')
-                    name_data       = 'ZZt_inv_spider_L0_'+str(self.L0)+'_m_r0_'+str(self.r0)+'_shape_'+str(ZZt.shape[0])+'x'+str(ZZt.shape[1])+'.json'
+                    name_data       = 'ZZt_inv_spider_L0_'+str(self.L0)+'_m_r0_'+str(self.r0_def)+'_shape_'+str(self.ZZt.shape[0])+'x'+str(self.ZZt.shape[1])+'.json'
                     location_data   = self.param['pathInput'] + self.param['name'] + '/sk_v/'
                     createFolder(location_data)
                     
-                    ZZt_inv = np.linalg.pinv(ZZt)
+                    self.ZZt_inv = np.linalg.pinv(self.ZZt)
                 
                     print('saving for future...')
                     data = dict()
                     data['pupil'] = self.tel.pupil
-                    data['ZZt_inv'] = ZZt_inv
+                    data['ZZt_inv'] = self.ZZt_inv
                             
                     data_encoded  = jsonpickle.encode(data)
                     with open(location_data+name_data, 'w') as f:
                         json.dump(data_encoded, f)
             d=time.time()
             print('ZZt.. : ' +str(d-c) +' s')
-            ZXt = makeCovarianceMatrix(innerZ,outerZ,self)
+            self.ZXt = makeCovarianceMatrix(layer.innerZ,layer.outerZ,self)
             e=time.time()
             print('ZXt.. : ' +str(e-d) +' s')
-            XXt = makeCovarianceMatrix(outerZ,outerZ,self)
+            self.XXt = makeCovarianceMatrix(layer.outerZ,layer.outerZ,self)
             f=time.time()
             print('XXt.. : ' +str(f-e) +' s')
             
-            self.ZZt = ZZt
-            self.ZXt = ZXt
-            self.XXt = XXt
-            self.ZZt_inv = ZZt_inv
+            self.ZZt_r0     = self.ZZt*(self.r0_def/self.r0)**(5/3)
+            self.ZXt_r0     = self.ZXt*(self.r0_def/self.r0)**(5/3)
+            self.XXt_r0     = self.XXt*(self.r0_def/self.r0)**(5/3)
+            self.ZZt_inv_r0 = self.ZZt_inv/((self.r0_def/self.r0)**(5/3))
         
-        layer.A         = np.matmul(ZXt.T,ZZt_inv)    
-        BBt             = XXt -  np.matmul(layer.A,ZXt)
+        layer.A         = np.matmul(self.ZXt_r0.T,self.ZZt_inv_r0)    
+        BBt             = self.XXt_r0 -  np.matmul(layer.A,self.ZXt_r0)
         layer.B         = np.linalg.cholesky(BBt)
         layer.mapShift  = np.zeros([layer.nPixel+1,layer.nPixel+1])        
         Z               = layer.phase[layer.innerMask[1:-1,1:-1]!=0]
@@ -209,7 +217,7 @@ class Atmosphere:
         
         layer.mapShift[layer.outerMask!=0] = X
         layer.mapShift[layer.outerMask==0] = np.reshape(layer.phase,layer.resolution*layer.resolution)
-        layer.notDoneOnce           = True
+        layer.notDoneOnce                  = True
 
         print('Done!')
         
@@ -218,21 +226,19 @@ class Atmosphere:
     
     
     def add_row(self,layer,stepInPixel):
-        shiftMatrix = translationImageMatrix(layer.mapShift,[stepInPixel[0],stepInPixel[1]]) #units are in pixel of the M1            
-        tmp         = globalTransformation(layer.mapShift,shiftMatrix)
-        onePixelShiftedPhaseScreen = tmp[1:-1,1:-1]        
-        Z = onePixelShiftedPhaseScreen[layer.innerMask[1:-1,1:-1]!=0]
-        X = layer.A@Z + layer.B@layer.randomState.normal( size=layer.B.shape[1])
-
-        layer.mapShift[layer.outerMask!=0] = X
-        layer.mapShift[layer.outerMask==0] = np.reshape(onePixelShiftedPhaseScreen,layer.resolution*layer.resolution)
+        shiftMatrix                         = translationImageMatrix(layer.mapShift,[stepInPixel[0],stepInPixel[1]]) #units are in pixel of the M1            
+        tmp                                 = globalTransformation(layer.mapShift,shiftMatrix)
+        onePixelShiftedPhaseScreen          = tmp[1:-1,1:-1]        
+        Z                                   = onePixelShiftedPhaseScreen[layer.innerMask[1:-1,1:-1]!=0]
+        X                                   = layer.A@Z + layer.B@layer.randomState.normal(size=layer.B.shape[1])
+        layer.mapShift[layer.outerMask!=0]  = X
+        layer.mapShift[layer.outerMask==0]  = np.reshape(onePixelShiftedPhaseScreen,layer.resolution*layer.resolution)
         return onePixelShiftedPhaseScreen
 
     def updateLayer(self,layer):
-        # print([layer.vX,layer.vY])
-        self.ps_loop = layer.D / (layer.resolution)
-        ps_turb_x = layer.vX*self.tel.samplingTime
-        ps_turb_y = layer.vY*self.tel.samplingTime
+        self.ps_loop    = layer.D / (layer.resolution)
+        ps_turb_x       = layer.vX*self.tel.samplingTime
+        ps_turb_y       = layer.vY*self.tel.samplingTime
         
         if layer.vX==0 and layer.vY==0:
             layer.phase = layer.phase
@@ -381,19 +387,24 @@ class Atmosphere:
          self._r0 = val
 
          if self.hasNotBeenInitialized is False:
-             print('Updating the Atmosphere covariance matrices...')
-             self.seeingArcsec           = 206265*(self.wavelength/val)
-
-             self.hasNotBeenInitialized = True
-             del self.ZZt
-             del self.XXt
-             del self.ZXt
-             del self.ZZt_inv
-
-             # for i_layer in range(self.nLayer):
-                 # tmp_layer = getattr(self,'layer_'+str(i_layer+1) )
-                 # setattr(tmp_layer,'notDoneOnce', True)
-             self.initializeAtmosphere(self.tel)
+             print('Updating the Atmosphere covariance matrices...')             
+             self.ZZt_r0 = self.ZZt*(self.r0_def/self.r0)**(5/3)
+             self.ZXt_r0 = self.ZXt*(self.r0_def/self.r0)**(5/3)
+             self.XXt_r0 = self.XXt*(self.r0_def/self.r0)**(5/3)
+             self.ZZt_inv_r0 = self.ZZt_inv/((self.r0_def/self.r0)**(5/3))
+             
+             self.seeingArcsec           = 206265*(self.wavelength/val)             
+             for i_layer in range(self.nLayer):
+                    tmpLayer = getattr(self,'layer_'+str(i_layer+1))
+                    # tmpLayer.A         = np.matmul(self.ZXt_r0.T,self.ZZt_inv_r0)    
+                    BBt                = self.XXt_r0 -  np.matmul(tmpLayer.A,self.ZXt_r0)
+                    tmpLayer.B         = np.linalg.cholesky(BBt)
+                    # tmpLayer.mapShift  = np.zeros([tmpLayer.nPixel+1,tmpLayer.nPixel+1])        
+                    # Z               = tmpLayer.phase[tmpLayer.innerMask[1:-1,1:-1]!=0]
+                    # X               = np.matmul(tmpLayer.A,Z) + np.matmul(tmpLayer.B,tmpLayer.randomState.normal(size=tmpLayer.B.shape[1]))
+                    
+                    # tmpLayer.mapShift[tmpLayer.outerMask!=0] = X
+                    # tmpLayer.mapShift[tmpLayer.outerMask==0] = np.reshape(tmpLayer.phase,tmpLayer.resolution*tmpLayer.resolution)
     @property
     def L0(self):
          return self._L0
@@ -425,7 +436,7 @@ class Atmosphere:
                 print('Updating the wing speed...')
                 for i_layer in range(self.nLayer):
                     tmpLayer = getattr(self,'layer_'+str(i_layer+1))
-                    tmpLayer.notDoneOnce = True
+                    # tmpLayer.notDoneOnce = True
 
                     tmpLayer.windSpeed = val[i_layer]
                     tmpLayer.vY            = tmpLayer.windSpeed*np.cos(np.deg2rad(tmpLayer.direction))                    
@@ -435,7 +446,7 @@ class Atmosphere:
                     tmpLayer.ratio[0] = ps_turb_x/self.ps_loop
                     tmpLayer.ratio[1] = ps_turb_y/self.ps_loop
                     setattr(self,'layer_'+str(i_layer+1),tmpLayer )
-                self.print_atm()
+                # self.print_atm()
                 
     @property
     def windDirection(self):
@@ -452,7 +463,7 @@ class Atmosphere:
                 print('Updating the wind direction...')
                 for i_layer in range(self.nLayer):
                     tmpLayer = getattr(self,'layer_'+str(i_layer+1))
-                    tmpLayer.notDoneOnce = True
+                    # tmpLayer.notDoneOnce = True
                     tmpLayer.direction = val[i_layer]
                     tmpLayer.vY            = tmpLayer.windSpeed*np.cos(np.deg2rad(tmpLayer.direction))                    
                     tmpLayer.vX            = tmpLayer.windSpeed*np.sin(np.deg2rad(tmpLayer.direction))
@@ -461,7 +472,7 @@ class Atmosphere:
                     tmpLayer.ratio[0] = ps_turb_x/self.ps_loop
                     tmpLayer.ratio[1] = ps_turb_y/self.ps_loop
                     setattr(self,'layer_'+str(i_layer+1),tmpLayer )
-                self.print_atm()
+                # self.print_atm()
 
 
                           

@@ -35,7 +35,8 @@ def get_fast_atmosphere(obj,param,speed_factor):
                           windSpeed     = param['windSpeed'],\
                           fractionalR0  = param['fractionnalR0'],\
                           windDirection = param['windDirection'],\
-                          altitude      = param['altitude'])
+                          altitude      = param['altitude'],\
+                          param = param)
         
     # initialize atmosphere
     atm_fast.initializeAtmosphere(tel_fast)

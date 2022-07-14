@@ -72,7 +72,7 @@ def makeCovarianceMatrix(rho1,rho2,atm):
     
     rho = np.abs(bsxfunMinus(rho1,rho2))
 
-    L0r0ratio   =  (atm.L0/atm.r0)**(5./3)
+    L0r0ratio   =  (atm.L0/atm.r0_def)**(5./3)
     
     cst = (24.*np.math.gamma(6./5)/5)**(5./6) * (np.math.gamma(11./6)/((2.**(5./6))*np.pi**(8./3)))*L0r0ratio
 
