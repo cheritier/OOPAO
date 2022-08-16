@@ -90,6 +90,11 @@ class Pyramid:
         self.backgroundNoise            = False                                             # background noise in photon 
         self.binning                    = binning                                           # binning factor for the detector
         self.old_mask                   = old_mask
+        self.random_state_photon_noise  = np.random.RandomState(seed=int(time.time()))
+        self.random_state_readout_noise = np.random.RandomState(seed=int(time.time()))
+        self.random_state_background    = np.random.RandomState(seed=int(time.time()))
+        
+        
         if self.gpu_available:
             self.joblib_setting             = 'processes'
         else:
@@ -996,16 +1001,14 @@ class Pyramid:
             obj.frame = obj.frame *(self.telescope.src.fluxMap.sum())/obj.frame.sum()
             
             if obj.photonNoise!=0:
-                rs=np.random.RandomState(seed=int(time.time()))
-                obj.frame = rs.poisson(obj.frame)
+                obj.frame = self.random_state_photon_noise.poisson(obj.frame)
                 
             if obj.readoutNoise!=0:
-                obj.frame += np.int64(np.round(np.random.randn(obj.resolution,obj.resolution)*obj.readoutNoise))
+                obj.frame += np.int64(np.round(self.random_state_readout_noise.randn(obj.resolution,obj.resolution)*obj.readoutNoise))
 #                obj.frame = np.round(obj.frame)
                 
             if self.backgroundNoise is True:    
-                rs=np.random.RandomState(seed=int(time.time()))
-                self.backgroundNoiseAdded = rs.poisson(self.backgroundNoiseMap)
+                self.backgroundNoiseAdded = self.random_state_background.poisson(self.backgroundNoiseMap)
                 obj.frame +=self.backgroundNoiseAdded
         else:
             print('Error light propagated to the wrong type of object')
