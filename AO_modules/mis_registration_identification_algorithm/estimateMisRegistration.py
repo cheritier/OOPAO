@@ -142,10 +142,27 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
             # temporary scaling factor    
             try:
                 scalingFactor_tmp   = np.round(np.diag(calib_tmp.D.T@calib_in.D)/ np.diag(calib_tmp.D.T@calib_tmp.D),precision)
+                contain_nan = False
+                for i in scalingFactor_tmp:
+                    if(np.isnan(i)):
+                        contain_nan = True
+                        break
+                if contain_nan:
+                    print('Nan Warning !!')
+                    scalingFactor_tmp[:] = 1 
+
+                              
                 # temporary mis-registration
                 misReg_tmp          = gainEstimation*np.matmul(metaMatrix.M,np.reshape( calib_in.D@np.diag(1/scalingFactor_tmp) - calib_tmp.D ,calib_in.D.shape[0]*calib_in.D.shape[1]))
             except:
                 scalingFactor_tmp = np.round(np.sum(np.squeeze(calib_tmp.D)*np.squeeze(calib_in.D))/ np.sum(np.squeeze(calib_tmp.D)*np.squeeze(calib_tmp.D)),precision)    
+                contain_nan = False
+                if np.isnan(scalingFactor_tmp):
+                    scalingFactor_tmp = 1
+                    contain_nan = True
+                    print('Nan Warning !!')
+
+                    
                 # temporary mis-registration 
                 misReg_tmp          = gainEstimation*np.matmul(metaMatrix.M,np.squeeze((np.squeeze(calib_in.D)*(1/scalingFactor_tmp)) - np.squeeze(calib_tmp.D)))
             # cumulative mis-registration
@@ -176,11 +193,24 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
             # temporary scaling factor            
             try:
                 scalingFactor_tmp   = np.round(np.diag(calib_tmp.D.T@calib_in.D)/ np.diag(calib_tmp.D.T@calib_tmp.D),precision)
+                contain_nan = False
+                for i in scalingFactor_tmp:
+                    if(np.isnan(i)):
+                        contain_nan = True
+                        break
+                if contain_nan:
+                    print('Nan Warning !!')
+                    scalingFactor_tmp[:] = 1 
                 # temporary mis-registration
                 misReg_tmp          = gainEstimation*np.matmul(metaMatrix.M,np.reshape( calib_in.D@np.diag(1/scalingFactor_tmp) - calib_tmp.D ,calib_in.D.shape[0]*calib_in.D.shape[1]))
 
             except:
                 scalingFactor_tmp = np.round(np.sum(np.squeeze(calib_tmp.D)*np.squeeze(calib_in.D))/ np.sum(np.squeeze(calib_tmp.D)*np.squeeze(calib_tmp.D)),precision)    
+                contain_nan = False
+                if np.isnan(scalingFactor_tmp):
+                    scalingFactor_tmp = 1
+                    contain_nan = True
+                    print('Nan Warning !!')
                 # temporary mis-registration 
                 misReg_tmp          = gainEstimation*np.matmul(metaMatrix.M,np.squeeze((np.squeeze(calib_in.D)*(1/scalingFactor_tmp)) - np.squeeze(calib_tmp.D)))
             
@@ -188,8 +218,9 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
             misRegEstBuffer+= np.round(misReg_tmp,precision)
             
             # define the next working point to adjust the scaling factor
-            for i_mis_reg in range(n_mis_reg):
-                setattr(misRegistration_out, epsilonMisRegistration_field[i_mis_reg], getattr(misRegistration_out, epsilonMisRegistration_field[i_mis_reg]) + np.round(misReg_tmp[i_mis_reg],precision))
+            if contain_nan is False:
+                for i_mis_reg in range(n_mis_reg):
+                    setattr(misRegistration_out, epsilonMisRegistration_field[i_mis_reg], getattr(misRegistration_out, epsilonMisRegistration_field[i_mis_reg]) + np.round(misReg_tmp[i_mis_reg],precision))
                             
             
             # save the data for each iteration
@@ -214,11 +245,16 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
     
     # in case of nan
     diff[np.where(np.isnan(diff))] = 10000
-    if np.argwhere(diff-tolerance[:n_mis_reg]>0).size==0:    
+    if np.argwhere(diff-tolerance[:n_mis_reg]>0).size==0 or contain_nan:    
         # validity of the mis-reg
         validity_flag = True
     else:
         validity_flag = False
+        misRegistration_out.shiftX              = 0*np.round(misRegistration_out.shiftX,precision)
+        misRegistration_out.shiftY              = 0*np.round(misRegistration_out.shiftY,precision)
+        misRegistration_out.rotationAngle       = 0*np.round(misRegistration_out.rotationAngle,precision)
+        misRegistration_out.radialScaling       = 0*np.round(misRegistration_out.radialScaling,precision)
+        misRegistration_out.tangentialScaling   = 0*np.round(misRegistration_out.tangentialScaling,precision)
     
     if return_all:
         return misRegistration_out, scalingFactor_values, misRegistration_values,validity_flag
