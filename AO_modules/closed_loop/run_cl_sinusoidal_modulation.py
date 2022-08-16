@@ -83,9 +83,9 @@ def run_cl_sinusoidal_modulation(param,obj):
         
     #%%  modulation signal
     
-    obj.n_iteration_per_mode =  np.zeros(obj.n_multiplexed_modulated_modes, dtype = int)
-    obj.n_iteration_per_period =  np.zeros(obj.n_multiplexed_modulated_modes, dtype = int)
-    obj.modulation_index_frequency =  np.zeros(obj.n_multiplexed_modulated_modes, dtype = int)
+    obj.n_iteration_per_mode        =  np.zeros(obj.n_multiplexed_modulated_modes, dtype = int)
+    obj.n_iteration_per_period      =  np.zeros(obj.n_multiplexed_modulated_modes, dtype = int)
+    obj.modulation_index_frequency  =  np.zeros(obj.n_multiplexed_modulated_modes, dtype = int)
     
     for i_mode in range(obj.n_multiplexed_modulated_modes):
         period              = 1/obj.modulation_frequency[i_mode]
@@ -102,7 +102,6 @@ def run_cl_sinusoidal_modulation(param,obj):
         criterion = period/obj.tel.samplingTime
         
         N_tmp           = int(np.ceil(n_period*criterion))
-        print(N_tmp)
         criteria = True
     
         while criteria:
@@ -110,21 +109,21 @@ def run_cl_sinusoidal_modulation(param,obj):
             if obj.modulation_frequency[i_mode] in u:
                 criteria = False
                 index_freq = list(u).index(obj.modulation_frequency[i_mode])
+                print(u[index_freq])
             else:
-                N_tmp+=1
-        print(N_tmp)
-    
+                N_tmp+=1    
         print('Mode '+str(obj.modulation_index_mode[i_mode])+' -- Sinusoidal modulation sampled with '+str(criterion) + ' points per period -- total of iterations required: '+str(N_tmp))
         obj.n_iteration_per_period[i_mode]      = int(criterion)
         obj.n_iteration_per_mode[i_mode]        = int(N_tmp)
-        obj.modulation_index_frequency[i_mode]  = int(index_freq )
     
     # TAKING THE MAXIMUM NUMBER OF ITERATION
     N = int(np.max(obj.n_iteration_per_mode))
     N_real = N+obj.n_iteration_per_period[i_mode]
-    obj.modulation_signal =  np.zeros([obj.n_multiplexed_modulated_modes, N_real])
 
-    
+    obj.modulation_signal =  np.zeros([obj.n_multiplexed_modulated_modes, N_real])
+    obj.amp_demo_theo = np.zeros([obj.n_multiplexed_modulated_modes])
+
+
     t                                   = np.linspace(0,N_real*obj.tel.samplingTime,N_real, endpoint = True)
 
     t_measurement                                   = np.linspace(0,N*obj.tel.samplingTime,N_real, endpoint = True)
@@ -133,8 +132,13 @@ def run_cl_sinusoidal_modulation(param,obj):
     obj.cos = np.cos(t_measurement*obj.modulation_frequency[i_mode]*2.0*np.pi) 
     
     for i_mode in range(obj.n_multiplexed_modulated_modes):
+        u = (np.fft.fftfreq(N, d =obj.tel.samplingTime))
+        index_tmp  = list(u).index(obj.modulation_frequency[i_mode])
         obj.modulation_signal[i_mode,:] =  (obj.modulation_amplitude[i_mode])*np.sin(t*obj.modulation_frequency[i_mode]*2.0*np.pi + obj.modulation_phase_shift[i_mode]) 
-        
+    
+        fft_theo        = np.fft.fft(obj.modulation_signal[i_mode,obj.n_iteration_per_period[i_mode]:])
+        obj.amp_demo_theo[i_mode]   = 2.0/N_real * np.abs(fft_theo[index_tmp])
+    
     nLoop = N_real+param['nLoop']
     #%% ------------------------------------ closed loop data to be saved  ------------------------------------
     
@@ -261,7 +265,7 @@ def run_cl_sinusoidal_modulation(param,obj):
         # apply the modulation of the modes
         if i_loop>=param['nLoop']:
             count_bootstrap+=1
-            print('Applying perturbation')
+            print('Applying sinusoidal perturbation at '+str(obj.modulation_frequency[i_mode]) + ' Hz')
 
             if count_bootstrap>= obj.n_iteration_per_period[0]:
                 count+=1
@@ -423,11 +427,17 @@ def run_cl_sinusoidal_modulation(param,obj):
         
             return amp, y_f_phi
     
-        fft_modal_coefs         = np.fft.fft(modal_coefs[obj.modulation_index_mode[i_mode],:N_requested])
+        fft_modal_coefs       = np.fft.fft(modal_coefs[obj.modulation_index_mode[i_mode],:N_requested])
+        
+        
+        # start = len(obj.modulation_signal[obj.modulation_index_mode[i_mode]])-N_requested
+
         
         fft_frequency_vector = np.fft.fftfreq(len(fft_modal_coefs), d =obj.tel.samplingTime)
     
         tmp_demodulated_amplitude   = 2.0/N_requested * np.abs(fft_modal_coefs[index_freq_temp])
+
+        # tmp_demodulated_amplitude   = np.abs(fft_modal_coefs[index_freq_temp])/np.abs(fft_theo[index_freq_temp])
         
         
         def job_loop_demodulate():
@@ -469,6 +479,9 @@ def run_cl_sinusoidal_modulation(param,obj):
     
     dataCL['demodulated_phase'      ] = demodulated_phase
     dataCL['demodulated_amplitude'  ] = demodulated_amplitude
+    dataCL['demodulated_amplitude_theo' ] = obj.amp_demo_theo
+    dataCL['demodulated_amplitude_ratio'] = demodulated_amplitude /  obj.amp_demo_theo
+
     dataCL['demodulated_wfs_signal' ] = demodulated_wfs_signal
     dataCL['fft_modal_coefs'        ] = fft_modal_coefs
     dataCL['fft_frequency_vector'   ] = fft_frequency_vector
