@@ -115,6 +115,60 @@ def displayPyramidSignals(wfs,signals,returnOutput=False, norma = False):
         return out
         
 
+def display_wfs_signals(wfs,signals,returnOutput=False, norma = False):
+    
+    if wfs.tag == 'pyramid':
+        A= np.zeros(wfs.validSignal.shape)
+        print(A.shape)
+        A[:]=np.Inf
+        # one signal only
+        if np.ndim(signals)==1:
+            if wfs.validSignal.sum() == signals.shape:
+                A[np.where(wfs.validSignal==1)]=signals
+            plt.figure()
+            plt.imshow(A)
+            out =A
+        else:
+            B= np.zeros([wfs.validSignal.shape[0],wfs.validSignal.shape[1],signals.shape[1]])
+            B[:]=np.Inf
+            if wfs.validSignal.shape[0] == wfs.validSignal.shape[1]:
+                B[wfs.validSignal,:]=signals
+                out = displayMap(B,returnOutput=True)
+            else:
+                for i in range(signals.shape[1]):
+                    A[np.where(wfs.validSignal==1)]=signals[:,i]
+                    if norma:
+                        A/= np.max(np.abs(signals[:,i]))
+                    B[:,:,i] = A
+                out = displayMap(B,returnOutput=True)
+        if returnOutput:
+            return out
+    if wfs.tag == 'shackHartmann':
+        A= np.zeros(wfs.valid_slopes_maps.shape)
+        print(A.shape)
+        A[:]=np.Inf
+        # one signal only
+        if np.ndim(signals)==1:
+            if wfs.valid_slopes_maps.sum() == signals.shape:
+                A[np.where(wfs.valid_slopes_maps==1)]=signals
+            plt.figure()
+            plt.imshow(A)
+            out =A
+        else:
+            B= np.zeros([wfs.valid_slopes_maps.shape[0],wfs.valid_slopes_maps.shape[1],signals.shape[1]])
+            B[:]=np.Inf
+            if wfs.valid_slopes_maps.shape[0] == wfs.valid_slopes_maps.shape[1]:
+                B[wfs.valid_slopes_maps,:]=signals
+                out = displayMap(B,returnOutput=True)
+            else:
+                for i in range(signals.shape[1]):
+                    A[np.where(wfs.valid_slopes_maps==1)]=signals[:,i]
+                    if norma:
+                        A/= np.max(np.abs(signals[:,i]))
+                    B[:,:,i] = A
+                out = displayMap(B,returnOutput=True)
+        if returnOutput:
+            return out
 
 def interactive_plot(x,y,im_array, im_array_ref, event_name ='button_press_event', n_fig = None):   
     # create figure and plot scatter
