@@ -97,14 +97,7 @@ class ShackHartmann:
             for j in range(self.nSubap):
                 self.index_x.append(i)
                 self.index_y.append(j)
-                
-        #         mask_amp_SH = np.sqrt(self.telescope.src.fluxMap[i*self.n_pix_subap:(i+1)*self.n_pix_subap,j*self.n_pix_subap:(j+1)*self.n_pix_subap]).astype(float)
-        #         # define the cube of lenslet arrays
-        #         self.cube[count,self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2,self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2] = mask_amp_SH
-        #         self.cube_flux[count,:,:] = mask_amp_SH*self.phasor[self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2,self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2]
 
-        #         self.photon_per_subaperture[count] = mask_amp_SH.sum()
-        #         count+=1
         self.current_nPhoton = self.telescope.src.nPhoton
         self.index_x = np.asarray(self.index_x)
         self.index_y = np.asarray(self.index_y)
@@ -189,7 +182,7 @@ class ShackHartmann:
         for i in range(self.nSubap):
             tmp_flux_v_split = np.vsplit(tmp_flux_h_split[i],self.nSubap)
             self.cube_flux[i*self.nSubap:(i+1)*self.nSubap,self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2,self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2] = np.asarray(tmp_flux_v_split)
-        self.photon_per_subaperture = np.apply_over_axes(np.sum, self.cube_flux, [1,2]) #sum over axes 0 and 2np.sum(self.cube_flux,axis = [1,2])
+        self.photon_per_subaperture = np.apply_over_axes(np.sum, self.cube_flux, [1,2]) 
         return
     
     def get_lenslet_em(self,phase):
@@ -201,7 +194,7 @@ class ShackHartmann:
         self.cube_em*=self.cube_flux*self.phasor_tiled
         return self.cube_em 
 
-# single measurement 
+
     def fill_cube_LGS(self,mask,ind_x,ind_y,LGS):
         # convolve with gaussian to simulate effect of LGS
         support         = np.copy(self.lenslet_frame)
@@ -212,7 +205,6 @@ class ShackHartmann:
         K               = np.real(np.fft.ifft2(np.fft.fft2(I)*LGS))
         return K
   
-        
     def fill_camera_frame(self,ind_x,ind_y,I,index_frame=None):
         if index_frame is None:
             self.camera_frame[ind_x*self.n_pix_subap//self.binning_factor:(ind_x+1)*self.n_pix_subap//self.binning_factor,ind_y*self.n_pix_subap//self.binning_factor:(ind_y+1)*self.n_pix_subap//self.binning_factor] = I        
@@ -238,13 +230,13 @@ class ShackHartmann:
     #%% GEOMETRIC    
          
     def gradient_2D(self,arr):
-        res_x = (np.gradient(arr,axis=1)/self.telescope.pixelSize)*self.telescope.pupil
-        res_y = (np.gradient(arr,axis=0)/self.telescope.pixelSize)*self.telescope.pupil
+        res_x = (np.gradient(arr,axis=0)/self.telescope.pixelSize)*self.telescope.pupil
+        res_y = (np.gradient(arr,axis=1)/self.telescope.pixelSize)*self.telescope.pupil
         return res_x,res_y
         
     def lenslet_propagation_geometric(self,arr):
         
-        [SLx,SLy]  = self.gradient_2D(arr)
+        [SLx,SLy]  = self.gradient_2D(arr.T)
         
         sx = (bin_ndarray(SLx, [self.nSubap,self.nSubap], operation='mean'))
         sy = (bin_ndarray(SLy, [self.nSubap,self.nSubap], operation='mean'))
@@ -301,8 +293,8 @@ class ShackHartmann:
                 # compute the centroid on valid subaperture
                 norma = np.sum(np.sum(self.maps_intensity,axis=1),axis=1)
                 centroid_single = np.zeros([self.maps_intensity.shape[0],2])
-                centroid_single[:,0] = np.sum(np.sum(self.maps_intensity*self.X_coord_map,axis=1),axis=1)/norma
-                centroid_single[:,1] = np.sum(np.sum(self.maps_intensity*self.Y_coord_map,axis=1),axis=1)/norma
+                centroid_single[:,1] = np.sum(np.sum(self.maps_intensity*self.X_coord_map,axis=1),axis=1)/norma
+                centroid_single[:,0] = np.sum(np.sum(self.maps_intensity*self.Y_coord_map,axis=1),axis=1)/norma
                 
                 # discard nan and inf values
                 val_inf = np.where(np.isinf(centroid_single))
