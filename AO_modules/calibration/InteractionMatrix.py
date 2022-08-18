@@ -97,7 +97,7 @@ def interactionMatrix(ngs,atm,tel,dm,wfs,M2C,stroke,phaseOffset=0,nMeasurements=
             b=time.time()
             print('Time elapsed: '+str(b-a)+' s' )
     
-        out=calibrationVault(intMat,invert=invert)
+    out=calibrationVault(intMat,invert=invert)
        
     return out
 
@@ -187,7 +187,7 @@ def interactionMatrixFromPhaseScreen(ngs,atm,tel,wfs,phasScreens,stroke,phaseOff
             b=time.time()
             print('Time elapsed: '+str(b-a)+' s' )
     
-        out=calibrationVault(intMat,invert=invert)
+    out=calibrationVault(intMat,invert=invert)
   
     return out
 
