@@ -13,7 +13,7 @@ import AO_modules.calibration.ao_cockpit_psim as aou
 
 
 
-def compute_M2C(telescope, atmosphere, deformableMirror, param, nameFolder = None, nameFile = None,remove_piston = False,HHtName = None, baseName = None, SpM_2D = None, nZer = 3, SZ=None, mem_available = None, NDIVL = None, computeSpM = True, ortho_spm = True, computeSB = True, computeKL = True, minimF = False, P2F = None, alpha = None, beta = None, nmo = None, IF_2D = None, IFma = None, returnSB = False, returnHHt = False, extra_name = ''):
+def compute_M2C(telescope, atmosphere, deformableMirror, param, nameFolder = None, nameFile = None,remove_piston = False,HHtName = None, baseName = None, SpM_2D = None, nZer = 3, SZ=None, mem_available = None, NDIVL = None, computeSpM = True, ortho_spm = True, computeSB = True, computeKL = True, minimF = False, P2F = None, alpha = None, beta = None, nmo = None, IF_2D = None, IFma = None, returnSB = False, returnHHt = False, recompute_cov = False,extra_name = ''):
 
     """
     - HHtName       = None      extension for the HHt Covariance file
@@ -101,13 +101,17 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param, nameFolder = Non
 
 #%% ----------COMPUTE HHt COVARIANCE MATRIX (OR LOAD EXISTING ONE) ----------    
     #pdb.set_trace()
-    try:
-        #HHt, PSD_atm, df = aou.load(nameFolder+'HHt_PSD_df_'+HHtName+'_r'+str(r0)+'_SZ'+str(SZ)+'.pkl')
-        HHt, PSD_atm, df = aou.load(nameFolder+'HHt_PSD_df_'+HHtName+'.pkl')
-        print('LOADED COV MAT HHt...')
-        print(' ')
-        
-    except:
+    
+    if recompute_cov is False:
+        try:
+            #HHt, PSD_atm, df = aou.load(nameFolder+'HHt_PSD_df_'+HHtName+'_r'+str(r0)+'_SZ'+str(SZ)+'.pkl')
+            HHt, PSD_atm, df = aou.load(nameFolder+'HHt_PSD_df_'+HHtName+'.pkl')
+            print('LOADED COV MAT HHt...')
+            print(' ')
+        except:
+            recompute_cov = True
+    
+    if recompute_cov is True:
         print('COMPUTING COV MAT HHt...')
         print(' ')
         #pdb.set_trace()
@@ -163,7 +167,7 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param, nameFolder = Non
 
 
         if alpha is None:
-            alpha = 1.e-16
+            alpha = 1.e-18
         if beta is None:
             beta=1.e-6
     
