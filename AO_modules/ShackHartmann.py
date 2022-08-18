@@ -154,6 +154,7 @@ class ShackHartmann:
         
         print('Setting slopes units..')        
         [Tip,Tilt]                         = np.meshgrid(np.linspace(0,self.telescope.resolution-1,self.telescope.resolution),np.linspace(0,self.telescope.resolution-1,self.telescope.resolution))
+        # normalize to 2 pi p2v
         Tip                                = (((Tip/Tip.max())-0.5)*2*np.pi)
         mean_slope = np.zeros(5)
         amp = 1e-9
@@ -162,22 +163,26 @@ class ShackHartmann:
             self.telescope.OPD_no_pupil = Tip*(i-2)*amp
 
             self.sh_measure()        
-            mean_slope[i] = np.mean(self.signal[:self.nSignal//2])
+            mean_slope[i] = np.mean(self.signal[:self.nValidSubaperture])
         self.p = np.polyfit(np.linspace(-2,2,5)*amp,mean_slope,deg = 1)
-        self.slopes_units = self.p[0]
+        self.slopes_units = np.abs(self.p[0])
         print('Done!')
         self.cam.photonNoise        = readoutNoise
         self.cam.readoutNoise       = photonNoise
         self.telescope.resetOPD()
 
-    def centroid(self,im, threshold = 0):
-        im[im<threshold*im.max()]=0
-        [x,y] = ndimage.center_of_mass(im.T)
-        return x,y
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SHACK HARTMANN WFS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        print('Pupils Diameter \t'+str(self.nSubap) + ' \t\t [pixels]')
+        print('Subaperture Size \t'+str(self.telescope.D/self.nSubap) + ' \t [m]')
+        print('Pixel Scale \t\t' + str(np.round(206265*self.binning_factor*self.telescope.src.wavelength/(self.telescope.D/self.nSubap),2)) + str('\t [arcsec]'))
+        print('Subaperture FoV \t' + str(np.round(self.n_pix_subap*206265*self.binning_factor*self.telescope.src.wavelength/(self.telescope.D/self.nSubap),2)) + str('\t [arcsec]'))
+        print('Valid Subaperture \t' + str(self.nValidSubaperture) + str('\t'))
+
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 #%% DIFFRACTIVE
 
     def initialize_flux(self):
-        tmp_flux_h_split = np.hsplit(self.telescope.src.fluxMap,self.nSubap)
+        tmp_flux_h_split = np.hsplit(self.telescope.src.fluxMap.T,self.nSubap)
         self.cube_flux = np.zeros([self.nSubap**2,self.n_pix_lenslet,self.n_pix_lenslet],dtype=float)
         for i in range(self.nSubap):
             tmp_flux_v_split = np.vsplit(tmp_flux_h_split[i],self.nSubap)
@@ -185,25 +190,14 @@ class ShackHartmann:
         self.photon_per_subaperture = np.apply_over_axes(np.sum, self.cube_flux, [1,2]) 
         return
     
-    def get_lenslet_em(self,phase):
-        tmp_phase_h_split = np.hsplit(phase,self.nSubap)
+    def get_lenslet_em_field(self,phase):
+        tmp_phase_h_split = np.hsplit(phase.T,self.nSubap)
         self.cube_em = np.zeros([self.nSubap**2,self.n_pix_lenslet,self.n_pix_lenslet],dtype=complex)
         for i in range(self.nSubap):
             tmp_phase_v_split = np.vsplit(tmp_phase_h_split[i],self.nSubap)
             self.cube_em[i*self.nSubap:(i+1)*self.nSubap,self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2,self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2] = np.exp(1j*np.asarray(tmp_phase_v_split))
         self.cube_em*=self.cube_flux*self.phasor_tiled
         return self.cube_em 
-
-
-    def fill_cube_LGS(self,mask,ind_x,ind_y,LGS):
-        # convolve with gaussian to simulate effect of LGS
-        support         = np.copy(self.lenslet_frame)
-        lenslet_phase   = self.telescope.src.phase[ind_x*self.n_pix_subap:(ind_x+1)*self.n_pix_subap,ind_y*self.n_pix_subap:(ind_y+1)*self.n_pix_subap]
-        support[self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2,self.center - self.n_pix_subap//2:self.center+self.n_pix_subap//2] = mask*np.exp(1j*lenslet_phase)
-        norma           = support.shape[0]
-        I               = np.abs(np.fft.fftshift(np.fft.fft2(support))/norma)**2
-        K               = np.real(np.fft.ifft2(np.fft.fft2(I)*LGS))
-        return K
   
     def fill_camera_frame(self,ind_x,ind_y,I,index_frame=None):
         if index_frame is None:
@@ -236,10 +230,10 @@ class ShackHartmann:
         
     def lenslet_propagation_geometric(self,arr):
         
-        [SLx,SLy]  = self.gradient_2D(arr.T)
+        [SLx,SLy]  = self.gradient_2D(arr)
         
-        sx = (bin_ndarray(SLx, [self.nSubap,self.nSubap], operation='mean'))
-        sy = (bin_ndarray(SLy, [self.nSubap,self.nSubap], operation='mean'))
+        sy = (bin_ndarray(SLx, [self.nSubap,self.nSubap], operation='sum'))
+        sx = (bin_ndarray(SLy, [self.nSubap,self.nSubap], operation='sum'))
         
         return np.concatenate((sx,sy))
             
@@ -261,21 +255,15 @@ class ShackHartmann:
                 
                 # reset camera frame
                 self.camera_frame   = np.zeros([self.n_pix_subap*(self.nSubap)//self.binning_factor,self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype =float)
-                
+                norma = self.lenslet_frame.shape[0]
+                I = (np.abs(np.fft.fft2(np.asarray(self.get_lenslet_em_field(self.telescope.src.phase)))/norma)**2)
+                I = I[self.valid_subapertures_1D,:,:]
                 if self.is_LGS:
-                    def fill_em_cube():
-                        Q=Parallel(n_jobs=self.nJobs,prefer=self.joblib_prefer)(delayed(self.fill_cube_LGS)(i,j,k,l) for i,j,k,l in zip(self.cube_flux[self.valid_subapertures_1D,:,:],self.index_x[self.valid_subapertures_1D],self.index_y[self.valid_subapertures_1D],self.LGS.C))
-                        return Q
-                    I = (np.asarray(fill_em_cube()))
-                else:
-                    norma = self.lenslet_frame.shape[0]
-                    I = np.abs(np.fft.fft2(np.asarray(self.get_lenslet_em(self.telescope.src.phase)))/norma)**2   
+                    I = np.real(np.fft.ifft2(np.fft.fft2(I)*self.LGS.C))
+                    
                 # bin the 2D spots intensity
-                self.maps_intensity =  bin_ndarray(I, [I.shape[0], self.n_pix_subap//self.binning_factor,self.n_pix_subap//self.binning_factor], operation='sum')
-                
-                # select only valid subaperture
-                self.maps_intensity = self.maps_intensity[self.valid_subapertures_1D,:,:]
-                
+                self.maps_intensity =  bin_ndarray(I,[I.shape[0], self.n_pix_subap//self.binning_factor,self.n_pix_subap//self.binning_factor], operation='sum')
+                                
                 # add photon/readout noise to 2D spots
                 if self.cam.photonNoise!=0:
                     rs = np.random.RandomState(seed=int(time.time()))
@@ -293,9 +281,9 @@ class ShackHartmann:
                 # compute the centroid on valid subaperture
                 norma = np.sum(np.sum(self.maps_intensity,axis=1),axis=1)
                 centroid_single = np.zeros([self.maps_intensity.shape[0],2])
-                centroid_single[:,1] = np.sum(np.sum(self.maps_intensity*self.X_coord_map,axis=1),axis=1)/norma
-                centroid_single[:,0] = np.sum(np.sum(self.maps_intensity*self.Y_coord_map,axis=1),axis=1)/norma
-                
+                centroid_single[:,0] = np.sum(np.sum(self.maps_intensity*self.X_coord_map,axis=1),axis=1)/norma
+                centroid_single[:,1] = np.sum(np.sum(self.maps_intensity*self.Y_coord_map,axis=1),axis=1)/norma
+            
                 # discard nan and inf values
                 val_inf = np.where(np.isinf(centroid_single))
                 val_nan = np.where(np.isnan(centroid_single)) 
@@ -325,45 +313,51 @@ class ShackHartmann:
 
                 # set phase buffer
                 self.phase_buffer = np.moveaxis(self.telescope.src.phase_no_pupil,-1,0)
+
                 # tile the valid subaperture vector to match the number of phase
                 valid_subap_1D_tiled = np.tile(self.valid_subapertures_1D,self.phase_buffer.shape[0])
+
+                if self.is_LGS:
+                    self.lgs_exp =  np.tile(self.LGS.C,[self.phase_buffer.shape[0],1,1])
                 # reset camera frame
                 self.camera_frame   = np.zeros([self.phase_buffer.shape[0],self.n_pix_subap*(self.nSubap)//self.binning_factor,self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype =float)
                 
                 # compute 2D intensity for multiple input wavefronts
                 def compute_diffractive_signals_multi():
-                    Q=Parallel(n_jobs=1,prefer='processes')(delayed(self.get_lenslet_em)(i) for i in self.phase_buffer)
+                    Q=Parallel(n_jobs=1,prefer='processes')(delayed(self.get_lenslet_em_field)(i) for i in self.phase_buffer)
                     return Q                 
-                self.maps_intensity = np.reshape(np.asarray(compute_diffractive_signals_multi()),[self.phase_buffer.shape[0]*self.nSubap**2,self.n_pix_lenslet,self.n_pix_lenslet])
+                emf_buffer = np.reshape(np.asarray(compute_diffractive_signals_multi()),[self.phase_buffer.shape[0]*self.nSubap**2,self.n_pix_lenslet,self.n_pix_lenslet])
                 # select only valid subapertures
-                self.maps_intensity = self.maps_intensity[valid_subap_1D_tiled,:,:]
+                emf_buffer = emf_buffer[valid_subap_1D_tiled,:,:]
                 
                 # normalization for FFT
-                norma = self.maps_intensity.shape[1]
-                
-                F = np.abs(np.fft.fft2(self.maps_intensity)/norma)**2
-                
+                norma = emf_buffer.shape[1]
+                # get the spots intensity
+                I = np.abs(np.fft.fft2(emf_buffer)/norma)**2
+                # if lgs convolve with gaussian
+                if self.is_LGS:
+                    I = np.real(np.fft.ifft2(np.fft.fft2(I)*self.lgs_exp))
                 # bin the 2D spots arrays
-                F_binned = (bin_ndarray(F, [F.shape[0],self.n_pix_subap,self.n_pix_subap], operation='sum'))
-
+                self.maps_intensity = (bin_ndarray(I, [I.shape[0],self.n_pix_subap,self.n_pix_subap], operation='sum'))
+                
                 # add photon/readout noise to 2D spots
                 if self.cam.photonNoise!=0:
                     rs = np.random.RandomState(seed=int(time.time()))
-                    F_binned  = rs.poisson(F_binned)
+                    self.maps_intensity  = rs.poisson(I)
                         
                 if self.cam.readoutNoise!=0:
-                    F_binned += np.int64(np.round(np.random.randn(F_binned.shape[0],F_binned.shape[1],F_binned.shape[2])*self.cam.readoutNoise))
+                    self.maps_intensity += np.int64(np.round(np.random.randn(self.maps_intensity.shape[0],self.maps_intensity.shape[1],self.maps_intensity.shape[2])*self.cam.readoutNoise))
                 
                 # fill up camera frame if requested (default is False)
                 if self.get_camera_frame_multi is True:
-                    self.compute_camera_frame_multi(F_binned)
+                    self.compute_camera_frame_multi(self.maps_intensity)
                                     
                 # normalization for centroid computation
-                norma = np.sum(np.sum(F_binned,axis=1),axis=1)
+                norma = np.sum(np.sum(self.maps_intensity,axis=1),axis=1)
                 # centroid computation
-                self.centroid_multi = np.zeros([F_binned.shape[0],2])
-                self.centroid_multi[:,0] = np.sum(np.sum(F_binned*self.X_coord_map,axis=1),axis=1)/norma
-                self.centroid_multi[:,1] = np.sum(np.sum(F_binned*self.Y_coord_map,axis=1),axis=1)/norma
+                self.centroid_multi = np.zeros([self.maps_intensity.shape[0],2])
+                self.centroid_multi[:,0] = np.sum(np.sum(self.maps_intensity*self.X_coord_map,axis=1),axis=1)/norma
+                self.centroid_multi[:,1] = np.sum(np.sum(self.maps_intensity*self.Y_coord_map,axis=1),axis=1)/norma
 
                 # re-organization of signals according to number of wavefronts considered
                 self.signal_2D = np.zeros([self.phase_buffer.shape[0],self.nSubap*2,self.nSubap])
@@ -382,10 +376,14 @@ class ShackHartmann:
         else:
             ##%%%%%%%%%%%%  GEOMETRIC SH WFS %%%%%%%%%%%%
             if np.ndim(self.telescope.src.phase)==2:
+                self.camera_frame   = np.zeros([self.n_pix_subap*(self.nSubap)//self.binning_factor,self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype =float)
+
                 self.signal_2D = self.lenslet_propagation_geometric(self.telescope.src.phase_no_pupil)*self.valid_slopes_maps/self.slopes_units
                     
                 self.signal = self.signal_2D[self.valid_slopes_maps]
                 
+                self*self.cam
+
             else:
                 self.phase_buffer = np.moveaxis(self.telescope.src.phase_no_pupil,-1,0)
 
