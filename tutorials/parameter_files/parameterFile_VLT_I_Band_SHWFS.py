@@ -62,9 +62,9 @@ def initializeParameterFile():
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
     param['modulation'            ] = 3                                             # modulation radius in ratio of wavelength over telescope diameter
-    param['lightThreshold'        ] = 0.05                                           # light threshold to select the valid pixels
+    param['lightThreshold'        ] = 0.5                                           # light threshold to select the valid pixels
     param['unitCalibration'       ] = False                                         # calibration of the PWFS units using a ramp of Tip/Tilt    
-    
+    param['is_geometric'          ] = False
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOOP PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

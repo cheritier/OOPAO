@@ -28,7 +28,7 @@ def initializeParameterFile():
     
     param['diameter'             ] = 8.2                                             # diameter in [m]
     param['nSubaperture'         ] = 40                                             # number of PWFS subaperture along the telescope diameter
-    param['nPixelPerSubap'       ] = 6                                            # sampling of the PWFS subapertures
+    param['nPixelPerSubap'       ] = 4                                            # sampling of the PWFS subapertures
     param['resolution'           ] = param['nSubaperture']*param['nPixelPerSubap']  # resolution of the telescope driven by the PWFS
     param['sizeSubaperture'      ] = param['diameter']/param['nSubaperture']        # size of a sub-aperture projected in the M1 space
     param['samplingTime'         ] = 1/1000                                         # loop sampling time in [s]
@@ -62,9 +62,9 @@ def initializeParameterFile():
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
     param['modulation'            ] = 3                                             # modulation radius in ratio of wavelength over telescope diameter
-    param['lightThreshold'        ] = 0.05                                           # light threshold to select the valid pixels
+    param['lightThreshold'        ] = 0.5                                           # light threshold to select the valid pixels
     param['unitCalibration'       ] = False                                         # calibration of the PWFS units using a ramp of Tip/Tilt    
-    
+    param['is_geometric'          ] = False
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOOP PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

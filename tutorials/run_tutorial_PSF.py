@@ -21,7 +21,7 @@ from AO_modules.tools.displayTools           import displayMap, makeSquareAxes
 
 #%% -----------------------     read parameter file   ----------------------------------
 
-from parameterFile_VLT_I_Band import initializeParameterFile
+from parameter_files.parameterFile_VLT_I_Band import initializeParameterFile
 
 param = initializeParameterFile()
 
@@ -123,7 +123,7 @@ plt.title('Cross Product Matrix')
 amp = 100e-9 
 
 # choose a number of zernike polynomial
-N= 10
+N= 80
 
 # set the Optical Path Difference (OPD) of the telescope using a the Nth zernike
 tel.OPD = np.squeeze(Z.modesFullRes[:,:,N])*amp
@@ -139,6 +139,8 @@ nCrop = int(tel.resolution * zeroPaddingFactor /3)
 
 PSF_cropped = PSF_normalized[nCrop:-nCrop,nCrop:-nCrop]
 
+plt.figure()
+plt.imshow(tel.OPD)
 # display
 plt.figure()
 ax1 = plt.subplot(1,2,1)

@@ -106,14 +106,10 @@ wfs = Pyramid(nSubap                = param['nSubaperture'],\
               telescope             = tel,\
               modulation            = param['modulation'],\
               lightRatio            = param['lightThreshold'],\
-              pupilSeparationRatio  = param['pupilSeparationRatio'],\
-              calibModulation       = param['calibrationModulation'],\
+              n_pix_separation      = param['n_pix_separation'],\
               psfCentering          = param['psfCentering'],\
-              edgePixel             = param['edgePixel'],\
-              extraModulationFactor = param['extraModulationFactor'],\
               postProcessing        = param['postProcessing'])
 
-#%%
 tel*wfs
 plt.close('all')
 plt.figure()
@@ -204,7 +200,7 @@ calib_zernike = interactionMatrix(  ngs            = ngs,\
                             wfs            = wfs,\
                             M2C            = M2C_zernike,\
                             stroke         = stroke,\
-                            nMeasurements  = 50,\
+                            nMeasurements  = 20,\
                             noise          = 'off')
 
 plt.figure()
@@ -242,7 +238,7 @@ plt.title('DM phase [rad]')
 tel.computePSF(zeroPaddingFactor=6)
 
 ax4         = plt.subplot(2,3,3)
-im_PSF_OL   = ax4.imshow(tel.PSF_trunc)
+im_PSF_OL   = ax4.imshow(tel.PSF)
 plt.colorbar(im_PSF_OL)
 plt.title('OL PSF')
 
@@ -258,7 +254,7 @@ plt.colorbar(im_wfs_CL)
 plt.title('Pyramid Frame CL')
 
 ax6         = plt.subplot(2,3,6)
-im_PSF      = ax6.imshow(tel.PSF_trunc)
+im_PSF      = ax6.imshow(tel.PSF)
 plt.colorbar(im_PSF)
 plt.title('CL PSF')
 
@@ -289,7 +285,7 @@ for i in range(param['nLoop']):
     if display == True:
            # compute the OL PSF and update the display
        tel.computePSF(zeroPaddingFactor=6)
-       im_PSF_OL.set_data(np.log(tel.PSF_trunc/tel.PSF_trunc.max()))
+       im_PSF_OL.set_data(np.log(tel.PSF/tel.PSF.max()))
        im_PSF_OL.set_clim(vmin=-3,vmax=0)
        
      # propagate to the WFS with the CL commands applied
@@ -324,7 +320,7 @@ for i in range(param['nLoop']):
        im_residual.set_clim(vmin=D.min(),vmax=D.max()) 
     
        tel.computePSF(zeroPaddingFactor=6)
-       im_PSF.set_data(np.log(tel.PSF_trunc/tel.PSF_trunc.max()))
+       im_PSF.set_data(np.log(tel.PSF/tel.PSF.max()))
        im_PSF.set_clim(vmin=-4,vmax=0)
        plt.draw()
        plt.show()

@@ -20,7 +20,6 @@ from AO_modules.Telescope        import Telescope
 from AO_modules.Source           import Source
 # calibration modules 
 from AO_modules.calibration.compute_KL_modal_basis import compute_M2C
-from AO_modules.calibration.ao_calibration import ao_calibration
 # display modules
 from AO_modules.tools.displayTools           import displayMap
 
@@ -37,35 +36,18 @@ tel = Telescope(resolution          = param['resolution'],\
                 samplingTime        = param['samplingTime'],\
                 centralObstruction  = param['centralObstruction'])
 
+
+thickness_spider = 0.05                         # size in m
+angle            = [45,135,225,315]             # in degrees
+offset_X         = [-0.4,0.4,0.4,-0.4]        # shift offset of the spider
+offset_Y         = None
+
+tel.apply_spiders(angle, thickness_spider, offset_X = offset_X, offset_Y= offset_Y)
     
-# create VLT-like spiders
 
-P = np.copy(tel.pupil.astype(float)) 
-   
-center      = P.shape[0]//2 +8
-center_2    = P.shape[0]//2 -8
-# thickness
-n_spider = 1
 
-P[center_2-n_spider:center_2+n_spider,:center] = 0
-P[center-n_spider:center+n_spider,center:] = 0
-P[:center,center_2-n_spider:center_2+n_spider] = 0
-P[center:,center-n_spider:center+n_spider] = 0
-
-from scipy.ndimage import rotate
-P =rotate(P, angle=45, reshape = False)
-P = P>0.5
 plt.figure()
-plt.imshow(P)
-
-# assign to the telescope object both pupil and pupil reflectivity ! (Important)
-tel.pupil = P
-tel.pupilReflectivity = P
-
-#%%
-
-
-
+plt.imshow(tel.pupilReflectivity)
 # %% -----------------------     NGS   ----------------------------------
 # create the Source object
 ngs=Source(optBand   = param['opticalBand'],\
@@ -75,13 +57,18 @@ ngs=Source(optBand   = param['opticalBand'],\
 ngs*tel
 
 tel.computePSF(zeroPaddingFactor = 6)
+PSF_diff = tel.PSF/tel.PSF.max()
+N = 500
+
+fov_pix = tel.xPSF_arcsec[1]/tel.PSF.shape[0]
+fov = N*fov_pix
 plt.figure()
-plt.imshow(np.log10(np.abs(tel.PSF)),extent = [tel.xPSF_arcsec[0],tel.xPSF_arcsec[1],tel.xPSF_arcsec[0],tel.xPSF_arcsec[1]])
-plt.clim([-1,3])
+plt.imshow(np.log10(PSF_diff[N:-N,N:-N]), extent=(-fov,fov,-fov,fov))
+plt.clim([-4.5,0])
 plt.xlabel('[Arcsec]')
 plt.ylabel('[Arcsec]')
-plt.title('Diffraction Limit SPHERE PSF')
-plt.colorbar()
+
+
 #%% -----------------------     ATMOSPHERE   ----------------------------------
 
 # create the Atmosphere object
@@ -133,10 +120,10 @@ plt.title('DM Actuator Coordinates')
 # make sure tel and atm are separated to initialize the PWFS
 tel-atm
 
-wfs = ShackHartmann(nSubap                = param['nSubaperture'],\
-              telescope             = tel,\
-              lightRatio            = 0.5,\
-              is_geometric = False)
+wfs = ShackHartmann(nSubap      = param['nSubaperture'],\
+              telescope         = tel,\
+              lightRatio        = param['lightThreshold'],\
+              is_geometric      = param['is_geometric'])
 
 tel*wfs
 plt.close('all')
@@ -157,19 +144,11 @@ M2C = compute_M2C(telescope            = tel,\
                                   atmosphere         = atm,\
                                   deformableMirror   = dm,\
                                   param              = param,\
-                                  nameFolder         = None,\
-                                  nameFile           = None,\
-                                  remove_piston      = True,\
-                                  HHtName            = None,\
-                                  baseName           = None ,\
                                   mem_available      = 8.1e9,\
-                                  minimF             = False,\
                                   nmo                = 1000,\
-                                  ortho_spm          = True,\
-                                  SZ                 = int(2*tel.OPD.shape[0]),\
                                   nZer               = 3,\
-                                  NDIVL              = 1,\
-                                  recompute_cov      = True) # forces to recompute covariance matrix
+                                  remove_piston = True,\
+                                  recompute_cov      = False) # forces to recompute covariance matrix
 
 
 
@@ -199,7 +178,7 @@ plt.show()
 
 #%%
 from AO_modules.calibration.InteractionMatrix import interactionMatrix
-wfs.is_geometric = True
+# wfs.is_geometric = False
 
 stroke = 1e-9
 # controlling 1000 modes
@@ -213,24 +192,32 @@ calib_KL = interactionMatrix(  ngs            = ngs,\
                             wfs            = wfs,\
                             M2C            = M2C_KL,\
                             stroke         = stroke,\
-                            nMeasurements  = 100,\
+                            nMeasurements  = 200,\
                             noise          = 'off')
+wfs.is_geometric = True
 
+calib_KL_geo = interactionMatrix(  ngs            = ngs,\
+                            atm            = atm,\
+                            tel            = tel,\
+                            dm             = dm,\
+                            wfs            = wfs,\
+                            M2C            = M2C_KL,\
+                            stroke         = stroke,\
+                            nMeasurements  = 200,\
+                            noise          = 'off')
 plt.figure()
 plt.plot(np.std(calib_KL.D,axis=0))
+plt.plot(np.std(calib_KL_geo.D,axis=0))
+
 plt.xlabel('Mode Number')
 plt.ylabel('WFS slopes STD')
-
-#%%
-from AO_modules.tools.displayTools import *
-
-display_wfs_signals(wfs, np.var(calib_KL.D,axis=1))
-
 
 
 #%%
 # These are the calibration data used to close the loop
-calib_CL    = calib_KL
+wfs.is_geometric = False
+
+calib_CL    = calib_KL_geo
 M2C_CL      = M2C_KL.copy()
 
 
@@ -260,7 +247,7 @@ plt.title('DM phase [rad]')
 tel.computePSF(zeroPaddingFactor=6)
 
 ax4         = plt.subplot(2,3,3)
-im_PSF_OL   = ax4.imshow(tel.PSF_trunc)
+im_PSF_OL   = ax4.imshow(tel.PSF)
 plt.colorbar(im_PSF_OL)
 plt.title('OL PSF')
 
@@ -276,13 +263,13 @@ plt.colorbar(im_wfs_CL)
 plt.title('SH Frame CL')
 
 ax6         = plt.subplot(2,3,6)
-im_PSF      = ax6.imshow(tel.PSF_trunc)
+im_PSF      = ax6.imshow(tel.PSF)
 plt.colorbar(im_PSF)
 plt.title('CL PSF')
 
 plt.show()
 
-param['nLoop'] = 50
+param['nLoop'] = 1000
 # allocate memory to save data
 SR                      = np.zeros(param['nLoop'])
 total                   = np.zeros(param['nLoop'])
@@ -295,7 +282,7 @@ wfs.cam.photonNoise     = True
 display                 = True
 
 reconstructor = M2C_CL@calib_CL.M
-
+PSF_LE = []
 for i in range(param['nLoop']):
     a=time.time()
     # update phase screens => overwrite tel.OPD and consequently tel.src.phase
@@ -306,8 +293,8 @@ for i in range(param['nLoop']):
     turbPhase = tel.src.phase
     if display == True:
            # compute the OL PSF and update the display
-       tel.computePSF(zeroPaddingFactor=6)
-       im_PSF_OL.set_data(np.log(tel.PSF_trunc/tel.PSF_trunc.max()))
+       tel.computePSF(zeroPaddingFactor=2)
+       im_PSF_OL.set_data(np.log(tel.PSF/tel.PSF.max()))
        im_PSF_OL.set_clim(vmin=-3,vmax=0)
        
      # propagate to the WFS with the CL commands applied
@@ -321,6 +308,10 @@ for i in range(param['nLoop']):
     wfsSignal=wfs.signal
     b= time.time()
     print('Elapsed time: ' + str(b-a) +' s')
+    tel.computePSF(zeroPaddingFactor=2)
+    if i>10:
+        PSF_LE.append(tel.PSF)
+
     # update displays if required
     if display==True:
         
@@ -341,8 +332,7 @@ for i in range(param['nLoop']):
        im_residual.set_data(D)
        im_residual.set_clim(vmin=D.min(),vmax=D.max()) 
     
-       tel.computePSF(zeroPaddingFactor=6)
-       im_PSF.set_data(np.log(tel.PSF_trunc/tel.PSF_trunc.max()))
+       im_PSF.set_data(np.log(tel.PSF/tel.PSF.max()))
        im_PSF.set_clim(vmin=-4,vmax=0)
        plt.draw()
        plt.show()
@@ -362,4 +352,28 @@ plt.plot(residual)
 plt.xlabel('Time [ms]')
 plt.ylabel('WFE [nm]')
 
+plt.figure()
+PSF = np.mean(PSF_LE,axis=0)
+PSF/=PSF.max()
+N = 200
+fov_pix = tel.xPSF_arcsec[1]/PSF.shape[0]
+fov = N*fov_pix
+plt.imshow(np.log10(PSF[N:-N,N:-N]), extent=(-fov,fov,-fov,fov))
+plt.clim([-4.5,0])
+plt.xlabel('[Arcsec]')
+plt.ylabel('[Arcsec]')
 
+
+tel.resetOPD()
+tel.computePSF(6)
+PSF_diff = tel.PSF/tel.PSF.max()
+plt.figure()
+plt.imshow(np.log10(PSF_diff[N:-N,N:-N]), extent=(-fov,fov,-fov,fov))
+plt.clim([-4.5,0])
+plt.xlabel('[Arcsec]')
+plt.ylabel('[Arcsec]')
+
+plt.figure()
+plt.plot(residual)
+plt.xlabel('Time')
+plt.ylabel('WFE [nm]')

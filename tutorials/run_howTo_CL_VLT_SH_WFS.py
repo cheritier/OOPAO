@@ -106,16 +106,23 @@ tel-atm
 wfs = ShackHartmann(nSubap                = param['nSubaperture'],\
               telescope             = tel,\
               lightRatio            = param['lightThreshold'],\
-              is_geometric = True)
+              is_geometric = False)
 
 
 #%%
+wfs.cam.photonNoise = False
+
 tel*wfs
 plt.close('all')
 plt.figure()
-plt.imshow(wfs.signal_2D)
-plt.title('WFS Camera Frame')
+plt.imshow(wfs.cam.frame)
+plt.title('WFS Camera Frame - Without Noise')
 
+wfs.cam.photonNoise = True
+tel*wfs
+plt.figure()
+plt.imshow(wfs.cam.frame)
+plt.title('WFS Camera Frame - With Noise')
 #%% -----------------------     Modal Basis   ----------------------------------
 # compute the modal basis
 # foldername_M2C  = None  # name of the folder to save the M2C matrix, if None a default name is used 
@@ -244,7 +251,7 @@ plt.title('DM phase [rad]')
 tel.computePSF(zeroPaddingFactor=6)
 
 ax4         = plt.subplot(2,3,3)
-im_PSF_OL   = ax4.imshow(tel.PSF_trunc)
+im_PSF_OL   = ax4.imshow(tel.PSF)
 plt.colorbar(im_PSF_OL)
 plt.title('OL PSF')
 
@@ -260,7 +267,7 @@ plt.colorbar(im_wfs_CL)
 plt.title('SH Frame CL')
 
 ax6         = plt.subplot(2,3,6)
-im_PSF      = ax6.imshow(tel.PSF_trunc)
+im_PSF      = ax6.imshow(tel.PSF)
 plt.colorbar(im_PSF)
 plt.title('CL PSF')
 
@@ -291,7 +298,7 @@ for i in range(param['nLoop']):
     if display == True:
            # compute the OL PSF and update the display
        tel.computePSF(zeroPaddingFactor=6)
-       im_PSF_OL.set_data(np.log(tel.PSF_trunc/tel.PSF_trunc.max()))
+       im_PSF_OL.set_data(np.log(tel.PSF/tel.PSF.max()))
        im_PSF_OL.set_clim(vmin=-3,vmax=0)
        
      # propagate to the WFS with the CL commands applied
@@ -326,7 +333,7 @@ for i in range(param['nLoop']):
        im_residual.set_clim(vmin=D.min(),vmax=D.max()) 
     
        tel.computePSF(zeroPaddingFactor=6)
-       im_PSF.set_data(np.log(tel.PSF_trunc/tel.PSF_trunc.max()))
+       im_PSF.set_data(np.log(tel.PSF/tel.PSF.max()))
        im_PSF.set_clim(vmin=-4,vmax=0)
        plt.draw()
        plt.show()

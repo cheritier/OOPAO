@@ -28,7 +28,7 @@ def initializeParameterFile():
     
     param['diameter'             ] = 8                                             # diameter in [m]
     param['nSubaperture'         ] = 20                                             # number of PWFS subaperture along the telescope diameter
-    param['nPixelPerSubap'       ] = 6                                            # sampling of the PWFS subapertures
+    param['nPixelPerSubap'       ] = 8                                            # sampling of the PWFS subapertures
     param['resolution'           ] = param['nSubaperture']*param['nPixelPerSubap']  # resolution of the telescope driven by the PWFS
     param['sizeSubaperture'      ] = param['diameter']/param['nSubaperture']        # size of a sub-aperture projected in the M1 space
     param['samplingTime'         ] = 1/1000                                         # loop sampling time in [s]
@@ -62,14 +62,10 @@ def initializeParameterFile():
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
     param['modulation'            ] = 3                                             # modulation radius in ratio of wavelength over telescope diameter
-    param['pupilSeparationRatio'  ] = 1.2                                             # separation ratio between the PWFS pupils
+    param['n_pix_separation'      ] = 4                                             # separation ratio between the PWFS pupils
     param['psfCentering'          ] = False                                         # centering of the FFT and of the PWFS mask on the 4 central pixels
-    param['calibrationModulation' ] = 50                                            # modulation radius used to select the valid pixels
     param['lightThreshold'        ] = 0.1                                           # light threshold to select the valid pixels
-    param['edgePixel'             ] = 1                                             # number of pixel on the external edge of the PWFS pupils
-    param['extraModulationFactor' ] = 0                                             # factor to add/remove 4 modulation points (one for each PWFS face)
     param['postProcessing'        ] = 'slopesMaps'                                   # post-processing of the PWFS signals 
-    param['unitCalibration'       ] = False                                         # calibration of the PWFS units using a ramp of Tip/Tilt    
     
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOOP PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
