@@ -10,14 +10,12 @@ import sys
 from AO_modules.MisRegistration import MisRegistration
 from joblib import Parallel, delayed
 
-import skimage.transform as sk
 import ctypes
 import time
 
-from astropy.io import fits as pfits
 from AO_modules.M4_model.make_M4_influenceFunctions import makeM4influenceFunctions
-from AO_modules.tools.tools import print_
-#from AO_modules.tools.interpolateGeometricalTransformation import rotateImageMatrix,rotation,translationImageMatrix,translation,anamorphosis,anamorphosisImageMatrix
+from AO_modules.tools.tools import print_, pol2cart, emptyClass
+from AO_modules.tools.interpolateGeometricalTransformation import interpolate_cube
 
 try : 
     mkl_rt = ctypes.CDLL('libmkl_rt.so')
@@ -38,13 +36,12 @@ except:
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
 class DeformableMirror:
-    def __init__(self,telescope,nSubap,mechCoupling = 0.35, coordinates=0, pitch=0, modes=0, misReg=0, M4_param = [], nJobs = 30, nThreads = 20,print_dm_properties = True,floating_precision = 64 ):
+    def __init__(self,telescope,nSubap,mechCoupling = 0.35, coordinates=0, pitch=0, modes=0, misReg=0, M4_param = [], nJobs = 30, nThreads = 20,print_dm_properties = True,floating_precision = 64, altitude = None ):
         self.print_dm_properties = print_dm_properties
         self.floating_precision = floating_precision
         self.M4_param = M4_param
         if M4_param:
             if M4_param['isM4']:
-#                from AO_modules.M4_model.make_M4_influenceFunctions import makeM4influenceFunctions
                 print_('Building the set of influence functions of M4...',print_dm_properties)
                 # generate the M4 influence functions            
 
@@ -83,7 +80,8 @@ class DeformableMirror:
                     coordinates = coordinates_M4[ACTXPC[0],:]
                 else:
                     coordinates = coordinates_M4
-
+                # normalize coordinates 
+                coordinates   = (coordinates/telescope.resolution - 0.5)*40
                 self.M4_param = M4_param
                 self.isM4 = True
                 print_ ('Done!',print_dm_properties)
@@ -93,11 +91,26 @@ class DeformableMirror:
             else:
                 self.isM4 = False
         else:
-            self.isM4 = False   
-        self.resolution            = telescope.resolution      # Resolution of the DM influence Functions 
-        self.mechCoupling          = mechCoupling
-        self.tag                   = 'deformableMirror'
-        self.D                     = telescope.D
+            self.isM4 = False
+        self.telescope             = telescope
+        self.altitude = altitude
+        if altitude is None:
+            self.resolution            = telescope.resolution      # Resolution of the DM influence Functions 
+            self.mechCoupling          = mechCoupling
+            self.tag                   = 'deformableMirror'
+            self.D                     = telescope.D
+        else:
+            if telescope.src.tag == 'asterism':
+                self.oversampling_factor    = np.max((np.asarray(self.telescope.src.coordinates)[:,0]/(self.telescope.resolution/2)))
+            else:
+                self.oversampling_factor = self.telescope.src.coordinates[0]/(self.telescope.resolution/2)
+            self.altitude_layer        = self.buildLayer(self.telescope,altitude)
+            self.resolution            = self.altitude_layer.resolution      # Resolution of the DM influence Functions 
+            self.mechCoupling          = mechCoupling
+            self.tag                   = 'deformableMirror'
+            self.D                     = self.altitude_layer.D
+
+
         
         # case with no pitch specified (Cartesian geometry)
         if pitch==0:
@@ -179,7 +192,7 @@ class DeformableMirror:
         self.coordinates        = np.zeros([self.nIF,2])
         self.coordinates[:,0]   = xIF
         self.coordinates[:,1]   = yIF
-        
+ 
         if self.isM4==False:
             print_('Generating a Deformable Mirror: ',print_dm_properties)
             if np.ndim(modes)==0:
@@ -206,7 +219,104 @@ class DeformableMirror:
             self.print_properties()
     
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% GEOMETRICAL FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+    def buildLayer(self,telescope,altitude):
+        # initialize layer object
+        layer               = emptyClass()
+       
+        # gather properties of the atmosphere
+        layer.altitude      = altitude       
+                
+        # Diameter and resolution of the layer including the Field Of View and the number of extra pixels
+        layer.D             = telescope.D+2*np.tan(telescope.fov/2)*layer.altitude*self.oversampling_factor
+        layer.resolution    = int(np.ceil((telescope.resolution/telescope.D)*layer.D))
+        layer.D_fov             = telescope.D+2*np.tan(telescope.fov/2)*layer.altitude
+        layer.resolution_fov    = int(np.ceil((telescope.resolution/telescope.D)*layer.D))
+        layer.center = layer.resolution//2
+        
+        if telescope.src.tag =='source':
+            [x_z,y_z] = pol2cart(telescope.src.coordinates[0]*(layer.D_fov-telescope.D)/telescope.D,np.deg2rad(telescope.src.coordinates[1]))
+     
+            center_x = int(y_z)+layer.resolution//2
+            center_y = int(x_z)+layer.resolution//2
+        
+            layer.pupil_footprint = np.zeros([layer.resolution,layer.resolution])
+            layer.pupil_footprint[center_x-telescope.resolution//2:center_x+telescope.resolution//2,center_y-telescope.resolution//2:center_y+telescope.resolution//2 ] = 1
+        else:
+            layer.pupil_footprint= []
+            layer.center_x= []
+            layer.center_y= []
+
+            for i in range(telescope.src.n_source):
+                 [x_z,y_z] = pol2cart(telescope.src.coordinates[i][0]*(layer.D_fov-telescope.D)/telescope.D,np.deg2rad(telescope.src.coordinates[i][1]))
+     
+                 center_x = int(y_z)+layer.resolution//2
+                 center_y = int(x_z)+layer.resolution//2
+            
+                 pupil_footprint = np.zeros([layer.resolution,layer.resolution])
+                 pupil_footprint[center_x-telescope.resolution//2:center_x+telescope.resolution//2,center_y-telescope.resolution//2:center_y+telescope.resolution//2 ] = 1
+                 layer.pupil_footprint.append(pupil_footprint)   
+                 layer.center_x.append(center_x)   
+                 layer.center_y.append(center_y)   
+
+        return layer
+    def get_OPD_altitude(self,i_source):
+        
+        if np.ndim(self.OPD)==2:                    
+            OPD = np.reshape(self.OPD[np.where(self.altitude_layer.pupil_footprint[i_source]==1)],[self.telescope.resolution,self.telescope.resolution])
+        else:
+            OPD = np.reshape(self.OPD[self.altitude_layer.center_x[i_source]-self.telescope.resolution//2:self.altitude_layer.center_x[i_source]+self.telescope.resolution//2,self.altitude_layer.center_y[i_source]-self.telescope.resolution//2:self.altitude_layer.center_y[i_source]+self.telescope.resolution//2,:],[self.telescope.resolution,self.telescope.resolution,self.OPD.shape[2]])
     
+        if self.telescope.src.src[i_source].type == 'LGS':
+                    if np.ndim(self.OPD)==2:  
+                        sub_im = np.atleast_3d(OPD)
+                    else:
+                        sub_im = np.moveaxis(OPD,2,0)
+                        
+                    alpha_cone = np.arctan(self.telescope.D/2/self.telescope.src.altitude[i_source])
+                    h = self.telescope.src.altitude[i_source]-self.altitude_layer.altitude
+                    if np.isinf(h):
+                        r =self.telescope.D/2
+                    else:
+                        r = h*np.tan(alpha_cone)
+                    ratio = self.telescope.D/r/2
+                    cube_in = sub_im.T
+                    pixel_size_in   = self.altitude_layer.D/self.altitude_layer.resolution
+                    pixel_size_out  = pixel_size_in/ratio
+                    resolution_out  = self.telescope.resolution
+
+                    OPD = np.asarray(np.squeeze(interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out)).T)
+        
+        return OPD
+
+
+
+        
+    def dm_propagation(self,telescope,OPD_in = None, i_source = None):
+        if OPD_in is None:
+            OPD_in = telescope.OPD_no_pupil
+        
+        if i_source is not None:
+            dm_OPD = self.get_OPD_altitude(i_source)
+        else:
+            dm_OPD = self.OPD
+
+        # case where the telescope is paired to an atmosphere
+        if telescope.isPaired:
+            if telescope.isPetalFree:
+                telescope.removePetalling()       
+            # case with single OPD
+            if np.ndim(self.OPD)==2:                    
+                OPD_out_no_pupil    = OPD_in + dm_OPD
+            # case with multiple OPD
+            else:
+                OPD_out_no_pupil    = np.tile(OPD_in[...,None],(1,1,self.OPD.shape[2]))+dm_OPD
+                    
+        # case where the telescope is separated from a telescope object
+        else:
+                OPD_out_no_pupil    = dm_OPD
+
+        return OPD_out_no_pupil
+        
     def rotateDM(self,x,y,angle):
         xOut =   x*np.cos(angle)-y*np.sin(angle)
         yOut =   y*np.cos(angle)+x*np.sin(angle)
@@ -270,9 +380,7 @@ class DeformableMirror:
                     self._coefs = np.zeros(self.nValidAct,dtype=np.float32)
                 else:
                     self._coefs = np.zeros(self.nValidAct,dtype=np.float64)
-                    
-                # self._coefs=np.arange(0,self.nValidAct)*val
-                
+                                    
                 try:
                     self.OPD =  np.float64(np.reshape(np.matmul(self.modes,self._coefs),[self.resolution,self.resolution]))
                 except:

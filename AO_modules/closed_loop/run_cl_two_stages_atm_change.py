@@ -189,7 +189,7 @@ def run_cl_two_stages_atm_change(param,obj,start_change,n_transition,func_change
         
         # skipping the first phase screen
         if i_loop>0:
-            	OPD_buffer.append(obj.atm_fast.OPD)
+            	OPD_buffer.append(obj.atm_fast.OPD_no_pupil)
         
         # save phase variance
         ao_turbulence[i_loop]=np.std(obj.atm_fast.OPD[np.where(obj.tel.pupil>0)])*1e9
@@ -199,8 +199,8 @@ def run_cl_two_stages_atm_change(param,obj,start_change,n_transition,func_change
 
         if len(OPD_buffer)==speed_factor:    
             OPD_first_stage = np.mean(OPD_buffer,axis=0)
-            obj.tel.OPD     = OPD_first_stage
-            
+            obj.tel.OPD_no_pupil     = OPD_first_stage.copy()
+            obj.tel.OPD     = OPD_first_stage.copy()*obj.tel.pupil                 
             # propagate to the WFS with the CL commands applied
             obj.tel*dm_cl*obj.wfs
             

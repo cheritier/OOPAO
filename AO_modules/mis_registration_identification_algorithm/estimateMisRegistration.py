@@ -12,7 +12,7 @@ from AO_modules.calibration.InteractionMatrix import interactionMatrix
 from AO_modules.MisRegistration   import MisRegistration
 
 from AO_modules.mis_registration_identification_algorithm.computeMetaSensitivyMatrix           import computeMetaSensitivityMatrix
-from AO_modules.mis_registration_identification_algorithm.applyMisRegistration                 import applyMisRegistration, apply_shift_wfs
+from AO_modules.mis_registration_identification_algorithm.applyMisRegistration                 import applyMisRegistration
 from AO_modules.tools.interpolateGeometricalTransformation                                     import rotateImageMatrix,rotation,translationImageMatrix,translation,anamorphosis,anamorphosisImageMatrix
 
 import skimage.transform as sk
@@ -90,7 +90,7 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
     
     epsilonMisRegistration_field = ['shiftX','shiftY','rotationAngle','radialScaling','tangentialScaling']
 
-    i=0
+    i_iter=0
     tel.isPaired = False
     misRegistration_out = MisRegistration(misRegistrationZeroPoint)
     
@@ -102,7 +102,7 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
         input_modes_0 = dm_0.OPD
         input_modes_cp = input_modes_0.copy()
         while criteria ==0:
-            i=i+1
+            i_iter=i_iter+1
             # temporary deformable mirror
             if np.ndim(input_modes_0)==2:
                 if wfs_mis_registrated is not None:
@@ -113,7 +113,7 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
                     misRegistration_dm               = MisRegistration()
                     misRegistration_dm.rotationAngle = misRegistration_out.rotationAngle
                     
-                    apply_shift_wfs(wfs, misRegistration_wfs.shiftX , misRegistration_wfs.shiftY)
+                    wfs.apply_shift_wfs( misRegistration_wfs.shiftX , misRegistration_wfs.shiftY)
                     
                     input_modes_cp =  tel.pupil*apply_mis_reg(tel,input_modes_0, misRegistration_dm)   
                 else:
@@ -130,7 +130,7 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
                         misRegistration_dm               = MisRegistration()
                         misRegistration_dm.rotationAngle = misRegistration_out.rotationAngle
                         
-                        apply_shift_wfs(wfs, misRegistration_wfs.shiftX, misRegistration_wfs.shiftY)
+                        wfs.apply_shift_wfs(misRegistration_wfs.shiftX, misRegistration_wfs.shiftY)
                         
                         input_modes_cp[:,:,i_modes] = tel.pupil*apply_mis_reg(tel,input_modes_0[:,:,i_modes], misRegistration_dm)   
                     else:
@@ -138,7 +138,7 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
                 
         
             # temporary interaction matrix
-            calib_tmp =  interactionMatrixFromPhaseScreen(ngs,atm,tel,wfs,input_modes_cp,stroke,phaseOffset=0,nMeasurements=50,invert=False,print_time=False)
+            calib_tmp =  interactionMatrixFromPhaseScreen(ngs,atm,tel,wfs,input_modes_cp,stroke,phaseOffset=0,nMeasurements=5,invert=False,print_time=False)
             # temporary scaling factor    
             try:
                 scalingFactor_tmp   = np.round(np.diag(calib_tmp.D.T@calib_in.D)/ np.diag(calib_tmp.D.T@calib_tmp.D),precision)
@@ -177,12 +177,12 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
             misRegistration_values.append(np.copy(misRegEstBuffer))
 
 
-            if i==nIteration:
+            if i_iter==nIteration:
                 criteria =1
 
     else:
         while criteria ==0:
-            i=i+1
+            i_iter=i_iter+1
             # temporary deformable mirror
             dm_tmp = applyMisRegistration(tel,misRegistration_out,param, wfs = wfs_mis_registrated,print_dm_properties=False,floating_precision=dm_0.floating_precision)
         
@@ -213,7 +213,6 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
                     print('Nan Warning !!')
                 # temporary mis-registration 
                 misReg_tmp          = gainEstimation*np.matmul(metaMatrix.M,np.squeeze((np.squeeze(calib_in.D)*(1/scalingFactor_tmp)) - np.squeeze(calib_tmp.D)))
-            
             # cumulative mis-registration
             misRegEstBuffer+= np.round(misReg_tmp,precision)
             
@@ -228,7 +227,7 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
             misRegistration_values.append(np.copy(misRegEstBuffer))
             
 
-            if i==nIteration:
+            if i_iter==nIteration:
                 criteria =1
 
     misRegistration_out.shiftX              = np.round(misRegistration_out.shiftX,precision)

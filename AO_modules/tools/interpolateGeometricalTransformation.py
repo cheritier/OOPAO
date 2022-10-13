@@ -146,7 +146,7 @@ Created on Tue Mar 16 10:04:46 2021
 """
 
 
-def interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out, mis_registration = None, order = 1, joblib_prefer = 'threads', joblib_nJobs = 4):
+def interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out, shape_out = None, mis_registration = None, order = 1, joblib_prefer = 'threads', joblib_nJobs = 4):
     if mis_registration is None:
         mis_registration = MisRegistration()
     nAct,nx, ny = cube_in.shape  
@@ -193,12 +193,12 @@ def interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out, mis
         output = globalTransformation(map_2D)  
         return output
     
-    print('interpolating... ')    
+    # print('interpolating... ')    
     def joblib_reconstruction():
         Q=Parallel(n_jobs = joblib_nJobs,prefer = joblib_prefer)(delayed(reconstruction)(i) for i in cube_in)
         return Q 
     
     cube_out =  np.asarray(joblib_reconstruction())
-    print('...Done!')    
+    # print('...Done!')    
 
     return cube_out

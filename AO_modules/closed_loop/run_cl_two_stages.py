@@ -163,22 +163,23 @@ def run_cl_two_stages(param,obj,speed_factor = 2,filename_phase_screen = None, e
         
         # skipping the first phase screen
         if i_loop>0:
-            	OPD_buffer.append(obj.atm_fast.OPD)
+            	OPD_buffer.append(obj.atm_fast.OPD_no_pupil)
         
         # save phase variance
         ao_turbulence[i_loop]=np.std(obj.atm_fast.OPD[np.where(obj.tel.pupil>0)])*1e9
         
         # save turbulent phase
-        OPD_turb = obj.tel_fast.OPD
+        OPD_turb = obj.tel_fast.OPD.copy()
 
         if len(OPD_buffer)==speed_factor:    
             OPD_first_stage = np.mean(OPD_buffer,axis=0)
-            obj.tel.OPD     = OPD_first_stage
-            
+            obj.tel.OPD_no_pupil     = OPD_first_stage.copy()
+            obj.tel.OPD     = OPD_first_stage.copy()*obj.tel.pupil            
+
             # propagate to the WFS with the CL commands applied
             obj.tel*dm_cl*obj.wfs
             
-            OPD_first_stage_res = obj.tel.OPD
+            OPD_first_stage_res = obj.tel.OPD.copy()
             # reinitialize phase buffer
             OPD_buffer = []
         
@@ -196,7 +197,7 @@ def run_cl_two_stages(param,obj,speed_factor = 2,filename_phase_screen = None, e
 
         b= time.time()
         
-        mean_rem_OPD = obj.tel_fast.OPD
+        mean_rem_OPD = obj.tel_fast.OPD.copy()
         mean_rem_OPD[np.where(obj.tel.pupil>0)] -= np.mean(mean_rem_OPD[np.where(obj.tel.pupil>0)])
                 
         residual_phase_screen[i_loop,:,:] = mean_rem_OPD
@@ -209,7 +210,7 @@ def run_cl_two_stages(param,obj,speed_factor = 2,filename_phase_screen = None, e
             im_atm.set_clim(vmin=OPD_turb.min(),vmax=OPD_turb.max())
             
             # residual phase
-            tmp = obj.tel_fast.OPD
+            tmp = obj.tel_fast.OPD.copy()
             # tmp-=np.mean(tmp[obj.tel.pupil])
             im_residual_2.set_data(tmp)
             im_residual_2.set_clim(vmin=tmp.min(),vmax=tmp.max()) 

@@ -264,8 +264,51 @@ def interactive_plot_text(x,y,text_array, event_name ='button_press_event'):
     plt.show()
     
 
-#%%
+def compute_gif(cube, name, vect = None, vlim = None):
+    from matplotlib import animation, rc
+    rc('animation', html='html5')    
+    data = cube.copy()
+    
+    plt.close('all')
+    fig, ax = plt.subplots(figsize = [5,5])
+    line = ax.imshow(np.fliplr(np.flip(data[0,:,:].T)))
+    # fig.set_facecolor((0.94,0.85,0.05))
+    # line.set_clim([-4,1])
+    plt.tick_params(
+            axis='both',          # changes apply to the x-axis
+            which='both',      # both major and minor ticks are affected
+            bottom=False,      # ticks along the bottom edge are off
+            top=False,         # ticks along the top edge are off
+            left = False,
+            labelbottom=False,
+            labelleft=False)
+    plt.tight_layout()
+    # SR =ax.text(50, 400,'SR: '+str(np.round(ao_res[20],1))+'%',color=(1,1,1),fontsize = 14,weight = 'bold')
 
+    def init():
+        tmp = np.copy(data[0,:,:])
+        tmp[np.where(tmp==0)] = np.inf
+        line.set_data(np.fliplr(np.flip(tmp.T)))
+        # ax.set_title('Time '+str(0) + ' ms -- WFE '+str(wfe[0])+' nm')
+        line.set_clim(vmin = np.min(data[0,:,:]), vmax = np.max(data[0,:,:]))
+        return (line,)
+        
+        
+        # animation function. This is called sequentially
+    def animate(i):
+        tmp = np.copy(data[i,:,:])
+        tmp[np.where(tmp==0)] = np.inf
+        line.set_data(np.fliplr(np.flip(tmp.T)))
+        # SR.set_text('SR: '+str(np.round(ao_res[i],1))+'%')
+        line.set_clim(vmin = np.min(data[i,:,:]), vmax = np.max(data[i,:,:]))
+        return (line)
+    # have changed.
+    anim = animation.FuncAnimation(fig, animate, init_func=init,
+                                    frames=data.shape[0], interval=100)
+    
+    folder = '//winhome/home/cheritie/My Pictures/gif_from_python/'
+    anim.save(folder+name+'.gif', writer='imagemagick', fps=2)
+    return
 
 def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20, list_ratio = None, list_title = None):
     

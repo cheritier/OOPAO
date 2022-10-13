@@ -86,11 +86,7 @@ def run_initialization_AO_PWFS(param):
                   calibModulation       = param['calibrationModulation'],\
                   psfCentering          = param['psfCentering'],\
                   edgePixel             = param['edgePixel'],\
-                  unitCalibration       = param['unitCalibration'],\
-                  extraModulationFactor = param['extraModulationFactor'],\
-                  postProcessing        = param['postProcessing'],\
-                  zeroPadding           = param['zeroPadding'])
-    
+                  postProcessing        = param['postProcessing'])    
     # set_paralleling_setup(wfs, ELT = False)
     # propagate the light through the WFS
     tel*wfs
@@ -133,7 +129,7 @@ def run_initialization_AO_PWFS(param):
                                nameIntMat       = None,\
                                nameFolderBasis  = None,\
                                nameBasis        = param['modal_basis_name'],\
-                               nMeasurements    = 100,\
+                               nMeasurements    = 1,\
                                get_basis        = False)
     
    

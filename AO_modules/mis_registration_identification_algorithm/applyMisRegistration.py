@@ -19,6 +19,13 @@ import scipy.ndimage as sp
 def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis_registration = None,print_dm_properties=True,floating_precision=64):
         if extra_dm_mis_registration is None:
             extra_dm_mis_registration = MisRegistration()
+        try:
+                if param['pitch'] is None:
+                    pitch = 0
+                else:
+                    pitch = param['pitch'] 
+        except:
+                pitch = 0
         if wfs is None:
             
             # case synthetic DM - with user-defined coordinates
@@ -80,7 +87,7 @@ def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis
                         nSubap       = param['nSubaperture'],\
                         mechCoupling = param['mechanicalCoupling'],\
                         coordinates  = coordinates,\
-                        pitch        = 0,\
+                        pitch        = pitch,\
                         misReg       = misRegistration_tmp + extra_dm_mis_registration,\
                         print_dm_properties = print_dm_properties)
                 if print_dm_properties:
@@ -92,7 +99,7 @@ def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis
                 misRegistration_wfs.shiftX          = misRegistration_tmp.shiftX
                 misRegistration_wfs.shiftY          = misRegistration_tmp.shiftY
                 
-                apply_shift_wfs(wfs, misRegistration_wfs.shiftX, misRegistration_wfs.shiftY)
+                wfs.apply_shift_wfs( misRegistration_wfs.shiftX, misRegistration_wfs.shiftY)
 
                 
                 misRegistration_dm                   = MisRegistration()
@@ -116,17 +123,17 @@ def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis
     
     
 
-def apply_shift_wfs(wfs,sx,sy):
-    if wfs.tag =='pyramid':
-        sx *= 1/(wfs.telescope.pixelSize*(wfs.telescope.resolution/wfs.nSubap))
-        sy *= 1/(wfs.telescope.pixelSize*(wfs.telescope.resolution/wfs.nSubap))
-        tmp                             = np.ones([wfs.nRes,wfs.nRes])
-        tmp[:,0]                        = 0
-        Tip                             = (sp.morphology.distance_transform_edt(tmp))
-        Tilt                            = (sp.morphology.distance_transform_edt(np.transpose(tmp)))
+# def apply_shift_wfs(wfs,sx,sy):
+#     if wfs.tag =='pyramid':
+#         sx *= 1/(wfs.telescope.pixelSize*(wfs.telescope.resolution/wfs.nSubap))
+#         sy *= 1/(wfs.telescope.pixelSize*(wfs.telescope.resolution/wfs.nSubap))
+#         tmp                             = np.ones([wfs.nRes,wfs.nRes])
+#         tmp[:,0]                        = 0
+#         Tip                             = (sp.morphology.distance_transform_edt(tmp))
+#         Tilt                            = (sp.morphology.distance_transform_edt(np.transpose(tmp)))
         
-        # normalize the TT to apply the modulation in terms of lambda/D
-        Tip                        = (wfs.telRes/wfs.nSubap)*(((Tip/Tip.max())-0.5)*2*np.pi)
-        Tilt                       = (wfs.telRes/wfs.nSubap)*(((Tilt/Tilt.max())-0.5)*2*np.pi)
+#         # normalize the TT to apply the modulation in terms of lambda/D
+#         Tip                        = (wfs.telRes/wfs.nSubap)*(((Tip/Tip.max())-0.5)*2*np.pi)
+#         Tilt                       = (wfs.telRes/wfs.nSubap)*(((Tilt/Tilt.max())-0.5)*2*np.pi)
         
-        wfs.mask = wfs.convert_for_gpu(np.exp(1j*(wfs.initial_m+sx*Tip+sy*Tilt)))
+#         wfs.mask = wfs.convert_for_gpu(np.exp(1j*(wfs.initial_m+sx*Tip+sy*Tilt)))

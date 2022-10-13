@@ -259,7 +259,7 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param, nameFolder = Non
         primary_hdu = pfits.ImageHDU(BASIS)
         hdu = pfits.HDUList([empty_primary, primary_hdu])
         hdu.writeto(nameFolder+nameFile+'.fits',overwrite=True)
-        return BASIS
+        return np.asarray(BASIS)
         
     if returnSB == True:
         hdr=pfits.Header()

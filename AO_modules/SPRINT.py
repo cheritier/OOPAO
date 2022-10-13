@@ -17,11 +17,7 @@ class SPRINT:
         # modal basis considered
         self.basis              = basis
         self.n_mis_reg          = n_mis_reg
-        self.recompute_sensitivity = recompute_sensitivity
-        # consider the case when only one signal is used
-        # if len(basis.indexModes)==1:
-            # self.basis.indexModes    = [basis.indexModes,basis.indexModes]
-            # self.basis.modes         = np.asarray([basis.modes,basis.modes]).T           
+        self.recompute_sensitivity = recompute_sensitivity         
         
         # Case where the shifts are applied in the WFS space            
         self.wfs_mis_registered = wfs_mis_registered
@@ -155,7 +151,6 @@ class SPRINT:
         print('----------------------------------')
 
         print('Final Mis-Registrations identified:')
-        # self.mis_registration_out = self.mis_registration_out + self.mis_registration_zero_point
         self.mis_registration_out.print_()
         print('Mis-registration Validity Flag: '+ str(self.validity_flag))
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
