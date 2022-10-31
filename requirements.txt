@@ -1,0 +1,11 @@
+numba==0.53.1
+joblib==1.01
+scikit-image==0.18.3
+numexpr==2.7.3
+astropy==4.2.1
+pyFFTW==0.12.0
+mpmath==1.2.1
+jsonpickle==1.4.1
+json==0.9.5
+mkl==2022.1.0
+cupy-cuda114==9.5.0
