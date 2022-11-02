@@ -238,11 +238,16 @@ class Atmosphere:
             layer.innerZ = u[layer.innerMask!=0] + 1j*v[layer.innerMask!=0]
             layer.outerZ = u[layer.outerMask!=0] + 1j*v[layer.outerMask!=0]
             
-            self.get_covariance_matrices(layer)                            
+            layer.ZZt, layer.ZXt, layer.XXt, layer.ZZt_inv =  self.get_covariance_matrices(layer)                            
+
+            layer.ZZt_r0 = self.ZZt_r0.copy()     
+            layer.ZXt_r0 = self.ZXt_r0.copy()     
+            layer.XXt_r0 = self.XXt_r0.copy()     
+            layer.ZZt_inv_r0 =  self.ZZt_inv_r0.copy()                           
             
-            layer.A         = np.matmul(self.ZXt_r0.T,self.ZZt_inv_r0)    
-            BBt             = self.XXt_r0 -  np.matmul(layer.A,self.ZXt_r0)
-            layer.B         = np.linalg.cholesky(BBt)
+            layer.A         = np.matmul(layer.ZXt_r0.T,layer.ZZt_inv_r0)    
+            layer.BBt             = layer.XXt_r0 -  np.matmul(layer.A,layer.ZXt_r0)
+            layer.B         = np.linalg.cholesky(layer.BBt)
             layer.mapShift  = np.zeros([layer.nPixel+1,layer.nPixel+1])        
             Z               = layer.phase[layer.innerMask[1:-1,1:-1]!=0]
             X               = np.matmul(layer.A,Z) + np.matmul(layer.B,layer.randomState.normal(size=layer.B.shape[1]))
@@ -452,7 +457,7 @@ class Atmosphere:
             self.ZXt_r0     = self.ZXt*(self.r0_def/self.r0)**(5/3)
             self.XXt_r0     = self.XXt*(self.r0_def/self.r0)**(5/3)
             self.ZZt_inv_r0 = self.ZZt_inv/((self.r0_def/self.r0)**(5/3))
-        return
+        return self.ZZt, self.ZXt, self.XXt, self.ZZt_inv
         
     def generateNewPhaseScreen(self,seed = None):
         if seed is None:
@@ -524,7 +529,7 @@ class Atmosphere:
         return obj
     
     
-    def display_atm_layers(self,layer_index,fig_index = None):
+    def display_atm_layers(self,layer_index= None,fig_index = None):
         if layer_index is None:
             layer_index = list(np.arange(self.nLayer))
         if type(layer_index) is not list:
@@ -600,16 +605,16 @@ class Atmosphere:
 
          if self.hasNotBeenInitialized is False:
              print('Updating the Atmosphere covariance matrices...')             
-             self.ZZt_r0 = self.ZZt*(self.r0_def/self.r0)**(5/3)
-             self.ZXt_r0 = self.ZXt*(self.r0_def/self.r0)**(5/3)
-             self.XXt_r0 = self.XXt*(self.r0_def/self.r0)**(5/3)
-             self.ZZt_inv_r0 = self.ZZt_inv/((self.r0_def/self.r0)**(5/3))
-             
              self.seeingArcsec           = 206265*(self.wavelength/val)             
              for i_layer in range(self.nLayer):
-                    tmpLayer = getattr(self,'layer_'+str(i_layer+1))
-                    BBt                = self.XXt_r0 -  np.matmul(tmpLayer.A,self.ZXt_r0)
-                    tmpLayer.B         = np.linalg.cholesky(BBt)
+                 tmpLayer = getattr(self,'layer_'+str(i_layer+1))
+
+                 tmpLayer.ZZt_r0        = tmpLayer.ZZt*(self.r0_def/self.r0)**(5/3)
+                 tmpLayer.ZXt_r0        = tmpLayer.ZXt*(self.r0_def/self.r0)**(5/3)
+                 tmpLayer.XXt_r0        = tmpLayer.XXt*(self.r0_def/self.r0)**(5/3)
+                 tmpLayer.ZZt_inv_r0    = tmpLayer.ZZt_inv/((self.r0_def/self.r0)**(5/3))
+                 BBt                    = tmpLayer.XXt_r0 -  np.matmul(tmpLayer.A,tmpLayer.ZXt_r0)
+                 tmpLayer.B             = np.linalg.cholesky(BBt)
 
     @property
     def L0(self):
@@ -642,8 +647,6 @@ class Atmosphere:
                 print('Updating the wing speed...')
                 for i_layer in range(self.nLayer):
                     tmpLayer = getattr(self,'layer_'+str(i_layer+1))
-                    # tmpLayer.notDoneOnce = True
-
                     tmpLayer.windSpeed = val[i_layer]
                     tmpLayer.vY            = tmpLayer.windSpeed*np.cos(np.deg2rad(tmpLayer.direction))                    
                     tmpLayer.vX            = tmpLayer.windSpeed*np.sin(np.deg2rad(tmpLayer.direction))
