@@ -7,8 +7,8 @@ Created on Fri Oct  2 10:15:14 2020
 # commom modules
 import matplotlib.pyplot as plt
 import numpy             as np 
-import __load__psim
-__load__psim.load_psim()
+import __load__oopao
+__load__oopao.load_oopao()
 # local modules 
 from AO_modules.Telescope         import Telescope
 from AO_modules.Zernike           import Zernike
