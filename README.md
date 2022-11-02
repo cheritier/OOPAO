@@ -18,8 +18,19 @@ The code is written for Python 3 (version 3.8.8) and requires the following modu
     mpmath 1.2.1        => arithmetic with arbitrary precision
     jsonpickle 1.4.1    => json files encoding
     json       0.9.5    => json files
-    mkl        2022.1.0 => optimization of the parallized operations
     cupy-cuda114  9.5.0 => GPU computation
+
+# Parallelization optimization
+
+Make sure that the proper numpy package is installed to make sure that the operations are multi-threaded. 
+To do this you can use the numpy.show_config() function in your python session: 
+
+import numpy
+numpy.show_config()
+
+
+##For Intel processors: 
+
     
 # CONTRIBUTORS
 C.T. Heritier
