@@ -16,7 +16,7 @@ def initializeParameterFile():
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
-    param['r0'                   ] = 0.13                                           # value of r0 in the visibile in [m]
+    param['r0'                   ] = 0.15                                           # value of r0 in the visibile in [m]
     param['L0'                   ] = 30                                             # value of L0 in the visibile in [m]
     param['fractionnalR0'        ] = [0.4,0.15,0.1,0.25,0.1]                                            # Cn2 profile
     param['windSpeed'            ] = [10,10,10,10,10]                                           # wind speed of the different layers in [m.s-1]
@@ -28,7 +28,7 @@ def initializeParameterFile():
     
     param['diameter'             ] = 8.2                                             # diameter in [m]
     param['nSubaperture'         ] = 40                                             # number of PWFS subaperture along the telescope diameter
-    param['nPixelPerSubap'       ] = 4                                            # sampling of the PWFS subapertures
+    param['nPixelPerSubap'       ] = 6                                            # sampling of the PWFS subapertures
     param['resolution'           ] = param['nSubaperture']*param['nPixelPerSubap']  # resolution of the telescope driven by the PWFS
     param['sizeSubaperture'      ] = param['diameter']/param['nSubaperture']        # size of a sub-aperture projected in the M1 space
     param['samplingTime'         ] = 1/1000                                         # loop sampling time in [s]
@@ -39,7 +39,7 @@ def initializeParameterFile():
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% NGS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
     param['magnitude'            ] = 8                                              # magnitude of the guide star
-    param['opticalBand'          ] = 'I'                                            # optical band of the guide star
+    param['opticalBand'          ] = 'U'                                            # optical band of the guide star
     
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% DM PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
