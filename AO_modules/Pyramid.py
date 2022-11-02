@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import multiprocessing
 from AO_modules.Detector import Detector
 try:
-    # error
+    error
     import cupy as np_cp
 except:
     import numpy as np_cp
@@ -25,22 +25,22 @@ except:
     print('WARNING: The joblib module is not installed. This would speed up considerably the operations.')
     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
-import ctypes
-try : 
-    mkl_rt = ctypes.CDLL('libmkl_rt.so')
-    mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
-    mkl_set_num_threads(6)
-except:
-    try:
-        mkl_rt = ctypes.CDLL('./mkl_rt.dll')
-        mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
-        mkl_set_num_threads(6)
-    except:
-        try:
-            import mkl
-            mkl_set_num_threads = mkl.set_num_threads
-        except:
-            mkl_set_num_threads = None
+# import ctypes
+# try : 
+#     mkl_rt = ctypes.CDLL('libmkl_rt.so')
+#     mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
+#     mkl_set_num_threads(6)
+# except:
+#     try:
+#         mkl_rt = ctypes.CDLL('./mkl_rt.dll')
+#         mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
+#         mkl_set_num_threads(6)
+#     except:
+#         try:
+#             import mkl
+#             mkl_set_num_threads = mkl.set_num_threads
+#         except:
+#             mkl_set_num_threads = None
 class Pyramid:
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def __init__(self,nSubap,telescope,modulation,lightRatio, postProcessing='slopesMaps',psfCentering=True, n_pix_separation = 2, calibModulation=50, n_pix_edge=None,extraModulationFactor=0,zeroPadding=None,pupilSeparationRatio=None,edgePixel = None,binning =1,nTheta_user_defined=None,userValidSignal=None,old_mask=False,rooftop = None,delta_theta = 0, user_modulation_path = None):
@@ -107,7 +107,7 @@ class Pyramid:
         """        
         try:
             # try to find GPU
-            # error
+            error
             import cupy as np_cp
             self.gpu_available = True
             self.convert_for_gpu = np_cp.asarray
@@ -450,7 +450,8 @@ class Pyramid:
             I               = np_cp.abs(em_field_pwfs)**2
         del support
         del em_field_pwfs
-        self.modulation_camera_frame.append(self.convert_for_numpy(em_field_ft))
+        self.modulation_camera_em.append(self.convert_for_numpy(em_field_ft))
+
         del em_field_ft
         del phase_in        
         return I    
@@ -480,7 +481,7 @@ class Pyramid:
                 self.pupil_plane_spatial_filter    = (np.fft.ifft2(self.em_field_spatial_filter*self.spatialFilter))
 
         # modulation camera
-        self.modulation_camera_frame=[]
+        self.modulation_camera_em=[]
 
         if self.modulation==0:
             if np.ndim(phase_in)==2:
@@ -681,14 +682,25 @@ class Pyramid:
             
             return fullFrameMaps,fullFrame
         
+    def get_modulation_frame(self, radius = 6, norma = True):
+        self.modulation_camera_frame = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)
+       
+        N_trunc = int(self.nRes/2 - radius*self.modulation*self.zeroPaddingFactor )
+        
+        modulation_camera_frame_zoom = self.modulation_camera_frame[N_trunc:-N_trunc,N_trunc:-N_trunc]
+        
+        if norma:
+            modulation_camera_frame_zoom/= modulation_camera_frame_zoom.max()
+        
+        return modulation_camera_frame_zoom
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% GRAB QUADRANTS FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def grabQuadrant(self,n,cameraFrame=0):
         
         nExtraPix   = int(np.round((np.max(self.pupilSeparationRatio)-1)*self.telescope.resolution/(self.telescope.resolution/self.nSubap)/2/self.binning))
         centerPixel = int(np.round((self.cam.resolution/self.binning)/2))
         n_pixels    = int(np.ceil(self.nSubap/self.binning))
-        if cameraFrame==0:
-            cameraFrame=self.cam.frame
+        if cameraFrame ==0:
+            cameraFrame=self.cam.frame.copy()
             
         if self.rooftop is None:
             if n==3:
