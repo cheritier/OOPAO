@@ -6,9 +6,9 @@ Created on Wed Mar 18 09:26:22 2020
 """
 import numpy as np
 import time
-from AO_modules.calibration.CalibrationVault import calibrationVault
+from AO_modules.calibration.CalibrationVault import CalibrationVault
 
-def interactionMatrix(ngs,atm,tel,dm,wfs,M2C,stroke,phaseOffset=0,nMeasurements=50,noise='off',invert=True,print_time=True):
+def InteractionMatrix(ngs,atm,tel,dm,wfs,M2C,stroke,phaseOffset=0,nMeasurements=50,noise='off',invert=True,print_time=True):
 #    disabled noise functionality from WFS
     if noise =='off':  
         wfs.cam.photonNoise  = 0
@@ -97,12 +97,12 @@ def interactionMatrix(ngs,atm,tel,dm,wfs,M2C,stroke,phaseOffset=0,nMeasurements=
             b=time.time()
             print('Time elapsed: '+str(b-a)+' s' )
     
-    out=calibrationVault(intMat,invert=invert)
+    out=CalibrationVault(intMat,invert=invert)
        
     return out
 
 
-def interactionMatrixFromPhaseScreen(ngs,atm,tel,wfs,phasScreens,stroke,phaseOffset=0,nMeasurements=50,noise='off',invert=True,print_time=True):
+def InteractionMatrixFromPhaseScreen(ngs,atm,tel,wfs,phasScreens,stroke,phaseOffset=0,nMeasurements=50,noise='off',invert=True,print_time=True):
     
     #    disabled noise functionality from WFS
     if noise =='off':  
@@ -187,7 +187,7 @@ def interactionMatrixFromPhaseScreen(ngs,atm,tel,wfs,phasScreens,stroke,phaseOff
             b=time.time()
             print('Time elapsed: '+str(b-a)+' s' )
     
-    out=calibrationVault(intMat,invert=invert)
+    out=CalibrationVault(intMat,invert=invert)
   
     return out
 
@@ -263,7 +263,7 @@ def interactionMatrixFromPhaseScreen(ngs,atm,tel,wfs,phasScreens,stroke,phaseOff
 #         b=time.time()
 #         print('Time elapsed: '+str(b-a)+' s' )
 
-#     out=calibrationVault(intMat)
+#     out=CalibrationVault(intMat)
 #     return out      
         
         

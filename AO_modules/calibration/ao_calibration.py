@@ -7,8 +7,8 @@ Created on Tue Oct 13 09:47:17 2020
 from astropy.io import fits as pfits
 import numpy as np
 
-from AO_modules.calibration.CalibrationVault  import calibrationVault
-from AO_modules.calibration.InteractionMatrix import interactionMatrix
+from AO_modules.calibration.CalibrationVault  import CalibrationVault
+from AO_modules.calibration.InteractionMatrix import InteractionMatrix
 from AO_modules.tools.tools import emptyClass,createFolder, read_fits, write_fits
 import time
 
@@ -104,7 +104,7 @@ def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = Non
     try:
         print('Loading Interaction matrix '+nameIntMat+'...')
         imat = read_fits(nameFolderIntMat+nameIntMat+'.fits')
-        calib = calibrationVault(imat@M2C)    
+        calib = CalibrationVault(imat@M2C)    
         print('Done!')
         ao_obj.param['interaction_matrix_filename'] = nameFolderIntMat+nameIntMat+'.fits'
 
@@ -117,7 +117,7 @@ def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = Non
         M2C_zon = np.eye(ao_obj.dm.nValidAct)
 
         stroke =1e-9 # 1 nm amplitude
-        calib = interactionMatrix(ao_obj.ngs,ao_obj.atm,ao_obj.tel,ao_obj.dm,ao_obj.wfs,M2C_zon,stroke,phaseOffset = 0,nMeasurements = nMeasurements)
+        calib = InteractionMatrix(ao_obj.ngs,ao_obj.atm,ao_obj.tel,ao_obj.dm,ao_obj.wfs,M2C_zon,stroke,phaseOffset = 0,nMeasurements = nMeasurements)
         # save output in fits file
         hdr=pfits.Header()
         hdr['TITLE'] = 'INTERACTION MATRIX'
@@ -127,7 +127,7 @@ def ao_calibration_from_ao_obj(ao_obj, nameFolderIntMat = None, nameIntMat = Non
 
         hdu = pfits.HDUList([empty_primary, primary_hdu])
         hdu.writeto(nameFolderIntMat + nameIntMat + '.fits', overwrite=True)
-        calib = calibrationVault(calib.D@M2C)    
+        calib = CalibrationVault(calib.D@M2C)    
 
 ## %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%       
    
@@ -272,7 +272,7 @@ def ao_calibration(ngs, tel, atm, dm, wfs, param, nameFolderIntMat = None, nameI
     try:
         print('Loading Interaction matrix '+nameFolderIntMat+nameIntMat+'...')
         imat = read_fits(nameFolderIntMat+nameIntMat+'.fits')
-        calib = calibrationVault(imat@M2C)      
+        calib = CalibrationVault(imat@M2C)      
         print('Done!')
         param['interaction_matrix_filename'] = nameFolderIntMat+nameIntMat+'.fits'
 
@@ -283,7 +283,7 @@ def ao_calibration(ngs, tel, atm, dm, wfs, param, nameFolderIntMat = None, nameI
         time.sleep(5)
         M2C_zon = np.eye(dm.nValidAct)
         stroke =1e-9 # 1 nm amplitude
-        calib = interactionMatrix(ngs, atm, tel, dm, wfs, M2C_zon, stroke, phaseOffset = 0, nMeasurements = nMeasurements)
+        calib = InteractionMatrix(ngs, atm, tel, dm, wfs, M2C_zon, stroke, phaseOffset = 0, nMeasurements = nMeasurements)
         # save output in fits file
         hdr=pfits.Header()
         hdr['TITLE'] = 'INTERACTION MATRIX'
@@ -292,7 +292,7 @@ def ao_calibration(ngs, tel, atm, dm, wfs, param, nameFolderIntMat = None, nameI
         primary_hdu = pfits.ImageHDU(calib.D)
         hdu = pfits.HDUList([empty_primary, primary_hdu])
         hdu.writeto(nameFolderIntMat+nameIntMat+'.fits',overwrite=True)
-        calib = calibrationVault(calib.D@M2C)
+        calib = CalibrationVault(calib.D@M2C)
 
 ## %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%       
    
