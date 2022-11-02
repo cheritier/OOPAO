@@ -264,7 +264,7 @@ def interactive_plot_text(x,y,text_array, event_name ='button_press_event'):
     plt.show()
     
 
-def compute_gif(cube, name, vect = None, vlim = None):
+def compute_gif(cube, name, vect = None, vlim = None, fps = 2):
     from matplotlib import animation, rc
     rc('animation', html='html5')    
     data = cube.copy()
@@ -290,7 +290,11 @@ def compute_gif(cube, name, vect = None, vlim = None):
         tmp[np.where(tmp==0)] = np.inf
         line.set_data(np.fliplr(np.flip(tmp.T)))
         # ax.set_title('Time '+str(0) + ' ms -- WFE '+str(wfe[0])+' nm')
-        line.set_clim(vmin = np.min(data[0,:,:]), vmax = np.max(data[0,:,:]))
+        if vlim is None:
+            line.set_clim(vmin = np.min(data[0,:,:]), vmax = np.max(data[0,:,:]))
+        else:
+            line.set_clim(vmin = vlim[0], vmax = vlim[1])
+            
         return (line,)
         
         
@@ -300,25 +304,28 @@ def compute_gif(cube, name, vect = None, vlim = None):
         tmp[np.where(tmp==0)] = np.inf
         line.set_data(np.fliplr(np.flip(tmp.T)))
         # SR.set_text('SR: '+str(np.round(ao_res[i],1))+'%')
-        line.set_clim(vmin = np.min(data[i,:,:]), vmax = np.max(data[i,:,:]))
+        if vlim is None:
+            line.set_clim(vmin = np.min(data[i,:,:]), vmax = np.max(data[i,:,:]))
+        else:
+            line.set_clim(vmin = vlim[0], vmax = vlim[1])
         return (line)
     # have changed.
     anim = animation.FuncAnimation(fig, animate, init_func=init,
                                     frames=data.shape[0], interval=100)
     
     folder = '//winhome/home/cheritie/My Pictures/gif_from_python/'
-    anim.save(folder+name+'.gif', writer='imagemagick', fps=2)
+    anim.save(folder+name+'.gif', writer='imagemagick', fps=fps)
     return
 
-def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20, list_ratio = None, list_title = None):
+def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = None,list_ratio = None, list_title = None, list_lim = None,list_label = None, list_display_axis = None,s=16):
     
     n_im = len(list_fig)
-    n_sp = int(np.ceil(np.sqrt(n_im)))
-    n_add = 0
-    if (n_sp**2-n_im)<2:
-        n_add = 1
-    n_sp_y = n_sp + n_add
-    
+    if n_subplot is None:
+        n_sp = int(np.ceil(np.sqrt(n_im)))
+        n_sp_y = n_sp + 1
+    else:
+        n_sp   = n_subplot[0]
+        n_sp_y = n_subplot[1] +1
     if plt_obj is None:
         if list_ratio is None:
             gs = gridspec.GridSpec(n_sp_y,n_sp, height_ratios=np.ones(n_sp_y), width_ratios=np.ones(n_sp), hspace=0.25, wspace=0.25)
@@ -327,29 +334,37 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20, list_ratio 
         
         plt_obj = emptyClass()
         setattr(plt_obj,'gs',gs)
-        plt_obj.keep_going = True
-        f = plt.figure(fig_number)
+        plt_obj.list_label = list_label
         
-        line_comm = ['Stop','Pause','Continue']
+        plt_obj.list_lim = list_lim
+
+        plt_obj.keep_going = True
+        f = plt.figure(fig_number,figsize = [n_sp*4,n_sp_y*2],facecolor=[0,0.1,0.25], edgecolor = None)
+        COLOR = 'white'
+        mpl.rcParams['text.color'] = COLOR
+        mpl.rcParams['axes.labelcolor'] = COLOR
+        mpl.rcParams['xtick.color'] = COLOR
+        mpl.rcParams['ytick.color'] = COLOR
+        line_comm = ['Stop']
         col_comm = ['r','b','b']
         
-        for i in range(2):
-            
-            setattr(plt_obj,'ax_0_'+str(i+1), plt.subplot(gs[n_sp_y-1,n_sp-2+i]))
-            
+        for i in range(1):
+            setattr(plt_obj,'ax_0_'+str(i+1), plt.subplot(gs[n_sp_y-1,:]))            
             sp_tmp =getattr(plt_obj,'ax_0_'+str(i+1)) 
             
-            annot = sp_tmp.annotate(line_comm[i],color ='k', fontsize=25, xy=(0.5,0.5), xytext=(0.5,0.5),bbox=dict(boxstyle="round", fc=col_comm[i]))
+            annot = sp_tmp.annotate(line_comm[i],color ='k', fontsize=15, xy=(0.5,0.5), xytext=(0.5,0.5),bbox=dict(boxstyle="round", fc=col_comm[i]))
             setattr(plt_obj,'annot_'+str(i+1), annot)
         
             plt.axis('off')
         
 
-        count = 0
+        count = -1
         for i in range(n_sp):
             for j in range(n_sp):
-                if count < n_im:
-                    print(count)
+                if count < n_im-1:
+                    count+=1
+
+                    # print(count)
                     setattr(plt_obj,'ax_'+str(count), plt.subplot(gs[i,j]))
                     sp_tmp =getattr(plt_obj,'ax_'+str(count))            
 
@@ -360,51 +375,52 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20, list_ratio 
                         if len(data_tmp)==3:
                             setattr(plt_obj,'im_'+str(count),sp_tmp.imshow(data_tmp[2],extent = [data_tmp[0][0],data_tmp[0][1],data_tmp[1][0],data_tmp[1][1]]))        
                         else:
-                            setattr(plt_obj,'im_'+str(count),sp_tmp.imshow(data_tmp))        
-                            
-
+                            setattr(plt_obj,'im_'+str(count),sp_tmp.imshow(data_tmp))                                    
                         im_tmp =getattr(plt_obj,'im_'+str(count))
                         plt.colorbar(im_tmp)
+      
            # PLOT     
                     if type_fig[count] == 'plot':
                         data_tmp = list_fig[count]
                         if len(data_tmp)==2:
                             line_tmp, = sp_tmp.plot(data_tmp[0],data_tmp[1],'-x')
                         else:
-                            line_tmp, = sp_tmp.plot(data_tmp,'-o')                                
-                        setattr(plt_obj,'im_'+str(count),line_tmp)        
+                            line_tmp, = sp_tmp.plot(data_tmp,'-o')         
+                        setattr(plt_obj,'im_'+str(count),line_tmp)
+                            
            # SCATTER
                     if type_fig[count] == 'scatter':
                         data_tmp = list_fig[count]
-                        
-                        scatter_tmp = sp_tmp.scatter(data_tmp[0],data_tmp[1],c=data_tmp[2],marker = 'h', s =16)
+                        scatter_tmp = sp_tmp.scatter(data_tmp[0],data_tmp[1],c=data_tmp[2],marker = 'o', s =s)
                         setattr(plt_obj,'im_'+str(count),scatter_tmp)  
+                        sp_tmp.set_facecolor([0,0.1,0.25])
+                        for spine in sp_tmp.spines.values():
+                            spine.set_edgecolor([0,0.1,0.25])
                         makeSquareAxes(plt.gca())
                         plt.colorbar(scatter_tmp)
-                        plt.axis('off')
                     if list_title is not None:
                         plt.title(list_title[count])
-
-                count+=1
+                    if list_display_axis is not None:
+                        if list_display_axis[count] is None:
+                            sp_tmp.set_xticks([])                                
+                            sp_tmp.set_yticks([])                                                                
+                            sp_tmp.set_xticklabels([])                                
+                            sp_tmp.set_yticklabels([])                                
+                            
+                    if plt_obj.list_label is not None:
+                        if plt_obj.list_label[count] is not None:
+                            plt.xlabel(plt_obj.list_label[count][0])
+                            plt.ylabel(plt_obj.list_label[count][1]) 
                 
         def hover(event):
             if event.inaxes == plt_obj.ax_0_1:
                 cont, ind = f.contains(event)        
                 if cont:
                     plt_obj.keep_going = False
-                    plt_obj.annot_1.set_fontweight('bold')
                     plt_obj.annot_1.set_text('Stopped')
-          
-                        
-            if event.inaxes == plt_obj.ax_0_2:
-                cont, ind = f.contains(event)        
-                if cont:
-                    plt_obj.annot_2.set_text('Pause')
-                    plt_obj.annot_2.set_backgroundcolor('g')
-                    plt_obj.annot_2.set_fontweight('bold')
-                    plt.waitforbuttonpress()
         f.canvas.mpl_connect('button_press_event', hover)   
         return plt_obj
+    
     if plt_obj is not None:
         count = 0
         for i in range(n_sp):
@@ -414,7 +430,10 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20, list_ratio 
                     if getattr(plt_obj,'type_fig_'+str(count)) == 'imshow':
                         im_tmp =getattr(plt_obj,'im_'+str(count))
                         im_tmp.set_data(data)
-                        im_tmp.set_clim(vmin=data.min(),vmax=data.max())
+                        if plt_obj.list_lim[count] is None:
+                            im_tmp.set_clim(vmin=data.min(),vmax=data.max())
+                        else:
+                            im_tmp.set_clim(vmin=plt_obj.list_lim[count][0],vmax=plt_obj.list_lim[count][1])
                     if getattr(plt_obj,'type_fig_'+str(count)) == 'plot':
                         if len(data)==2:
                             im_tmp =getattr(plt_obj,'im_'+str(count))
@@ -422,7 +441,6 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20, list_ratio 
                             im_tmp.set_ydata(data[1])
                             im_tmp.axes.set_ylim([np.min(data[1])-0.1*np.abs(np.min(data[1])),np.max(data[1])+0.1*np.abs(np.max(data[1]))])
                             im_tmp.axes.set_xlim([np.min(data[0])-0.1*np.abs(np.min(data[0])),np.max(data[0])+0.1*np.abs(np.max(data[0]))])
-
                         else:
                             im_tmp =getattr(plt_obj,'im_'+str(count))
                             im_tmp.set_ydata(data[0])
@@ -430,13 +448,12 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20, list_ratio 
                                                 
                     if getattr(plt_obj,'type_fig_'+str(count)) == 'scatter':
                         n = mpl.colors.Normalize(vmin = min(data), vmax = max(data))
-                        m = mpl.cm.ScalarMappable(norm=n, cmap=mpl.cm.afmhot)
+                        m = mpl.cm.ScalarMappable(norm=n)
 
-                        im_tmp =getattr(plt_obj,'im_'+str(count))
+                        im_tmp = getattr(plt_obj,'im_'+str(count))
                         im_tmp.set_facecolor(m.to_rgba(data))
-                        im_tmp.set_clim(vmin=min(data), vmax=max(data))
-                    plt.draw()
-    
+                        im_tmp.colorbar.update_normal(m)    
                 count+=1
-    
+    plt.draw()
+
     
