@@ -17,21 +17,21 @@ from AO_modules.M4_model.make_M4_influenceFunctions import makeM4influenceFuncti
 from AO_modules.tools.tools import print_, pol2cart, emptyClass
 from AO_modules.tools.interpolateGeometricalTransformation import interpolate_cube
 
-try : 
-    mkl_rt = ctypes.CDLL('libmkl_rt.so')
-    mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
-    mkl_set_num_threads(8)
-except:
-    try:
-        mkl_rt = ctypes.CDLL('./mkl_rt.dll')
-        mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
-        mkl_set_num_threads(8)
-    except:
-        try:
-            import mkl
-            mkl_set_num_threads = mkl.set_num_threads
-        except:
-            mkl_set_num_threads = None
+# try : 
+#     mkl_rt = ctypes.CDLL('libmkl_rt.so')
+#     mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
+#     mkl_set_num_threads(8)
+# except:
+#     try:
+#         mkl_rt = ctypes.CDLL('./mkl_rt.dll')
+#         mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
+#         mkl_set_num_threads(8)
+#     except:
+#         try:
+#             import mkl
+#             mkl_set_num_threads = mkl.set_num_threads
+#         except:
+#             mkl_set_num_threads = None
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
@@ -353,17 +353,14 @@ class DeformableMirror:
     
     def print_properties(self):
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% DEFORMABLE MIRROR %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        print('Controlled Actuators \t '+str(self.nIF))
-        if self.isM4:
-            print('M4 influence functions \t Yes')
-            print('Pixel Size \t\t'+str(np.round(self.D/self.resolution,2)) + ' \t [m]')
-        else:
-            print('M4 influence functions \t No')
-            print('Pixel Size \t\t'+str(np.round(self.D/self.resolution,2)) + ' \t [m]')
-            print('Pitch \t\t\t '+str(self.pitch) + ' \t [m]')
-            print('Mechanical Coupling \t '+str(self.mechCoupling) + ' \t [m]')        
-        print('Rotation: ' +str(np.round(self.misReg.rotationAngle,2)) + ' deg -- shift X: ' +str(np.round(self.misReg.shiftX,2)) +' m -- shift Y: ' +str(np.round(self.misReg.shiftY,2)) +' m -- Anamorphosis Angle: ' +str(np.round(self.misReg.anamorphosisAngle,2)) +' deg -- Radial Scaling: ' +str(np.round(self.misReg.radialScaling,2)) + ' -- Tangential Scaling: ' +str(np.round(self.misReg.tangentialScaling,2)))
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        print('{: ^21s}'.format('Controlled Actuators')                     + '{: ^18s}'.format(str(self.nValidAct)))
+        print('{: ^21s}'.format('M4')                   + '{: ^18s}'.format(str(self.isM4)))
+        print('{: ^21s}'.format('Pitch')                                    + '{: ^18s}'.format(str(self.pitch))                    +'{: ^18s}'.format('[m]'))
+        print('{: ^21s}'.format('Mechanical Coupling')                      + '{: ^18s}'.format(str(self.mechCoupling))             +'{: ^18s}'.format('[%]' ))
+        print('-------------------------------------------------------------------------------')
+        print('Mis-registration:')
+        self.misReg.print_()
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
 #        
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% DM PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
