@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import multiprocessing
 from AO_modules.Detector import Detector
 try:
-    error
+    # error
     import cupy as np_cp
 except:
     import numpy as np_cp
@@ -107,7 +107,7 @@ class Pyramid:
         """        
         try:
             # try to find GPU
-            error
+            # error
             import cupy as np_cp
             self.gpu_available = True
             self.convert_for_gpu = np_cp.asarray
@@ -150,7 +150,7 @@ class Pyramid:
         self.random_state_background    = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
         self.user_modulation_path       = user_modulation_path                              # user defined modulation path
         self.pupilSeparationRatio       = pupilSeparationRatio                              # Separation ratio of the PWFS pupils (Diameter/Distance Center to Center) -- DEPRECIATED -> use n_pix_separation instead)
-
+        self.weight_vector = None
         if edgePixel is not None:
             print('WARNING: The use of the edgePixel property has been depreciated. Consider using the n_pix_edge instead')
         if pupilSeparationRatio is not None:
@@ -544,10 +544,16 @@ class Pyramid:
                         Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.phaseBuffModulationLowres)
                         return Q 
                     # apply the pyramid transform in parallel
-                    maps=np_cp.asarray(job_loop_single_mode_modulated())
+                    self.maps=np_cp.asarray(job_loop_single_mode_modulated())
                     # compute the sum of the pyramid frames for each modulation points
-                    self.pyramidFrame=self.convert_for_numpy(np_cp.sum((maps),axis=0))/self.nTheta
-                    del maps
+                    if self.weight_vector is None:
+                        self.pyramidFrame=self.convert_for_numpy(np_cp.sum((self.maps),axis=0))/self.nTheta
+                    else:
+                        weighted_map = np.reshape(self.maps,[self.nTheta,self.nRes**2])
+                        self.weighted_map = np.diag(self.weight_vector)@weighted_map
+                        self.pyramidFrame= np.reshape(self.convert_for_numpy(np_cp.sum((self.weighted_map),axis=0))/self.nTheta,[self.nRes,self.nRes])
+                        
+
                 #propagate to the detector
                 self*self.cam
                 
@@ -628,49 +634,49 @@ class Pyramid:
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS SIGNAL PROCESSING %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
             
-    def signalProcessing(self,cameraFrame=0):
-        if cameraFrame==0:
+    def signalProcessing(self,cameraFrame=None):
+        if cameraFrame is None:
             cameraFrame=self.cam.frame
-            if self.postProcessing == 'slopesMaps':
-                # slopes-maps computation
-                I1              = self.grabQuadrant(1,cameraFrame=0)*self.validI4Q
-                I2              = self.grabQuadrant(2,cameraFrame=0)*self.validI4Q
-                I3              = self.grabQuadrant(3,cameraFrame=0)*self.validI4Q
-                I4              = self.grabQuadrant(4,cameraFrame=0)*self.validI4Q
-                # global normalisation
-                I4Q        = I1+I2+I3+I4
-                norma      = np.mean(I4Q[self.validI4Q])
-                # slopesMaps computation cropped to the valid pixels
-                Sx         = (I1-I2+I4-I3)            
-                Sy         = (I1-I4+I2-I3)         
-                # 2D slopes maps      
-                slopesMaps = (np.concatenate((Sx,Sy)/norma) - self.referenceSignal_2D) *self.slopesUnits
-                # slopes vector
-                slopes     = slopesMaps[np.where(self.validSignal==1)]
-                return slopesMaps,slopes
-        
-            if self.postProcessing == 'slopesMaps_incidence_flux':
-                # slopes-maps computation
-                I1              = self.grabQuadrant(1,cameraFrame=0)*self.validI4Q
-                I2              = self.grabQuadrant(2,cameraFrame=0)*self.validI4Q
-                I3              = self.grabQuadrant(3,cameraFrame=0)*self.validI4Q
-                I4              = self.grabQuadrant(4,cameraFrame=0)*self.validI4Q
+        if self.postProcessing == 'slopesMaps':
+            # slopes-maps computation
+            I1              = self.grabQuadrant(1,cameraFrame=0)*self.validI4Q
+            I2              = self.grabQuadrant(2,cameraFrame=0)*self.validI4Q
+            I3              = self.grabQuadrant(3,cameraFrame=0)*self.validI4Q
+            I4              = self.grabQuadrant(4,cameraFrame=0)*self.validI4Q
+            # global normalisation
+            I4Q        = I1+I2+I3+I4
+            norma      = np.mean(I4Q[self.validI4Q])
+            # slopesMaps computation cropped to the valid pixels
+            Sx         = (I1-I2+I4-I3)            
+            Sy         = (I1-I4+I2-I3)         
+            # 2D slopes maps      
+            slopesMaps = (np.concatenate((Sx,Sy)/norma) - self.referenceSignal_2D) *self.slopesUnits
+            # slopes vector
+            slopes     = slopesMaps[np.where(self.validSignal==1)]
+            return slopesMaps,slopes
+    
+        if self.postProcessing == 'slopesMaps_incidence_flux':
+            # slopes-maps computation
+            I1              = self.grabQuadrant(1,cameraFrame=0)*self.validI4Q
+            I2              = self.grabQuadrant(2,cameraFrame=0)*self.validI4Q
+            I3              = self.grabQuadrant(3,cameraFrame=0)*self.validI4Q
+            I4              = self.grabQuadrant(4,cameraFrame=0)*self.validI4Q
 
-                # global normalisation
-                I4Q         = I1+I2+I3+I4
-                subArea     = (self.telescope.D / self.nSubap)**2
-                norma       = np.float64(self.telescope.src.nPhoton*self.telescope.samplingTime*subArea)
+            # global normalisation
+            I4Q         = I1+I2+I3+I4
+            subArea     = (self.telescope.D / self.nSubap)**2
+            norma       = np.float64(self.telescope.src.nPhoton*self.telescope.samplingTime*subArea)
 
-                # slopesMaps computation cropped to the valid pixels
-                Sx         = (I1-I2+I4-I3)            
-                Sy         = (I1-I4+I2-I3)   
-                
-                # 2D slopes maps      
-                slopesMaps = (np.concatenate((Sx,Sy)/norma) - self.referenceSignal_2D) *self.slopesUnits
-                
-                # slopes vector
-                slopes     = slopesMaps[np.where(self.validSignal==1)]
-                return slopesMaps,slopes
+            # slopesMaps computation cropped to the valid pixels
+            Sx         = (I1-I2+I4-I3)            
+            Sy         = (I1-I4+I2-I3)   
+            
+            # 2D slopes maps      
+            slopesMaps = (np.concatenate((Sx,Sy)/norma) - self.referenceSignal_2D) *self.slopesUnits
+            
+            # slopes vector
+            slopes     = slopesMaps[np.where(self.validSignal==1)]
+            return slopesMaps,slopes
         
         if self.postProcessing == 'fullFrame':
             # global normalization
