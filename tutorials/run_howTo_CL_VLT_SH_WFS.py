@@ -103,7 +103,7 @@ plt.title('DM Actuator Coordinates')
 # make sure tel and atm are separated to initialize the PWFS
 tel-atm
 
-wfs = ShackHartmann(nSubap                = param['nSubaperture'],\
+wfs = ShackHartmann(nSubap          = param['nSubaperture'],\
               telescope             = tel,\
               lightRatio            = param['lightThreshold'],\
               is_geometric = False)
@@ -181,6 +181,8 @@ from AO_modules.calibration.InteractionMatrix import InteractionMatrix
 
 
 #%%
+wfs.is_geometric = True
+
 M2C_zonal = np.eye(dm.nValidAct)
 # zonal interaction matrix
 calib_zonal = InteractionMatrix(  ngs            = ngs,\
@@ -200,21 +202,15 @@ plt.ylabel('WFS slopes STD')
 
 #%%
 # Modal interaction matrix
-calib_zernike = InteractionMatrix(  ngs            = ngs,\
-                            atm            = atm,\
-                            tel            = tel,\
-                            dm             = dm,\
-                            wfs            = wfs,\
-                            M2C            = M2C_zernike,\
-                            stroke         = stroke,\
-                            nMeasurements  = 100,\
-                            noise          = 'off')
+from AO_modules.calibration.CalibrationVault import CalibrationVault
+
+# Modal interaction matrix
+calib_zernike = CalibrationVault(calib_zonal.D@M2C_zernike)
 
 plt.figure()
 plt.plot(np.std(calib_zernike.D,axis=0))
 plt.xlabel('Mode Number')
 plt.ylabel('WFS slopes STD')
-
 
 #%% switch to a diffractive SH-WFS
 
@@ -266,7 +262,7 @@ plot_obj = cl_plot(list_fig          = [atm.OPD,tel.mean_removed_OPD,wfs.cam.fra
                    list_display_axis = [None,None,None,None,True,None,None],\
                    list_ratio        = [[0.95,0.95,0.1],[1,1,1,1]], s=20)
 # loop parameters
-gainCL                  = 0.6
+gainCL                  = 0.4
 wfs.cam.photonNoise     = True
 display                 = True
 

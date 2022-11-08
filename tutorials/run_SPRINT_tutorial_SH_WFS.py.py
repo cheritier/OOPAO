@@ -365,7 +365,7 @@ rot =       [2]   # in degrees
 
 n = len(shiftX)
 
-amp = [50]
+amp = [100]
 
 misReg_out = []
 scaling_factor_out = []

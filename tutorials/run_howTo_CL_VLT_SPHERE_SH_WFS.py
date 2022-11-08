@@ -260,7 +260,7 @@ plot_obj = cl_plot(list_fig          = [atm.OPD,tel.mean_removed_OPD,wfs.cam.fra
                    list_display_axis = [None,None,None,None,True,None,None],\
                    list_ratio        = [[0.95,0.95,0.1],[1,1,1,1]], s=5)
 # loop parameters
-gainCL                  = 0.6
+gainCL                  = 0.4
 wfs.cam.photonNoise     = True
 display                 = True
 

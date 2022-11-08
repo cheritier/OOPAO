@@ -196,16 +196,12 @@ plt.xlabel('Mode Number')
 plt.ylabel('WFS slopes STD')
 
 #%%
+
+from AO_modules.calibration.CalibrationVault import CalibrationVault
+
+
 # Modal interaction matrix
-calib_zernike = InteractionMatrix(  ngs            = ngs,\
-                            atm            = atm,\
-                            tel            = tel,\
-                            dm             = dm,\
-                            wfs            = wfs,\
-                            M2C            = M2C_zernike,\
-                            stroke         = stroke,\
-                            nMeasurements  = 20,\
-                            noise          = 'off')
+calib_zernike = CalibrationVault(calib_zonal.D@M2C_zernike)
 
 plt.figure()
 plt.plot(np.std(calib_zernike.D,axis=0))
@@ -261,7 +257,7 @@ plot_obj = cl_plot(list_fig          = [atm.OPD,tel.mean_removed_OPD,wfs.cam.fra
 # loop parameters
 gainCL                  = 0.6
 wfs.cam.photonNoise     = True
-display                 = True
+display                 = False
 
 reconstructor = M2C_CL@calib_CL.M
 
