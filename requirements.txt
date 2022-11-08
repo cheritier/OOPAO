@@ -1,9 +1,9 @@
-numba==0.53.1
+numba
 joblib==1.01
 scikit-image==0.18.3
 numexpr==2.7.3
-astropy==4.2.1
-pyFFTW==0.12.0
+astropy
+pyfftw
 mpmath==1.2.1
 jsonpickle==1.4.1
 aotools
