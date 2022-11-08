@@ -214,7 +214,7 @@ class DeformableMirror:
             self.coefs = np.zeros(self.nValidAct,dtype=np.float32)
         else:
             self.coefs = np.zeros(self.nValidAct,dtype=np.float64)
-            
+        self.current_coefs = self.coefs.copy()
         if self.print_dm_properties:
             self.print_properties()
     
@@ -292,6 +292,8 @@ class DeformableMirror:
 
         
     def dm_propagation(self,telescope,OPD_in = None, i_source = None):
+        if self.coefs.all() == self.current_coefs.all():
+           self.coefs = self.coefs  
         if OPD_in is None:
             OPD_in = telescope.OPD_no_pupil
         
@@ -327,7 +329,7 @@ class DeformableMirror:
         mRad  += 1
         mNorm += 1
         xOut   = x * (mRad*np.cos(angle)**2  + mNorm* np.sin(angle)**2)  +  y * (mNorm*np.sin(2*angle)/2  - mRad*np.sin(2*angle)/2)
-        yOut   = y * (mRad*np.cos(angle)**2  + mNorm* np.sin(angle)**2)  +  x * (mNorm*np.sin(2*angle)/2  - mRad*np.sin(2*angle)/2)
+        yOut   = y * (mRad*np.sin(angle)**2  + mNorm* np.cos(angle)**2)  +  x * (mNorm*np.sin(2*angle)/2  - mRad*np.sin(2*angle)/2)
     
         return xOut,yOut
         
@@ -405,7 +407,7 @@ class DeformableMirror:
             else:
                 print('Error: wrong value for the coefficients')    
                 sys.exit(0)
-
+            self.current_coefs = self.coefs.copy()
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% END %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
  
