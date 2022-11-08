@@ -206,19 +206,12 @@ class Atmosphere:
         if compute_turbulence:
             print('-> Computing the initial phase screen...')  
             a=time.time()
-            if self.mode ==1:
-                import aotools as ao
-                layer.phaseScreen   = ao.turbulence.infinitephasescreen.PhaseScreenVonKarman(layer.resolution,layer.D/(layer.resolution),r0,L0,random_seed=i_layer)
-                layer.phase         = layer.phaseScreen.scrn
-            else:
-                if self.mode == 2:
-                    from AO_modules.phaseStats import ft_sh_phase_screen
-    
-                    layer.phase         = ft_sh_phase_screen(self,layer.resolution,layer.D/layer.resolution,seed=i_layer)                
-                else: 
-                    layer.phase         = ft_phase_screen(self,layer.resolution,layer.D/layer.resolution,seed=i_layer)
-                    
-            layer.initialPhase = layer.phase
+            if self.mode == 2:
+                from AO_modules.phaseStats import ft_sh_phase_screen
+                layer.phase         = ft_sh_phase_screen(self,layer.resolution,layer.D/layer.resolution,seed=i_layer)                
+            else: 
+                    layer.phase         = ft_phase_screen(self,layer.resolution,layer.D/layer.resolution,seed=i_layer)                    
+            layer.initialPhase = layer.phase.copy()
             layer.seed = i_layer
             b=time.time()
             print('initial phase screen : ' +str(b-a) +' s')
