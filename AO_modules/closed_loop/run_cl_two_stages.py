@@ -11,7 +11,7 @@ import time
 import scipy
 from astropy.io import fits as pfits
 # local modules 
-from AO_modules.calibration.CalibrationVault  import calibrationVault
+from AO_modules.calibration.CalibrationVault  import CalibrationVault
 from AO_modules.MisRegistration   import MisRegistration
 from AO_modules.tools.tools       import createFolder,write_fits
 from AO_modules.mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
@@ -52,7 +52,7 @@ def run_cl_two_stages(param,obj,speed_factor = 2,filename_phase_screen = None, e
     
     #% ------------------------------------ Calibration ------------------------------------
     if obj.calib.D.shape[1] != param['nModes']:
-        calib_cl    = calibrationVault(obj.calib.D[:,:param['nModes']])
+        calib_cl    = CalibrationVault(obj.calib.D[:,:param['nModes']])
     else:
         calib_cl = obj.calib
     M2C_cl      = obj.M2C
@@ -235,7 +235,7 @@ def run_cl_two_stages(param,obj,speed_factor = 2,filename_phase_screen = None, e
     dataCL['long_exposure_psf']    = np.mean(np.asarray(PSF_LE),axis =0)
     
     if filename_phase_screen is None:
-        filename_phase_screen           = 'phi_'+'seeing_'+str(np.round(obj.atm.seeingArcsec,2))+'_magnitude_'+str(np.round(obj.ngs.magnitude))+\
+        filename_phase_screen           = 'seeing_'+str(np.round(obj.atm.seeingArcsec,2))+'_magnitude_'+str(np.round(obj.ngs.magnitude))+\
         '_nKL_'+str(param['nModes'])+'_nLoop_'+str(param['nLoop'])+'_windspeed_'+str(np.round(np.mean(obj.atm_fast.windSpeed)))+\
         '_stg1_'+str(np.round(0.001/obj.tel.samplingTime,2))+'_kHz_stg2_'+str(np.round(0.001/obj.tel_fast.samplingTime,2))+'_kHz'
     
@@ -243,30 +243,6 @@ def run_cl_two_stages(param,obj,speed_factor = 2,filename_phase_screen = None, e
     dataCL['dm_commands']           = dm_commands
     dataCL['residual_phase_screen'] = residual_phase_screen
     dataCL['wfs_signals']           = wfs_signals
-    
-    # hdr             = pfits.Header()
-    # hdr['TITLE']    = 'phase screens'
-    # primary_hdu   = pfits.PrimaryHDU(residual_phase_screen)
-    # hdu             = pfits.HDUList([primary_hdu])
-    # # save output
-    # hdu.writeto(destination_folder+filename_phase_screen+'.fits',overwrite=True)
-    # hdu.close()
-    
-    # hdr             = pfits.Header()
-    # hdr['TITLE']    = 'wfs signals'
-    # primary_hdu   = pfits.PrimaryHDU(wfs_signals)
-    # hdu             = pfits.HDUList([primary_hdu])
-    # # save output
-    # hdu.writeto(destination_folder+filename_phase_screen+'_wfs_signals.fits',overwrite=True)
-    # hdu.close()
-    
-    # hdr             = pfits.Header()
-    # hdr['TITLE']    = 'dm commands'
-    # primary_hdu   = pfits.PrimaryHDU(dm_commands)
-    # hdu             = pfits.HDUList([primary_hdu])
-    # # save output
-    # hdu.writeto(destination_folder+filename_phase_screen+'_dm_commands.fits',overwrite=True)
-    # hdu.close()
     
     return dataCL
 

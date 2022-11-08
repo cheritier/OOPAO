@@ -18,7 +18,7 @@ import time
 import scipy
 from astropy.io import fits as pfits
 # local modules 
-from AO_modules.calibration.CalibrationVault  import calibrationVault
+from AO_modules.calibration.CalibrationVault  import CalibrationVault
 from AO_modules.MisRegistration   import MisRegistration
 from AO_modules.tools.tools       import createFolder,write_fits
 from AO_modules.mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
@@ -64,7 +64,7 @@ def run_cl_two_stages_atm_change(param,obj,start_change,n_transition,func_change
     
     #% ------------------------------------ Calibration ------------------------------------
     if obj.calib.D.shape[1] != param['nModes']:
-        calib_cl    = calibrationVault(obj.calib.D[:,:param['nModes']])
+        calib_cl    = CalibrationVault(obj.calib.D[:,:param['nModes']])
     else:
         calib_cl = obj.calib
     M2C_cl      = obj.M2C
@@ -260,10 +260,9 @@ def run_cl_two_stages_atm_change(param,obj,start_change,n_transition,func_change
     dataCL['long_exposure_psf']    = np.mean(np.asarray(PSF_LE),axis =0)
     
     if filename_phase_screen is None:
-        filename_phase_screen           = 'phi'+\
-        '_magnitude_'+str(np.round(obj.ngs.magnitude))+\
+        filename_phase_screen           ='_magnitude_'+str(np.round(obj.ngs.magnitude))+\
         '_nLoop_'+str(param['nLoop'])+\
-        '_seeing_1_'+str(np.round(ref_seeing,2))+'_to_'+str(np.round(obj.atm.seeingArcsec,2))+\
+        '_seeing_1_'+str(np.round(ref_seeing,2))+'_to_'+str(np.round(obj.atm_fast.seeingArcsec,2))+\
         '_speed_1_'+str(np.round(np.mean(ref_wind_speed)))+'_to_'+str(np.round(np.mean(obj.atm_fast.windSpeed)))+\
         '_direction_1_'+str(np.round(np.mean(ref_wind_direction)))+'_to_'+str(np.round(np.mean(obj.atm_fast.windDirection)))+\
         '_stg1_'+str(np.round(0.001/obj.tel.samplingTime,2))+'_kHz_stg2_'+str(np.round(0.001/obj.tel_fast.samplingTime,2))+'_kHz'
