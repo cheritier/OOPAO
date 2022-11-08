@@ -130,7 +130,7 @@ def run_initialization_AO_PWFS(param):
                                nameFolderBasis  = None,\
                                nameBasis        = param['modal_basis_name'],\
                                nMeasurements    = 1,\
-                               get_basis        = False)
+                               get_basis        = True)
     
    
         
@@ -151,5 +151,6 @@ def run_initialization_AO_PWFS(param):
     simulationObject.M2C    = ao_calib.M2C
     simulationObject.gOpt   = ao_calib.gOpt
     simulationObject.projector   = ao_calib.projector
+    simulationObject.basis   = ao_calib.basis
 
     return simulationObject

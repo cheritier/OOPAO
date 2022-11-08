@@ -5,8 +5,8 @@ Created on Fri Aug 21 10:22:55 2020
 @author: cheritie
 """
 
-from AO_modules.calibration.CalibrationVault import calibrationVault
-from AO_modules.calibration.InteractionMatrix import interactionMatrix,interactionMatrixFromPhaseScreen
+from AO_modules.calibration.CalibrationVault import CalibrationVault
+from AO_modules.calibration.InteractionMatrix import InteractionMatrix,InteractionMatrixFromPhaseScreen
 from AO_modules.MisRegistration  import MisRegistration
 from astropy.io import fits as pfits
 import numpy as np
@@ -91,7 +91,7 @@ def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pi
             if recompute_sensitivity is False:
 
                 hdu = pfits.open(name_0)
-                calib_0 = calibrationVault(hdu[1].data,invert=False)
+                calib_0 = CalibrationVault(hdu[1].data,invert=False)
                 print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
                 print('WARNING: you are loading existing data from \n')
                 print(str(name_0)+'/n')
@@ -101,7 +101,7 @@ def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pi
                 hdu = pfits.open(name_0+'_volontary_error')                
 
         except:
-            calib_0 = interactionMatrix(ngs, atm, tel, dm_0, wfs, basis.modes ,stroke, phaseOffset=0, nMeasurements=50,invert=False,print_time=False)
+            calib_0 = InteractionMatrix(ngs, atm, tel, dm_0, wfs, basis.modes ,stroke, phaseOffset=0, nMeasurements=50,invert=False,print_time=False)
             
             # save output in fits file
             if save_sensitivity_matrices:
@@ -116,7 +116,7 @@ def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pi
         try:
             if recompute_sensitivity is False:
                 hdu = pfits.open(name_p)
-                calib_tmp_p = calibrationVault(hdu[1].data,invert=False)
+                calib_tmp_p = CalibrationVault(hdu[1].data,invert=False)
             else:
                 hdu = pfits.open(name_0+'_volontary_error')       
         except:
@@ -131,13 +131,13 @@ def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pi
                 input_modes_cp = input_modes_0.copy()
                 input_modes_cp = tel.pupil*apply_mis_reg(tel,input_modes_0, misRegistration_tmp) 
 
-                calib_tmp_p =  interactionMatrixFromPhaseScreen(ngs,atm,tel,wfs,input_modes_cp,stroke,phaseOffset=0,nMeasurements=50,invert=False,print_time=False)
+                calib_tmp_p =  InteractionMatrixFromPhaseScreen(ngs,atm,tel,wfs,input_modes_cp,stroke,phaseOffset=0,nMeasurements=50,invert=False,print_time=False)
 
             else:
                 # compute new deformable mirror
                 dm_tmp      = applyMisRegistration(tel,misRegistration_tmp,param, wfs = wfs_mis_registrated,print_dm_properties=False, floating_precision=dm_0.floating_precision)
                 # compute the interaction matrix for the positive mis-registration
-                calib_tmp_p = interactionMatrix(ngs, atm, tel, dm_tmp, wfs, basis.modes, stroke, phaseOffset=0, nMeasurements=50,invert=False,print_time=False)
+                calib_tmp_p = InteractionMatrix(ngs, atm, tel, dm_tmp, wfs, basis.modes, stroke, phaseOffset=0, nMeasurements=50,invert=False,print_time=False)
                 del dm_tmp
 
             # save output in fits file
@@ -153,7 +153,7 @@ def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pi
         try:
             if recompute_sensitivity is False:
                 hdu = pfits.open(name_n)
-                calib_tmp_n = calibrationVault(hdu[1].data,invert=False)
+                calib_tmp_n = CalibrationVault(hdu[1].data,invert=False)
             else:
                 hdu = pfits.open(name_0+'_volontary_error')    
         except:
@@ -167,12 +167,12 @@ def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pi
                 input_modes_cp = input_modes_0.copy()
                 input_modes_cp = tel.pupil*apply_mis_reg(tel,input_modes_0, misRegistration_tmp) 
 
-                calib_tmp_n =  interactionMatrixFromPhaseScreen(ngs,atm,tel,wfs,input_modes_cp,stroke,phaseOffset=0,nMeasurements=50,invert=False,print_time=False)
+                calib_tmp_n =  InteractionMatrixFromPhaseScreen(ngs,atm,tel,wfs,input_modes_cp,stroke,phaseOffset=0,nMeasurements=50,invert=False,print_time=False)
             else:
                 # compute new deformable mirror
                 dm_tmp = applyMisRegistration(tel,misRegistration_tmp,param, wfs = wfs_mis_registrated,print_dm_properties=False, floating_precision=dm_0.floating_precision)
                 # compute the interaction matrix for the negative mis-registration
-                calib_tmp_n = interactionMatrix(ngs, atm, tel, dm_tmp, wfs, basis.modes, stroke, phaseOffset=0, nMeasurements=50,invert=False,print_time=False)
+                calib_tmp_n = InteractionMatrix(ngs, atm, tel, dm_tmp, wfs, basis.modes, stroke, phaseOffset=0, nMeasurements=50,invert=False,print_time=False)
                 del dm_tmp
 
             # save output in fits file
@@ -193,7 +193,7 @@ def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pi
             row_meta_matrix   = np.reshape(((calib_tmp_p.D -calib_tmp_n.D)/2.)/getattr(epsilonMisRegistration,epsilonMisRegistration_field[i]),[calib_tmp_p.D.shape[0]])            
         meta_matrix[:,i]  = row_meta_matrix 
         
-    metaSensitivityMatrix = calibrationVault(meta_matrix)
+    metaSensitivityMatrix = CalibrationVault(meta_matrix)
     
     return metaSensitivityMatrix, calib_0
 

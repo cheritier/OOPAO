@@ -120,14 +120,15 @@ class Telescope:
         self.tag                         = 'telescope'                                                  # tag of the object
         self.isPaired                    = False                                                        # indicate if telescope object is paired with an atmosphere object
         self.spatialFilter              = None
+
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TELESCOPE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        print('Diameter \t\t\t'+str(self.D) + ' \t [m]') 
-        print('Resolution \t\t\t'+str(self.resolution) + ' \t [pix]') 
-        print('Pixel Size \t\t\t' + str(np.round(self.pixelSize,2)) + str('\t [m]'))
-        print('Surface \t\t\t'+ str(np.round(self.pixelArea*self.pixelSize**2)) + str('\t [m2]'))
-        print('Central Obstruction \t\t'+str(100*self.centralObstruction)+str('\t [% of diameter]'))
-        print('Number of pixel in the pupil \t'+str(self.pixelArea)+' \t [pix]') 
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        print('{: ^18s}'.format('Diameter')                     + '{: ^18s}'.format(str(self.D))                                        +'{: ^18s}'.format('[m]'   ))
+        print('{: ^18s}'.format('Resolution')                   + '{: ^18s}'.format(str(self.resolution))                               +'{: ^18s}'.format('[pixels]'   ))
+        print('{: ^18s}'.format('Pixel Size')                   + '{: ^18s}'.format(str(np.round(self.pixelSize,2)))                    +'{: ^18s}'.format('[m]'   ))
+        print('{: ^18s}'.format('Surface')                      + '{: ^18s}'.format(str(np.round(self.pixelArea*self.pixelSize**2)))    +'{: ^18s}'.format('[m2]'  ))
+        print('{: ^18s}'.format('Central Obstruction')          + '{: ^18s}'.format(str(100*self.centralObstruction))                   +'{: ^18s}'.format('[% of diameter]' ))
+        print('{: ^18s}'.format('Pixels in the pupil')           + '{: ^18s}'.format(str(self.pixelArea))                                +'{: ^18s}'.format('[pixels]' ))
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         self.isInitialized= True
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF COMPUTATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
@@ -166,6 +167,10 @@ class Telescope:
             
             # PSF computation
             self.PSF        = (np.abs(np.fft.fft2(supportPadded*self.phasor)*mask/norma)**2)            
+            self.PSF_norma  = self.PSF/self.PSF.max()   
+            N_trunc = int(np.floor(2*N/6))
+            self.PSF_norma_zoom  = self.PSF_norma[N_trunc:-N_trunc,N_trunc:-N_trunc]
+
         else:
             print('Error: no NGS associated to the Telescope. Combine a tel object with an ngs using ngs*tel')
             return -1
@@ -212,6 +217,8 @@ class Telescope:
         if type(val) is not list:
             if self.src.tag == 'source':
                 self.src.phase = self._OPD*2*np.pi/self.src.wavelength
+                if np.ndim(self.OPD)==2:
+                    self.mean_removed_OPD = (self.OPD - np.mean(self.OPD[np.where(self.pupil ==1)]))*self.pupil
             else:
                 if self.src.tag == 'asterism':
                     for i in range(self.src.n_source):
@@ -261,10 +268,11 @@ class Telescope:
                 if len(self.OPD) == len(obj):
                     for i_obj in range(len(self.OPD)):
                         tel_tmp = getattr(obj[i_obj], 'telescope')
+                        self.src.src[i_obj]*tel_tmp
                         tel_tmp.OPD = self.OPD[i_obj]
                         tel_tmp.OPD_no_pupil = self.OPD_no_pupil[i_obj]
                         setattr(obj[i_obj],'telescope',tel_tmp)
-                        obj[i_obj].wfs_measure()               # propagation of the telescope-source phase screen to the pyramid-detector
+                        obj[i_obj].wfs_measure(phase_in = tel_tmp.src.phase)               # propagation of the telescope-source phase screen to the pyramid-detector
                 else:
                     raise ValueError('Error! There is a mis-match between the number of Sources ('+str(len(self.OPD))+') and the number of WFS ('+str(len(obj))+')')
             else:
@@ -292,7 +300,9 @@ class Telescope:
                 FP_filtered         = FP_in*np.fft.fftshift(obj.mask)
                 em_field            = np.fft.ifft2(FP_filtered)
                 self.em_field_filtered  = em_field[obj.center-self.resolution//2:obj.center+self.resolution//2,obj.center-self.resolution//2:obj.center+self.resolution//2]
-                self.phase_filtered = np.arctan2(np.imag(self.em_field_filtered),np.real(self.em_field_filtered))*self.pupil
+                # self.phase_filtered = np.arctan2(np.imag(self.em_field_filtered),np.real(self.em_field_filtered))*self.pupil
+                self.phase_filtered = ((np.angle(self.em_field_filtered)))*self.pupil
+                
                 self.amplitude_filtered  = np.abs(self.em_field_filtered)
                 return self
             

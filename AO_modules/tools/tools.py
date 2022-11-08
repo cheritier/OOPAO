@@ -197,3 +197,30 @@ def get_gpu_memory():
     memory_free_info = subprocess.check_output(command.split()).decode('ascii').split('\n')[:-1][1:]
     memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
     return memory_free_values
+
+
+def compute_fourier_mode(pupil,spatial_frequency,angle_deg,zeropadding = 2):
+    N = pupil.shape[0]
+    mode = np.zeros([N,N])
+    
+    t = spatial_frequency*zeropadding/2
+    Z = np.zeros([N,N],'complex')
+
+    thet = angle_deg
+    
+    Z[N//2+int(t*np.cos(np.deg2rad(thet)+np.pi)),N//2+int(t*np.sin(np.deg2rad(thet)+np.pi))]=1
+    Z[N//2-int(t*np.cos(np.deg2rad(thet)+np.pi)),N//2-int(t*np.sin(np.deg2rad(thet)+np.pi))]=-100000
+    
+    support = np.zeros([N*zeropadding,N*zeropadding],dtype='complex')
+    
+    
+    center = zeropadding*N//2
+    support [center-N//2:center+N//2,center-N//2:center+N//2]=Z
+    F = np.fft.ifft2(support)
+    F= F[center-N//2:center+N//2,center-N//2:center+N//2]    
+    # normalisation
+    S= np.abs(F)/np.max(np.abs(F))
+    S=S - np.mean([S.max(), S.min()])
+    mode = S/S.std()
+    
+    return mode

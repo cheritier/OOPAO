@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy             as np 
 import scipy.ndimage as sp
 
-from AO_modules.calibration.InteractionMatrix import interactionMatrix
+from AO_modules.calibration.InteractionMatrix import InteractionMatrix
 from AO_modules.MisRegistration   import MisRegistration
 
 from AO_modules.mis_registration_identification_algorithm.computeMetaSensitivyMatrix           import computeMetaSensitivityMatrix
@@ -95,7 +95,7 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
     misRegistration_out = MisRegistration(misRegistrationZeroPoint)
     
     if fast:
-        from AO_modules.calibration.InteractionMatrix import interactionMatrixFromPhaseScreen
+        from AO_modules.calibration.InteractionMatrix import InteractionMatrixFromPhaseScreen
 
         dm_0.coefs = np.squeeze(basis.modes)
         tel*dm_0
@@ -138,7 +138,7 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
                 
         
             # temporary interaction matrix
-            calib_tmp =  interactionMatrixFromPhaseScreen(ngs,atm,tel,wfs,input_modes_cp,stroke,phaseOffset=0,nMeasurements=5,invert=False,print_time=False)
+            calib_tmp =  InteractionMatrixFromPhaseScreen(ngs,atm,tel,wfs,input_modes_cp,stroke,phaseOffset=0,nMeasurements=5,invert=False,print_time=False)
             # temporary scaling factor    
             try:
                 scalingFactor_tmp   = np.round(np.diag(calib_tmp.D.T@calib_in.D)/ np.diag(calib_tmp.D.T@calib_tmp.D),precision)
@@ -187,7 +187,7 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
             dm_tmp = applyMisRegistration(tel,misRegistration_out,param, wfs = wfs_mis_registrated,print_dm_properties=False,floating_precision=dm_0.floating_precision)
         
             # temporary interaction matrix
-            calib_tmp =  interactionMatrix(ngs,atm,tel,dm_tmp,wfs,basis.modes,stroke,phaseOffset=0,nMeasurements=50,invert=False,print_time=False)
+            calib_tmp =  InteractionMatrix(ngs,atm,tel,dm_tmp,wfs,basis.modes,stroke,phaseOffset=0,nMeasurements=50,invert=False,print_time=False)
             # erase dm_tmp to free memory
             del dm_tmp
             # temporary scaling factor            

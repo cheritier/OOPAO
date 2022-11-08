@@ -18,12 +18,11 @@ def initializeParameterFile():
     
     param['r0'                   ] = 0.13                                           # value of r0 in the visibile in [m]
     param['L0'                   ] = 30                                             # value of L0 in the visibile in [m]
-    param['fractionnalR0'        ] = [0.2,0.2,0.2,0.2,0.2]                                            # Cn2 profile
-    param['windSpeed'            ] = [10,10,10,10,10]                                           # wind speed of the different layers in [m.s-1]
+    param['fractionnalR0'        ] = [0.45,0.1,0.1,0.25,0.1]                                            # Cn2 profile
+    param['windSpeed'            ] = [10,12,11,15,20]                                           # wind speed of the different layers in [m.s-1]
     param['windDirection'        ] = [0,72,144,216,288]                                            # wind direction of the different layers in [degrees]
-    param['altitude'             ] = [100, 100,100,100,100 ]                                         # altitude of the different layers in [m]
-
-                              
+    param['altitude'             ] = [0, 1000,5000,10000,12000 ]                                         # altitude of the different layers in [m]
+                    
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% M1 PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
     param['diameter'             ] = 8                                             # diameter in [m]

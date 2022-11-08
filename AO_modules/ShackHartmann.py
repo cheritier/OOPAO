@@ -4,17 +4,11 @@ Created on Thu May 20 17:52:09 2021
 
 @author: cheritie
 """
-import warnings
 import numpy as np
-import scipy.ndimage as sp
-import sys
 import inspect
 import time
-import matplotlib.pyplot as plt
-import multiprocessing
 from AO_modules.Detector import Detector
-from AO_modules.tools.tools import bin_ndarray, pol2cart
-import scipy.ndimage as ndimage
+from AO_modules.tools.tools import bin_ndarray
 
 try:
     from joblib import Parallel, delayed
@@ -23,18 +17,18 @@ except:
     print('WARNING: The joblib module is not installed. This would speed up considerably the operations.')
     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
-import ctypes
-try : 
-    mkl_rt = ctypes.CDLL('libmkl_rt.so')
-    mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
-    mkl_set_num_threads(6)
-except:
-    try:
-        mkl_rt = ctypes.CDLL('./mkl_rt.dll')
-        mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
-        mkl_set_num_threads(6)
-    except:
-        print('Could not optimize the parallelisation of the code ')
+# import ctypes
+# try : 
+#     mkl_rt = ctypes.CDLL('libmkl_rt.so')
+#     mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
+#     mkl_set_num_threads(6)
+# except:
+#     try:
+#         mkl_rt = ctypes.CDLL('./mkl_rt.dll')
+#         mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
+#         mkl_set_num_threads(6)
+#     except:
+#         print('Could not optimize the parallelisation of the code ')
 
 
 
@@ -90,54 +84,57 @@ class ShackHartmann:
             _ wfs.lightRatio            : reset the valid subaperture selection considering the new value
         
         """ 
-        self.tag                    = 'shackHartmann'
-        self.telescope              = telescope
-        self.is_geometric           = is_geometric
-        self.nSubap                 = nSubap
-        self.lightRatio             = lightRatio
-        self.pupil                  = telescope.pupil.astype(float)  
-        self.binning_factor         = binning_factor
-        self.zero_padding           = 2
-        self.padding_extension_factor = padding_extension_factor
-        self.threshold_convolution = threshold_convolution
-        
-        self.random_state_photon_noise  = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
-        self.random_state_readout_noise = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
-        self.random_state_background    = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
+        self.tag                            = 'shackHartmann'
+        self.telescope                      = telescope
+        self.is_geometric                   = is_geometric
+        self.nSubap                         = nSubap
+        self.lightRatio                     = lightRatio
+        self.binning_factor                 = binning_factor
+        self.zero_padding                   = 2
+        self.padding_extension_factor       = padding_extension_factor
+        self.threshold_convolution          = threshold_convolution
+        self.threshold_cog                  = threshold_cog
+
+
         # case where the spots are zeropadded to provide larger fOV
-        if padding_extension_factor>1:
+        if padding_extension_factor>2:
             self.n_pix_subap            = int(padding_extension_factor*self.telescope.resolution// self.nSubap)            
             self.is_extended            = True
             self.binning_factor         = padding_extension_factor
             self.zero_padding           = 1 
-            
-
         else:
             self.n_pix_subap            = self.telescope.resolution// self.nSubap 
             self.is_extended            = False
-            
-        self.n_pix_subap_init       = self.telescope.resolution// self.nSubap    
-        self.extra_pixel            = (self.n_pix_subap-self.n_pix_subap_init)//2         
-        self.n_pix_lenslet_init     = self.n_pix_subap_init*self.zero_padding 
-        self.n_pix_lenslet          = self.n_pix_subap*self.zero_padding 
-
-        self.center                 = self.n_pix_lenslet//2 
-
-        self.center_init                 = self.n_pix_lenslet_init//2 
-        self.threshold_cog          = threshold_cog
-        self.get_camera_frame_multi = False
-        self.cam                    = Detector(round(nSubap*self.n_pix_subap))                     # WFS detector object
-        self.cam.photonNoise        = 0
-        self.cam.readoutNoise       = 0        # single lenslet 
-        self.lenslet_frame          = np.zeros([self.n_pix_subap*self.zero_padding,self.n_pix_subap*self.zero_padding], dtype =complex)
-        self.photon_per_subaperture = np.zeros(self.nSubap**2)
         
-        self.fov_lenslet_arcsec = self.n_pix_subap*206265*self.binning_factor/self.padding_extension_factor*self.telescope.src.wavelength/(self.telescope.D/self.nSubap)
-        self.fov_pixel_arcsec = self.fov_lenslet_arcsec/ self.n_pix_subap
-        self.fov_pixel_binned_arcsec   = self.fov_lenslet_arcsec/ self.n_pix_subap_init
+
+        # different resolutions needed
+        self.n_pix_subap_init           = self.telescope.resolution// self.nSubap    
+        self.extra_pixel                = (self.n_pix_subap-self.n_pix_subap_init)//2         
+        self.n_pix_lenslet_init         = self.n_pix_subap_init*self.zero_padding 
+        self.n_pix_lenslet              = self.n_pix_subap*self.zero_padding 
+        self.center                     = self.n_pix_lenslet//2 
+        self.center_init                = self.n_pix_lenslet_init//2 
+        self.lenslet_frame              = np.zeros([self.n_pix_subap*self.zero_padding,self.n_pix_subap*self.zero_padding], dtype =complex)
+        self.outerMask                  = np.ones([self.n_pix_subap_init*self.zero_padding, self.n_pix_subap_init*self.zero_padding ])
+        self.outerMask[1:-1,1:-1]       = 0
+        
+        # Compute camera frame in case of multiple measurements
+        self.get_camera_frame_multi     = False
+        # detector camera
+        self.cam                        = Detector(round(nSubap*self.n_pix_subap))                     # WFS detector object
+        self.cam.photonNoise            = 0
+        self.cam.readoutNoise           = 0        # single lenslet
+        # noies random states
+        self.random_state_photon_noise      = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
+        self.random_state_readout_noise     = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
+        self.random_state_background        = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
+        
+        # field of views
+        self.fov_lenslet_arcsec         = self.n_pix_subap*206265*self.binning_factor/self.padding_extension_factor*self.telescope.src.wavelength/(self.telescope.D/self.nSubap)
+        self.fov_pixel_arcsec           = self.fov_lenslet_arcsec/ self.n_pix_subap
+        self.fov_pixel_binned_arcsec    = self.fov_lenslet_arcsec/ self.n_pix_subap_init
 
         X_map, Y_map= np.meshgrid(np.arange(self.n_pix_subap//self.binning_factor),np.arange(self.n_pix_subap//self.binning_factor))
-        
         self.X_coord_map = np.atleast_3d(X_map).T
         self.Y_coord_map = np.atleast_3d(Y_map).T
         
@@ -155,9 +152,7 @@ class ShackHartmann:
 
         # cube of lenslet zero padded
         self.cube                   = np.zeros([self.nSubap**2,self.n_pix_lenslet_init,self.n_pix_lenslet_init])
-        
         self.cube_flux              = np.zeros([self.nSubap**2,self.n_pix_subap_init,self.n_pix_subap_init],dtype=(complex))
-
         self.index_x                = []
         self.index_y                = []
 
@@ -165,8 +160,8 @@ class ShackHartmann:
         [xx,yy]                    = np.meshgrid(np.linspace(0,self.n_pix_lenslet_init-1,self.n_pix_lenslet_init),np.linspace(0,self.n_pix_lenslet_init-1,self.n_pix_lenslet_init))
         self.phasor                = np.exp(-(1j*np.pi*(self.n_pix_lenslet_init+1)/self.n_pix_lenslet_init)*(xx+yy))
         self.phasor_tiled          = np.moveaxis(np.tile(self.phasor[:,:,None],self.nSubap**2),2,0)
-        # Get subapertures index and fluix per subaperture        
-
+        
+        # Get subapertures index and flux per subaperture        
         [xx,yy]                    = np.meshgrid(np.linspace(0,self.n_pix_lenslet-1,self.n_pix_lenslet),np.linspace(0,self.n_pix_lenslet-1,self.n_pix_lenslet))
         self.phasor_expanded       = np.exp(-(1j*np.pi*(self.n_pix_lenslet+1)/self.n_pix_lenslet)*(xx+yy))
         self.phasor_expanded_tiled          = np.moveaxis(np.tile(self.phasor_expanded[:,:,None],self.nSubap**2),2,0)
@@ -205,6 +200,8 @@ class ShackHartmann:
 
         # WFS initialization
         self.initialize_wfs()
+        
+
 
         
     def initialize_wfs(self):
@@ -254,14 +251,14 @@ class ShackHartmann:
         self.cam.readoutNoise       = photonNoise
         self.telescope.resetOPD()
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SHACK HARTMANN WFS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        print('{: ^18s}'.format('Subapertures')         + '{: ^18s}'.format(str(self.nSubap))                                   +'{: ^18s}'.format('[pixels]'   ))
-        print('{: ^18s}'.format('Subaperture Size')     + '{: ^18s}'.format(str(np.round(self.telescope.D/self.nSubap,2)))      +'{: ^18s}'.format('[pixels]'   ))
-        print('{: ^18s}'.format('Pixel FoV')            + '{: ^18s}'.format(str(np.round(self.fov_pixel_binned_arcsec,2)))      +'{: ^18s}'.format('[arcsec]'   ))
-        print('{: ^18s}'.format('Subapertue FoV')       + '{: ^18s}'.format(str(np.round(self.fov_lenslet_arcsec,2)))           +'{: ^18s}'.format('[lamda/D]'  ))
-        print('{: ^18s}'.format('Valid Subaperture')    + '{: ^18s}'.format(str(str(self.nValidSubaperture))))                   
+        print('{: ^20s}'.format('Subapertures')         + '{: ^18s}'.format(str(self.nSubap))                                   )
+        print('{: ^20s}'.format('Subaperture Size')     + '{: ^18s}'.format(str(np.round(self.telescope.D/self.nSubap,2)))      +'{: ^18s}'.format('[m]'   ))
+        print('{: ^20s}'.format('Pixel FoV')            + '{: ^18s}'.format(str(np.round(self.fov_pixel_binned_arcsec,2)))      +'{: ^18s}'.format('[arcsec]'   ))
+        print('{: ^20s}'.format('Subapertue FoV')       + '{: ^18s}'.format(str(np.round(self.fov_lenslet_arcsec,2)))           +'{: ^18s}'.format('[arcsec]'  ))
+        print('{: ^20s}'.format('Valid Subaperture')    + '{: ^18s}'.format(str(str(self.nValidSubaperture))))                   
         if self.is_LGS:    
-            print('{: ^18s}'.format('Spot Elungation')    + '{: ^18s}'.format(str(100*np.round(self.elungation_factor,3)))      +'{: ^18s}'.format('% of a subap' ))
-        print('{: ^18s}'.format('Geometric WFS')    + '{: ^18s}'.format(str(self.is_geometric)))
+            print('{: ^20s}'.format('Spot Elungation')    + '{: ^18s}'.format(str(100*np.round(self.elungation_factor,3)))      +'{: ^18s}'.format('% of a subap' ))
+        print('{: ^20s}'.format('Geometric WFS')    + '{: ^18s}'.format(str(self.is_geometric)))
 
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')        
         if self.is_geometric:
@@ -281,15 +278,16 @@ class ShackHartmann:
 #%% DIFFRACTIVE
 
     def initialize_flux(self,input_flux_map = None):
-        if input_flux_map is None:
-            input_flux_map = self.telescope.src.fluxMap.T
-        tmp_flux_h_split = np.hsplit(input_flux_map,self.nSubap)
-        self.cube_flux = np.zeros([self.nSubap**2,self.n_pix_lenslet_init,self.n_pix_lenslet_init],dtype=float)
-        for i in range(self.nSubap):
-            tmp_flux_v_split = np.vsplit(tmp_flux_h_split[i],self.nSubap)
-            self.cube_flux[i*self.nSubap:(i+1)*self.nSubap,self.center_init - self.n_pix_subap_init//2:self.center_init+self.n_pix_subap_init//2,self.center_init - self.n_pix_subap_init//2:self.center_init+self.n_pix_subap_init//2] = np.asarray(tmp_flux_v_split)
-        self.photon_per_subaperture = np.apply_over_axes(np.sum, self.cube_flux, [1,2])
-        self.current_nPhoton = self.telescope.src.nPhoton
+        if self.telescope.tag!='asterism':
+            if input_flux_map is None:
+                input_flux_map = self.telescope.src.fluxMap.T
+            tmp_flux_h_split = np.hsplit(input_flux_map,self.nSubap)
+            self.cube_flux = np.zeros([self.nSubap**2,self.n_pix_lenslet_init,self.n_pix_lenslet_init],dtype=float)
+            for i in range(self.nSubap):
+                tmp_flux_v_split = np.vsplit(tmp_flux_h_split[i],self.nSubap)
+                self.cube_flux[i*self.nSubap:(i+1)*self.nSubap,self.center_init - self.n_pix_subap_init//2:self.center_init+self.n_pix_subap_init//2,self.center_init - self.n_pix_subap_init//2:self.center_init+self.n_pix_subap_init//2] = np.asarray(tmp_flux_v_split)
+            self.photon_per_subaperture = np.apply_over_axes(np.sum, self.cube_flux, [1,2])
+            self.current_nPhoton = self.telescope.src.nPhoton
         return
     
     def get_lenslet_em_field(self,phase):
@@ -465,7 +463,7 @@ class ShackHartmann:
             
         if self.is_geometric is False:
             ##%%%%%%%%%%%%  DIFFRACTIVE SH WFS %%%%%%%%%%%%
-            if np.ndim(self.telescope.src.phase)==2:
+            if np.ndim(self.telescope.OPD)==2:
                 #-- case with a single wave-front to sense--
                 
                 # reset camera frame to be filled up
@@ -488,6 +486,13 @@ class ShackHartmann:
                 
                 # reduce to valid subaperture
                 I = I[self.valid_subapertures_1D,:,:]
+                
+                self.sum_I   = np.sum(I,axis=0)
+                self.edge_subaperture_criterion = np.sum(I*self.outerMask)/np.sum(I)
+                if self.edge_subaperture_criterion>0.05:
+                    print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                    print('WARNING !!!! THE LIGHT IN THE SUBAPERTURE IS MAYBE WRAPPING !!!'+str(np.round(100*self.edge_subaperture_criterion,1))+' % of the total flux detected on the edges of the subapertures. You may want to increase the seeing value or the resolution')
+                    print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
                 # if FoV is extended, zero pad the spot intensity
                 if self.is_extended:

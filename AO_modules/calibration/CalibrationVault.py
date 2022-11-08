@@ -8,7 +8,7 @@ Created on Mon Mar  2 09:21:48 2020
 import numpy as np
 import matplotlib.pyplot as plt
 import inspect
-class calibrationVault():
+class CalibrationVault():
     def __init__(self,D,nTrunc=0,display=False, print_details = False,invert= True):
         if print_details:
             print('Computing the SVD...')

@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 import numpy             as np 
 import time
 plt.ion()
-import __load__psim
-__load__psim.load_psim()
+import __load__oopao
+__load__oopao.load_oopao()
 
 from AO_modules.Atmosphere       import Atmosphere
 from AO_modules.ShackHartmann          import ShackHartmann
@@ -26,7 +26,6 @@ from AO_modules.tools.displayTools           import displayMap
 #%% -----------------------     read parameter file   ----------------------------------
 from parameter_files.parameterFile_VLT_SPHERE_SH_WFS import initializeParameterFile
 param = initializeParameterFile()
-
 
 #%% -----------------------     TELESCOPE   ----------------------------------
 
@@ -58,7 +57,7 @@ ngs*tel
 
 tel.computePSF(zeroPaddingFactor = 6)
 PSF_diff = tel.PSF/tel.PSF.max()
-N = 500
+N = 50
 
 fov_pix = tel.xPSF_arcsec[1]/tel.PSF.shape[0]
 fov = N*fov_pix
@@ -78,7 +77,7 @@ atm=Atmosphere(telescope     = tel,\
                windSpeed     = param['windSpeed'],\
                fractionalR0  = param['fractionnalR0'],\
                windDirection = param['windDirection'],\
-               altitude      = param['altitude'])
+               altitude      = param['altitude'],param = param)
 # initialize atmosphere
 atm.initializeAtmosphere(tel)
 
@@ -148,7 +147,7 @@ M2C = compute_M2C(telescope            = tel,\
                                   nmo                = 1000,\
                                   nZer               = 3,\
                                   remove_piston = True,\
-                                  recompute_cov      = False) # forces to recompute covariance matrix
+                                  recompute_cov      = True) # forces to recompute covariance matrix
 
 
 
@@ -177,7 +176,7 @@ plt.title('KL mode normalization projected on the DM')
 plt.show()
 
 #%%
-from AO_modules.calibration.InteractionMatrix import interactionMatrix
+from AO_modules.calibration.InteractionMatrix import InteractionMatrix
 # wfs.is_geometric = False
 
 stroke = 1e-9
@@ -185,18 +184,19 @@ stroke = 1e-9
 param['nModes'] = 1000
 M2C_KL = np.asarray(M2C[:,:param['nModes']])
 # Modal interaction matrix
-calib_KL = interactionMatrix(  ngs            = ngs,\
-                            atm            = atm,\
-                            tel            = tel,\
-                            dm             = dm,\
-                            wfs            = wfs,\
-                            M2C            = M2C_KL,\
-                            stroke         = stroke,\
-                            nMeasurements  = 200,\
-                            noise          = 'off')
+# wfs.is_geometric = False
+# calib_KL = InteractionMatrix(  ngs            = ngs,\
+#                             atm            = atm,\
+#                             tel            = tel,\
+#                             dm             = dm,\
+#                             wfs            = wfs,\
+#                             M2C            = M2C_KL,\
+#                             stroke         = stroke,\
+#                             nMeasurements  = 200,\
+#                             noise          = 'off')
 wfs.is_geometric = True
 
-calib_KL_geo = interactionMatrix(  ngs            = ngs,\
+calib_KL_geo = InteractionMatrix(  ngs            = ngs,\
                             atm            = atm,\
                             tel            = tel,\
                             dm             = dm,\
@@ -206,7 +206,6 @@ calib_KL_geo = interactionMatrix(  ngs            = ngs,\
                             nMeasurements  = 200,\
                             noise          = 'off')
 plt.figure()
-plt.plot(np.std(calib_KL.D,axis=0))
 plt.plot(np.std(calib_KL_geo.D,axis=0))
 
 plt.xlabel('Mode Number')
@@ -221,10 +220,18 @@ calib_CL    = calib_KL_geo
 M2C_CL      = M2C_KL.copy()
 
 
-
-plt.close('all')
+from AO_modules.tools.displayTools import cl_plot
 tel.resetOPD()
-tel*dm
+# initialize DM commands
+dm.coefs=0
+ngs*tel*dm*wfs
+tel+atm
+
+# dm.coefs[100] = -1
+
+tel.computePSF(4)
+plt.close('all')
+
 # combine telescope with atmosphere
 tel+atm
 
@@ -232,148 +239,64 @@ tel+atm
 dm.coefs=0
 ngs*tel*dm*wfs
 
-plt.ion()
-# setup the display
-fig         = plt.figure(79)
-ax1         = plt.subplot(2,3,1)
-im_atm      = ax1.imshow(tel.src.phase)
-plt.colorbar(im_atm)
-plt.title('Turbulence phase [rad]')
-
-ax2         = plt.subplot(2,3,2)
-im_dm       = ax2.imshow(dm.OPD*tel.pupil)
-plt.colorbar(im_dm)
-plt.title('DM phase [rad]')
-tel.computePSF(zeroPaddingFactor=6)
-
-ax4         = plt.subplot(2,3,3)
-im_PSF_OL   = ax4.imshow(tel.PSF)
-plt.colorbar(im_PSF_OL)
-plt.title('OL PSF')
-
-
-ax3         = plt.subplot(2,3,5)
-im_residual = ax3.imshow(tel.src.phase)
-plt.colorbar(im_residual)
-plt.title('Residual phase [rad]')
-
-ax5         = plt.subplot(2,3,4)
-im_wfs_CL   = ax5.imshow(wfs.cam.frame)
-plt.colorbar(im_wfs_CL)
-plt.title('SH Frame CL')
-
-ax6         = plt.subplot(2,3,6)
-im_PSF      = ax6.imshow(tel.PSF)
-plt.colorbar(im_PSF)
-plt.title('CL PSF')
 
 plt.show()
 
-param['nLoop'] = 1000
+param['nLoop'] = 200
 # allocate memory to save data
 SR                      = np.zeros(param['nLoop'])
 total                   = np.zeros(param['nLoop'])
 residual                = np.zeros(param['nLoop'])
 wfsSignal               = np.arange(0,wfs.nSignal)*0
+SE_PSF = []
+LE_PSF = np.log10(tel.PSF_norma_zoom)
 
+plot_obj = cl_plot(list_fig          = [atm.OPD,tel.mean_removed_OPD,wfs.cam.frame,[dm.coordinates[:,0],np.flip(dm.coordinates[:,1]),dm.coefs],[[0,0],[0,0]],np.log10(tel.PSF_norma_zoom),np.log10(tel.PSF_norma_zoom)],\
+                   type_fig          = ['imshow','imshow','imshow','scatter','plot','imshow','imshow'],\
+                   list_title        = ['Turbulence OPD','Residual OPD','WFS Detector','DM Commands',None,None,None],\
+                   list_lim          = [None,None,None,None,None,[-4,0],[-4,0]],\
+                   list_label        = [None,None,None,None,['Time','WFE [nm]'],['Short Exposure PSF',''],['Long Exposure_PSF','']],\
+                   n_subplot         = [4,2],\
+                   list_display_axis = [None,None,None,None,True,None,None],\
+                   list_ratio        = [[0.95,0.95,0.1],[1,1,1,1]], s=5)
 # loop parameters
 gainCL                  = 0.4
 wfs.cam.photonNoise     = True
 display                 = True
 
 reconstructor = M2C_CL@calib_CL.M
-PSF_LE = []
+
 for i in range(param['nLoop']):
     a=time.time()
     # update phase screens => overwrite tel.OPD and consequently tel.src.phase
     atm.update()
-     # save phase variance
+    # save phase variance
     total[i]=np.std(tel.OPD[np.where(tel.pupil>0)])*1e9
-     # save turbulent phase
+    # save turbulent phase
     turbPhase = tel.src.phase
-    if display == True:
-           # compute the OL PSF and update the display
-       tel.computePSF(zeroPaddingFactor=2)
-       im_PSF_OL.set_data(np.log(tel.PSF/tel.PSF.max()))
-       im_PSF_OL.set_clim(vmin=-3,vmax=0)
-       
-     # propagate to the WFS with the CL commands applied
+    # propagate to the WFS with the CL commands applied
     tel*dm*wfs
-    
-     # save the DM OPD shape
-    dmOPD=tel.pupil*dm.OPD*2*np.pi/ngs.wavelength
-    
+        
     dm.coefs=dm.coefs-gainCL*np.matmul(reconstructor,wfsSignal)
-     # store the slopes after computing the commands => 2 frames delay
+    # store the slopes after computing the commands => 2 frames delay
     wfsSignal=wfs.signal
     b= time.time()
     print('Elapsed time: ' + str(b-a) +' s')
-    tel.computePSF(zeroPaddingFactor=2)
-    if i>10:
-        PSF_LE.append(tel.PSF)
-
     # update displays if required
-    if display==True:
+    if display==True:        
+        tel.computePSF(4)
+        if i>15:
+            SE_PSF.append(np.log10(tel.PSF_norma_zoom))
+            LE_PSF = np.mean(SE_PSF, axis=0)
         
-       # Turbulence
-       im_atm.set_data(turbPhase)
-       im_atm.set_clim(vmin=turbPhase.min(),vmax=turbPhase.max())
-       # WFS frame
-       C=wfs.cam.frame
-       im_wfs_CL.set_data(C)
-       im_wfs_CL.set_clim(vmin=C.min(),vmax=C.max())
-       # DM OPD
-       im_dm.set_data(dmOPD)
-       im_dm.set_clim(vmin=dmOPD.min(),vmax=dmOPD.max())
-     
-       # residual phase
-       D=tel.src.phase
-       D=D-np.mean(D[tel.pupil])
-       im_residual.set_data(D)
-       im_residual.set_clim(vmin=D.min(),vmax=D.max()) 
-    
-       im_PSF.set_data(np.log(tel.PSF/tel.PSF.max()))
-       im_PSF.set_clim(vmin=-4,vmax=0)
-       plt.draw()
-       plt.show()
-       plt.pause(0.001)
-    
+        cl_plot(list_fig   = [atm.OPD,tel.mean_removed_OPD,wfs.cam.frame,dm.coefs,[np.arange(i+1),residual[:i+1]],np.log10(tel.PSF_norma_zoom), LE_PSF],
+                               plt_obj = plot_obj)
+        plt.pause(0.1)
+        if plot_obj.keep_going is False:
+            break
     
     SR[i]=np.exp(-np.var(tel.src.phase[np.where(tel.pupil==1)]))
     residual[i]=np.std(tel.OPD[np.where(tel.pupil>0)])*1e9
     OPD=tel.OPD[np.where(tel.pupil>0)]
 
     print('Loop'+str(i)+'/'+str(param['nLoop'])+' Turbulence: '+str(total[i])+' -- Residual:' +str(residual[i])+ '\n')
-
-#%%
-plt.figure()
-plt.plot(total)
-plt.plot(residual)
-plt.xlabel('Time [ms]')
-plt.ylabel('WFE [nm]')
-
-plt.figure()
-PSF = np.mean(PSF_LE,axis=0)
-PSF/=PSF.max()
-N = 200
-fov_pix = tel.xPSF_arcsec[1]/PSF.shape[0]
-fov = N*fov_pix
-plt.imshow(np.log10(PSF[N:-N,N:-N]), extent=(-fov,fov,-fov,fov))
-plt.clim([-4.5,0])
-plt.xlabel('[Arcsec]')
-plt.ylabel('[Arcsec]')
-
-
-tel.resetOPD()
-tel.computePSF(6)
-PSF_diff = tel.PSF/tel.PSF.max()
-plt.figure()
-plt.imshow(np.log10(PSF_diff[N:-N,N:-N]), extent=(-fov,fov,-fov,fov))
-plt.clim([-4.5,0])
-plt.xlabel('[Arcsec]')
-plt.ylabel('[Arcsec]')
-
-plt.figure()
-plt.plot(residual)
-plt.xlabel('Time')
-plt.ylabel('WFE [nm]')

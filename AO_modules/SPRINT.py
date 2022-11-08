@@ -8,7 +8,7 @@ Created on Wed Jun  2 13:30:51 2021
 from AO_modules.mis_registration_identification_algorithm.estimateMisRegistration import estimateMisRegistration
 from AO_modules.mis_registration_identification_algorithm.computeMetaSensitivyMatrix import computeMetaSensitivityMatrix
 from AO_modules.MisRegistration import MisRegistration
-from AO_modules.calibration.CalibrationVault import calibrationVault
+from AO_modules.calibration.CalibrationVault import CalibrationVault
 import numpy as np
 
 class SPRINT:
@@ -69,7 +69,7 @@ class SPRINT:
                                                          recompute_sensitivity      = self.recompute_sensitivity    )
 
             
-        self.metaMatrix_init = calibrationVault(self.metaMatrix.D)
+        self.metaMatrix_init = CalibrationVault(self.metaMatrix.D)
         self.mis_registration_zero_point_init = self.mis_registration_zero_point
         
         print('Done!')
@@ -89,9 +89,9 @@ class SPRINT:
             Sprint.mis_registration_out.rotation ---- rotation in degree
         """
 
-        calib_misReg_in = calibrationVault(on_sky_slopes,invert = False)
+        calib_misReg_in = CalibrationVault(on_sky_slopes,invert = False)
         # reinitialize the  meta matrix
-        self.metaMatrix = calibrationVault(self.metaMatrix_init.D)
+        self.metaMatrix = CalibrationVault(self.metaMatrix_init.D)
         self.mis_registration_zero_point = self.mis_registration_zero_point_init 
         
         for i_update in range(n_update_zero_point+1):

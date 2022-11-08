@@ -1,12 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Apr 27 10:46:24 2022
-
-@author: cheritie
-"""
-
-# -*- coding: utf-8 -*-
-"""
 Created on Thu Feb 10 11:29:43 2022
 
 @author: cheritie
@@ -15,8 +8,8 @@ Created on Thu Feb 10 11:29:43 2022
 import matplotlib.pyplot as plt
 import numpy             as np 
 
-import __load__psim
-__load__psim.load_psim()
+import __load__oopao
+__load__oopao.load_oopao()
 
 from AO_modules.Atmosphere       import Atmosphere
 from AO_modules.Pyramid          import Pyramid
@@ -31,7 +24,7 @@ from AO_modules.calibration.ao_calibration import ao_calibration
 from AO_modules.tools.displayTools           import displayMap
 
 #%% -----------------------     read parameter file   ----------------------------------
-from parameter_files.parameterFile_VLT_I_Band_SHWFS import initializeParameterFile
+from parameter_files.parameterFile_VLT_I_Band_PWFS import initializeParameterFile
 param = initializeParameterFile()
 
 #%% -----------------------     TELESCOPE   ----------------------------------
@@ -53,6 +46,8 @@ ngs*tel
 tel.computePSF(zeroPaddingFactor = 2)
 plt.figure()
 plt.imshow(np.log(np.abs(tel.PSF)),extent = [tel.xPSF_arcsec[0],tel.xPSF_arcsec[1],tel.xPSF_arcsec[0],tel.xPSF_arcsec[1]])
+plt.xlabel('arcsec')
+plt.ylabel('arcsec')
 
 #%% -----------------------     ATMOSPHERE   ----------------------------------
 
@@ -92,38 +87,27 @@ dm=DeformableMirror(telescope    = tel,\
                     misReg       = misReg)
 
 plt.figure()
-plt.plot(dm.coordinates[:,0],dm.coordinates[:,1],'x')
+plt.imshow(tel.pupil,extent=(-tel.D/2,tel.D/2,-tel.D/2,tel.D/2))
+plt.plot(dm.coordinates[:,0],dm.coordinates[:,1],'o')
 plt.xlabel('[m]')
 plt.ylabel('[m]')
+plt.legend(['Valid Actuators'])
 
 #%% -----------------------     PYRAMID WFS   ----------------------------------
 
-# # make sure tel and atm are separated to initialize the PWFS
-# tel-atm
-# # create the Pyramid Object
-# wfs = Pyramid(nSubap                = param['nSubaperture'],\
-#               telescope             = tel,\
-#               modulation            = param['modulation'],\
-#               lightRatio            = param['lightThreshold'],\
-#               pupilSeparationRatio  = param['pupilSeparationRatio'],\
-#               calibModulation       = param['calibrationModulation'],\
-#               psfCentering          = param['psfCentering'],\
-#               edgePixel             = param['edgePixel'],\
-#               extraModulationFactor = param['extraModulationFactor'],\
-#               postProcessing        = param['postProcessing'])
-    
-    
-    # make sure tel and atm are separated to initialize the PWFS
-from AO_modules.ShackHartmann import ShackHartmann
+# make sure tel and atm are separated to initialize the PWFS
 tel-atm
-wfs = ShackHartmann(nSubap       = param['nSubaperture'],\
-                    telescope    = tel,\
-                    lightRatio   = param['lightThreshold'] ,\
-                    is_geometric = param['is_geometric'])    
-    
-# propagate the light through the WFS
-tel*wfs
+# create the Pyramid Object
+wfs = Pyramid(nSubap                = param['nSubaperture'],\
+              telescope             = tel,\
+              modulation            = param['modulation'],\
+              lightRatio            = param['lightThreshold'],\
+              n_pix_separation      = param['n_pix_separation'],\
+              psfCentering          = param['psfCentering'],\
+              postProcessing        = param['postProcessing'])
 
+plt.figure()
+plt.imshow(wfs.cam.frame)
 #%% -----------------------     Modal Basis   ----------------------------------
 # compute the modal basis
 foldername_M2C  = None  # name of the folder to save the M2C matrix, if None a default name is used 
@@ -136,9 +120,9 @@ M2C = compute_M2C(  telescope          = tel,\
                     nameFolder         = None,\
                     nameFile           = None,\
                     remove_piston      = True,\
-                    HHtName            = None,\
+                    HHtName            = 'covariance_matrix_VLT',\
                     baseName           = None ,\
-                    nmo                = 1000,\
+                    nmo                = 300,\
                     ortho_spm          = True,\
                     nZer               = 3)
 
@@ -153,7 +137,7 @@ ao_calib =  ao_calibration(param            = param,\
                            nameIntMat       = None,\
                            nameFolderBasis  = None,\
                            nameBasis        = None,\
-                           nMeasurements    = 100)
+                           nMeasurements    = 1)
 
 #%% ----------------               PHASE OFFSET  ----------------
 
@@ -425,7 +409,7 @@ for i_misReg in range(n):
         Sprint.estimate(obj                 = obj,\
                         on_sky_slopes       = im,\
                         n_iteration         = 10,\
-                        n_update_zero_point = 3,\
+                        n_update_zero_point = 2,\
                         gain_estimation     = 0.8)            
             
         misReg_out.append(Sprint.mis_registration_buffer[-1])
@@ -434,3 +418,5 @@ for i_misReg in range(n):
     
 
 misReg_out = np.asarray(misReg_out)
+
+
