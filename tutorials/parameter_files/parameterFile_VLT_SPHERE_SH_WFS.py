@@ -39,7 +39,7 @@ def initializeParameterFile():
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% NGS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
     param['magnitude'            ] = 8                                              # magnitude of the guide star
-    param['opticalBand'          ] = 'U'                                            # optical band of the guide star
+    param['opticalBand'          ] = 'R'                                            # optical band of the guide star
     
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% DM PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

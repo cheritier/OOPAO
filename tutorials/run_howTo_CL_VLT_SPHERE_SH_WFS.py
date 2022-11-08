@@ -147,7 +147,7 @@ M2C = compute_M2C(telescope            = tel,\
                                   nmo                = 1000,\
                                   nZer               = 3,\
                                   remove_piston = True,\
-                                  recompute_cov      = True) # forces to recompute covariance matrix
+                                  recompute_cov      = False) # forces to recompute covariance matrix
 
 
 
