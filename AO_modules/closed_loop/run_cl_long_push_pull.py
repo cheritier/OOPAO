@@ -10,7 +10,7 @@ import numpy             as np
 import time
 
 # local modules 
-from AO_modules.calibration.CalibrationVault  import calibrationVault
+from AO_modules.calibration.CalibrationVault  import CalibrationVault
 from AO_modules.MisRegistration   import MisRegistration
 from AO_modules.tools.tools                  import createFolder, emptyClass
 from AO_modules.mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
@@ -49,7 +49,7 @@ def run_cl_long_push_pull(param,obj):
     
     #% ------------------------------------ Calibration ------------------------------------
     
-    calib_cl    = calibrationVault(obj.calib.D[:,:param['nModes']])
+    calib_cl    = CalibrationVault(obj.calib.D[:,:param['nModes']])
     M2C_cl      = obj.M2C_cl
     M2C_cl_inv  = np.linalg.pinv(M2C_cl)
     #% ------------------------------------ M4 Saturations ------------------------------------

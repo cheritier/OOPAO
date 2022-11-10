@@ -196,7 +196,7 @@ def InteractionMatrixFromPhaseScreen(ngs,atm,tel,wfs,phasScreens,stroke,phaseOff
 
 
 
-# def interactionMatrixOnePass(ngs,atm,tel,dm,wfs,M2C,stroke,phaseOffset=0,nMeasurements=50,noise='off'):
+# def InteractionMatrixOnePass(ngs,atm,tel,dm,wfs,M2C,stroke,phaseOffset=0,nMeasurements=50,noise='off'):
 # #    disabled noise functionality from WFS
 #     if noise =='off':  
 #         wfs.cam.photonNoise  = 0
