@@ -10,7 +10,7 @@ import numpy             as np
 import time
 
 # local modules 
-from AO_modules.calibration.CalibrationVault  import calibrationVault
+from AO_modules.calibration.CalibrationVault  import CalibrationVault
 from AO_modules.MisRegistration   import MisRegistration
 from AO_modules.tools.tools                  import createFolder
 from AO_modules.mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
@@ -48,7 +48,7 @@ def run_cl(param,obj):
     
     #% ------------------------------------ Calibration ------------------------------------
     if obj.calib.D.shape[1] != param['nModes']:
-        calib_cl    = calibrationVault(obj.calib.D[:,:param['nModes']])
+        calib_cl    = CalibrationVault(obj.calib.D[:,:param['nModes']])
     else:
         calib_cl = obj.calib
     M2C_cl      = obj.M2C_cl
