@@ -119,5 +119,6 @@ def set_paralleling_setup(wfs,ELT = True, nThread = None, nJob = None):
         mkl_set_num_threads(2)
         wfs.nJobs = 10  
             
-
+    if wfs.gpu_available:
+        wfs.nJobs=1
         

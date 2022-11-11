@@ -9,9 +9,6 @@ Created on Fri Nov  11 10:33:10 2020
 import numpy as np
 #import proper as prp
 import math
-import mpmath
-import numba
-from numba import jit
 from math import factorial
 import os
 import psutil
@@ -20,13 +17,8 @@ import time
 import multiprocessing as mp
 import pyfftw
 import numexpr as ne
-from astropy.io import fits
-
-import pdb
-
 import pickle
 
-import sys
 
 
 

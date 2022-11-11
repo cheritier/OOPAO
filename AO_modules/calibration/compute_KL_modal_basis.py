@@ -157,14 +157,17 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param, nameFolder = Non
     if minimF == True:
         if P2F is None:
             P2F=np.float64(pfits.getdata(param['pathInput']+'P2F.fits'))*1.e6 #( in N/m)
-            P2Ff=np.zeros([nact,nact],dtype=np.float64)
-            nap=nact//6
-            for k in range(0,6):
-                P2Ff[k*nap:(k+1)*nap,k*nap:(k+1)*nap] = P2F.copy()
             
-            K=np.asmatrix(P2Ff)
-            del P2Ff
-
+            P2Ff=np.zeros([nact,nact],dtype=np.float64)
+            if nact>892:
+                nap=nact//6
+                for k in range(0,6):
+                    P2Ff[k*nap:(k+1)*nap,k*nap:(k+1)*nap] = P2F.copy()
+                    
+                K=np.asmatrix(P2Ff)
+                del P2Ff
+            else:
+                K = np.asmatrix(P2F) 
 
         if alpha is None:
             alpha = 1.e-18
@@ -220,6 +223,9 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param, nameFolder = Non
             SB = aou.build_SeedBasis_F(IFma, SpM, K, beta)
             nSB=SB.shape[1]
             DELTA_SB = SB.T @ DELTA @ SB
+            if nmo>SB.shape[1]:
+                print('WARNING: Number of modes requested too high, taking the maximum value possible!')
+                nmo = SB.shape[1]
             print('Orthonormality error for '+str(nmo)+' modes of the Seed Basis = ',np.max(np.abs(DELTA_SB[0:nmo,0:nmo]/tpup-np.eye(nmo))))
 
     if computeKL == False:
