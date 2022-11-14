@@ -43,7 +43,7 @@ If the wrong version is installed, the __load__oopao.py function will raise a wa
 
     
 # CONTRIBUTORS
-C.T. Heritier, C. Vérinaud
+C.T. Heritier, C. Vérinaud, B. Engler
 
 # AKNOWLEDGEMENTS
 This tool has been developped during the Engineering & Research Technology Fellowship of C. Héritier funded by ESO. 
