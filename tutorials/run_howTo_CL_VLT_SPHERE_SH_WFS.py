@@ -4,28 +4,27 @@ Created on Wed Oct 21 10:51:32 2020
 
 @author: cheritie
 """
-# commom modules
-import matplotlib.pyplot as plt
-import numpy             as np 
+
 import time
-plt.ion()
-import __load__oopao
-__load__oopao.load_oopao()
 
-from AO_modules.Atmosphere       import Atmosphere
-from AO_modules.ShackHartmann          import ShackHartmann
-from AO_modules.DeformableMirror import DeformableMirror
-from AO_modules.MisRegistration  import MisRegistration
-from AO_modules.Telescope        import Telescope
-from AO_modules.Source           import Source
-# calibration modules 
-from AO_modules.calibration.compute_KL_modal_basis import compute_M2C
-# display modules
-from AO_modules.tools.displayTools           import displayMap
+import matplotlib.pyplot as plt
+import numpy as np
 
-#%% -----------------------     read parameter file   ----------------------------------
+from OOPAO.Atmosphere import Atmosphere
+from OOPAO.DeformableMirror import DeformableMirror
+from OOPAO.MisRegistration import MisRegistration
+from OOPAO.ShackHartmann import ShackHartmann
+from OOPAO.Source import Source
+from OOPAO.Telescope import Telescope
+from OOPAO.calibration.compute_KL_modal_basis import compute_M2C
+from OOPAO.tools.displayTools import displayMap
+# %% -----------------------     read parameter file   ----------------------------------
 from parameter_files.parameterFile_VLT_SPHERE_SH_WFS import initializeParameterFile
+
 param = initializeParameterFile()
+
+# %%
+plt.ion()
 
 #%% -----------------------     TELESCOPE   ----------------------------------
 

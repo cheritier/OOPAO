@@ -4,23 +4,16 @@ Created on Fri Oct  2 10:15:14 2020
 
 @author: cheritie
 """
-# commom modules
+
 import matplotlib.pyplot as plt
-import numpy             as np 
-import __load__oopao
-__load__oopao.load_oopao()
-# local modules 
-from AO_modules.Telescope         import Telescope
-from AO_modules.Zernike           import Zernike
-from AO_modules.Source            import Source
-from AO_modules.Atmosphere        import Atmosphere
-from AO_modules.tools.displayTools           import displayMap, makeSquareAxes
+import numpy as np
 
-
-
-
-#%% -----------------------     read parameter file   ----------------------------------
-
+from OOPAO.Atmosphere import Atmosphere
+from OOPAO.Source import Source
+from OOPAO.Telescope import Telescope
+from OOPAO.Zernike import Zernike
+from OOPAO.tools.displayTools import displayMap, makeSquareAxes
+# %% -----------------------     read parameter file   ----------------------------------
 from parameter_files.parameterFile_VLT_I_Band import initializeParameterFile
 
 param = initializeParameterFile()
