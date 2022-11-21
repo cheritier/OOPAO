@@ -299,3 +299,4 @@ for i in range(param['nLoop']):
     OPD=tel.OPD[np.where(tel.pupil>0)]
 
     print('Loop'+str(i)+'/'+str(param['nLoop'])+' Turbulence: '+str(total[i])+' -- Residual:' +str(residual[i])+ '\n')
+

@@ -90,7 +90,11 @@ class Source:
         
     def __mul__(self,telescope):
         telescope.src   = self
-        telescope.resetOPD()
+        if type(telescope.OPD) is list:
+            telescope.resetOPD()
+        
+        if np.ndim(telescope.OPD) ==3:
+            telescope.resetOPD()
         # update the phase of the source
         self.phase      = telescope.OPD*2*np.pi/self.wavelength
         self.phase_no_pupil      = telescope.OPD_no_pupil*2*np.pi/self.wavelength

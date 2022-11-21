@@ -4,6 +4,7 @@ Created on Wed Jan 20 17:02:23 2021
 
 @author: cheritie
 """
+
 import ctypes
 import socket 
 
@@ -120,5 +121,6 @@ def set_paralleling_setup(wfs,ELT = True, nThread = None, nJob = None):
         mkl_set_num_threads(2)
         wfs.nJobs = 10  
             
-
+    if wfs.gpu_available:
+        wfs.nJobs=1
         
