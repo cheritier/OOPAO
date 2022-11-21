@@ -1,5 +1,6 @@
 # OOPAO
-Object Oriented Python Adaptive Optics (OOPAO) is a project under development to propose a python-based tool to perform end-to-end AO simulations.
+
+Object-Oriented Python Adaptive Optics (OOPAO) is a project under development to propose a python-based tool to perform end-to-end AO simulations.
 This code is inspired from the OOMAO architecture: https://github.com/cmcorreia/LAM-Public developped by C. Correia and R. Conan (https://doi.org/10.1117/12.2054470). 
 The project was initially intended for personal use in the frame of an ESO project. It is now open to any interested user. 
 
@@ -12,8 +13,22 @@ The project was initially intended for personal use in the frame of an ESO proje
 	_ Source: 		NGS or LGS
 	_ Control Basis: 	KL modal basis, Zernike Polynomials
 
-## LICENSE
-This project is licensed under the terms of the MIT license.
+## MODULES REQUIRED
+The code is written for Python 3 (version 3.8.8) and requires the following modules:
+```
+joblib          => paralleling computing
+scikit-image    => 2D interpolations
+astropy         => handling of fits files
+pyFFTW          => optimization of the FFT  
+mpmath          => arithmetic with arbitrary precision
+jsonpickle      => json files encoding
+aotools         => zernike modes and functionalities for atmosphere computation
+numba           => required in aotools
+```
+If GPU computation is available:
+```
+cupy => GPU computation of the PWFS code (Not required)
+```
 
 ## INSTALLATION 
 
@@ -63,23 +78,20 @@ python -m pip install -e OOPAO
 python3 -m pip install -e OOPAO
 ```
 
+To include CUDA acceleration, just specify the `[CUDA]` branch:
 
-## MODULES REQUIRED
-The code is written for Python 3 (version 3.8.8) and requires the following modules:
 ```
-joblib          => paralleling computing
-scikit-image    => 2D interpolations
-astropy         => handling of fits files
-pyFFTW          => optimization of the FFT  
-mpmath          => arithmetic with arbitrary precision
-jsonpickle      => json files encoding
-aotools         => zernike modes and functionalities for atmosphere computation
-numba           => required in aotools
+python -m pip install -e OOPAO[CUDA]
+
+# or 
+
+python3 -m pip install -e OOPAO[CUDA]
 ```
-If GPU computation is available:
-```
-cupy => GPU computation of the PWFS code (Not required)
-```
+
+If you experience errors during the installation of one of the required scientific packages (e.g. `numpy`, `cupy`), 
+please consider using a `conda` environment and installing these using `conda install`.
+
+
 ## CODE OPTIMIZATION
 
 OOPAO multi-threading is based on the use of the numpy package built with the mkl library, make sure that the proper numpy package is installed to make sure that the operations are multi-threaded. 
@@ -90,8 +102,13 @@ numpy.show_config()
 
 
 ## CONTRIBUTORS
-C.T. Heritier, C. Vérinaud
+C.T. Heritier, C. Vérinaud, B. Engler
+
 
 ## ACKNOWLEDGEMENTS
 This tool has been developped during the Engineering & Research Technology Fellowship of C. Héritier funded by ESO. 
 Some functionalities of the code make use of the aotools package developped by M. J. Townson et al (2019). See https://doi.org/10.1364/OE.27.031316.
+
+
+## LICENSE
+This project is licensed under the terms of the MIT license.
