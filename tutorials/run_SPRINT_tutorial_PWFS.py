@@ -4,27 +4,22 @@ Created on Thu Feb 10 11:29:43 2022
 
 @author: cheritie
 """
-# commom modules
+
 import matplotlib.pyplot as plt
-import numpy             as np 
+import numpy as np
 
-import __load__oopao
-__load__oopao.load_oopao()
-
-from AO_modules.Atmosphere       import Atmosphere
-from AO_modules.Pyramid          import Pyramid
-from AO_modules.DeformableMirror import DeformableMirror
-from AO_modules.MisRegistration  import MisRegistration
-from AO_modules.Telescope        import Telescope
-from AO_modules.Source           import Source
-# calibration modules 
-from AO_modules.calibration.compute_KL_modal_basis import compute_M2C
-from AO_modules.calibration.ao_calibration import ao_calibration
-# display modules
-from AO_modules.tools.displayTools           import displayMap
-
-#%% -----------------------     read parameter file   ----------------------------------
+from OOPAO.Atmosphere import Atmosphere
+from OOPAO.DeformableMirror import DeformableMirror
+from OOPAO.MisRegistration import MisRegistration
+from OOPAO.Pyramid import Pyramid
+from OOPAO.Source import Source
+from OOPAO.Telescope import Telescope
+from OOPAO.calibration.ao_calibration import ao_calibration
+from OOPAO.calibration.compute_KL_modal_basis import compute_M2C
+from OOPAO.tools.displayTools import displayMap
+# %% -----------------------     read parameter file   ----------------------------------
 from parameter_files.parameterFile_VLT_I_Band_PWFS import initializeParameterFile
+
 param = initializeParameterFile()
 
 #%% -----------------------     TELESCOPE   ----------------------------------
@@ -167,7 +162,7 @@ plt.colorbar()
 plt.title('WFE: '+str(var_fit) + ' nm')
 
 #%% ------------------ SETTING UP SPRINT ALGORITHM ------------------
-from AO_modules.tools.tools import emptyClass
+from OOPAO.tools.tools import emptyClass
 
 """
 Case where the initial mis-registration is quite small (Closed Loop) => USE A MIDDLE ORDER MODE!
@@ -194,14 +189,14 @@ obj.dm      = dm
 obj.param   = param
 
 
-from AO_modules.SPRINT import SPRINT
+from OOPAO.SPRINT import SPRINT
 
 Sprint = SPRINT(obj,basis, recompute_sensitivity=True)
 
 
 #%% -------------------------- EXAMPLE WITH SMALL MIS-REGISTRATIONS - NO UPDATE OF MODEL--------------------------------------
 
-from AO_modules.mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
+from OOPAO.mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
 
 
 # mis-reg considered
@@ -270,7 +265,7 @@ for i_misReg in range(n):
 misReg_out = np.asarray(misReg_out)
 
 #%%
-from AO_modules.tools.displayTools import makeSquareAxes
+from OOPAO.tools.displayTools import makeSquareAxes
 
 plt.figure()
 plt.subplot(2,2,1)
@@ -317,7 +312,7 @@ makeSquareAxes(plt.gca())
 
 
 #%% -------------------------- EXAMPLE WITH LARGE MIS-REGISTRATIONS + UPDATE OF MODEL --------------------------------------
-from AO_modules.tools.tools import emptyClass
+from OOPAO.tools.tools import emptyClass
 
 """
 Case where the initial mis-registration is very large (Bootstrapping) => USE A LOW ORDER MODE!
@@ -344,10 +339,10 @@ obj.dm      = dm
 obj.param   = param
 
 
-from AO_modules.SPRINT import SPRINT
+from OOPAO.SPRINT import SPRINT
 
 Sprint = SPRINT(obj,basis,recompute_sensitivity=True)
-from AO_modules.mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
+from OOPAO.mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
 
 
 # mis-reg considered

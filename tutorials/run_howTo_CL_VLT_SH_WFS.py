@@ -4,30 +4,26 @@ Created on Wed Oct 21 10:51:32 2020
 
 @author: cheritie
 """
-# commom modules
-import matplotlib.pyplot as plt
-import numpy             as np 
+
 import time
-plt.ion()
-import __load__oopao
-__load__oopao.load_oopao()
 
-from AO_modules.Atmosphere       import Atmosphere
-from AO_modules.ShackHartmann          import ShackHartmann
-from AO_modules.DeformableMirror import DeformableMirror
-from AO_modules.MisRegistration  import MisRegistration
-from AO_modules.Telescope        import Telescope
-from AO_modules.Source           import Source
-# calibration modules 
-from AO_modules.calibration.compute_KL_modal_basis import compute_M2C
-from AO_modules.calibration.ao_calibration import ao_calibration
-# display modules
-from AO_modules.tools.displayTools           import displayMap
+import matplotlib.pyplot as plt
+import numpy as np
 
-#%% -----------------------     read parameter file   ----------------------------------
+from OOPAO.Atmosphere import Atmosphere
+from OOPAO.DeformableMirror import DeformableMirror
+from OOPAO.MisRegistration import MisRegistration
+from OOPAO.ShackHartmann import ShackHartmann
+from OOPAO.Source import Source
+from OOPAO.Telescope import Telescope
+from OOPAO.tools.displayTools import displayMap
+# %% -----------------------     read parameter file   ----------------------------------
 from parameter_files.parameterFile_VLT_I_Band_SHWFS import initializeParameterFile
+
 param = initializeParameterFile()
 
+# %%
+plt.ion()
 
 #%% -----------------------     TELESCOPE   ----------------------------------
 
@@ -158,7 +154,7 @@ plt.title('WFS Camera Frame - With Noise')
 #                            nMeasurements    = 100)
 
 #%% ZERNIKE Polynomials
-from AO_modules.Zernike import Zernike
+from OOPAO.Zernike import Zernike
 # create Zernike Object
 Z = Zernike(tel,300)
 # compute polynomials for given telescope
@@ -177,7 +173,7 @@ displayMap(tel.OPD)
 # amplitude of the modes in m
 stroke=1e-9
 # Modal Interaction Matrix 
-from AO_modules.calibration.InteractionMatrix import InteractionMatrix
+from OOPAO.calibration.InteractionMatrix import InteractionMatrix
 
 
 #%%
@@ -202,7 +198,7 @@ plt.ylabel('WFS slopes STD')
 
 #%%
 # Modal interaction matrix
-from AO_modules.calibration.CalibrationVault import CalibrationVault
+from OOPAO.calibration.CalibrationVault import CalibrationVault
 
 # Modal interaction matrix
 calib_zernike = CalibrationVault(calib_zonal.D@M2C_zernike)
@@ -217,7 +213,7 @@ plt.ylabel('WFS slopes STD')
 wfs.is_geometric = False
 
 #%%
-from AO_modules.tools.displayTools import cl_plot
+from OOPAO.tools.displayTools import cl_plot
 tel.resetOPD()
 # initialize DM commands
 dm.coefs=0

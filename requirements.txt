@@ -1,9 +1,23 @@
-numba
-joblib==1.01
-scikit-image==0.18.3
-numexpr==2.7.3
-astropy
-pyfftw
-mpmath==1.2.1
-jsonpickle==1.4.1
-aotools
+aotools == 1.0.6
+astropy <= 4.1 ; python_version == "3.6"
+astropy <= 4.3.1 ; python_version == "3.7"
+astropy == 5.1.1 ; python_version >= "3.8"
+joblib == 1.1.1 ; python_version == "3.6"
+joblib ; python_version >= "3.8"
+jsonpickle < 3.0 ; python_version == "3.6"
+jsonpickle == 1.4.1 ; python_version == "3.7"
+matplotlib <= 3.3.4 ; python_version == "3.6"
+matplotlib <= 3.5.3 ; python_version == "3.7"
+matplotlib == 3.6.2 ; python_version >= "3.8"
+numba <= 0.53.1 ; python_version <= "3.6"
+numba == 0.53.1
+numpy == 1.19.5 ; python_version == "3.6"
+numpy == 1.21.6 ; python_version == "3.7"
+numpy == 1.23.4 ; python_version >= "3.8"
+pyFFTW <= 0.12.0 ; python_version == "3.6"
+pyFFTW == 0.12.0 ; python_version >= "3.7"
+scikit_image <= 0.17.2 ; python_version == "3.6"
+scikit_image == 0.18.3 ; python_version >= "3.7"
+scipy <= 1.5.4 ; python_version == "3.6"
+scipy <= 1.7.3 ; python_version == "3.7"
+scipy == 1.9.3 ; python_version >= "3.8"

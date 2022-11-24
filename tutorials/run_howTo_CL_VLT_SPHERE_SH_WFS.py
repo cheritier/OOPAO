@@ -4,28 +4,27 @@ Created on Wed Oct 21 10:51:32 2020
 
 @author: cheritie
 """
-# commom modules
-import matplotlib.pyplot as plt
-import numpy             as np 
+
 import time
-plt.ion()
-import __load__oopao
-__load__oopao.load_oopao()
 
-from AO_modules.Atmosphere       import Atmosphere
-from AO_modules.ShackHartmann          import ShackHartmann
-from AO_modules.DeformableMirror import DeformableMirror
-from AO_modules.MisRegistration  import MisRegistration
-from AO_modules.Telescope        import Telescope
-from AO_modules.Source           import Source
-# calibration modules 
-from AO_modules.calibration.compute_KL_modal_basis import compute_M2C
-# display modules
-from AO_modules.tools.displayTools           import displayMap
+import matplotlib.pyplot as plt
+import numpy as np
 
-#%% -----------------------     read parameter file   ----------------------------------
+from OOPAO.Atmosphere import Atmosphere
+from OOPAO.DeformableMirror import DeformableMirror
+from OOPAO.MisRegistration import MisRegistration
+from OOPAO.ShackHartmann import ShackHartmann
+from OOPAO.Source import Source
+from OOPAO.Telescope import Telescope
+from OOPAO.calibration.compute_KL_modal_basis import compute_M2C
+from OOPAO.tools.displayTools import displayMap
+# %% -----------------------     read parameter file   ----------------------------------
 from parameter_files.parameterFile_VLT_SPHERE_SH_WFS import initializeParameterFile
+
 param = initializeParameterFile()
+
+# %%
+plt.ion()
 
 #%% -----------------------     TELESCOPE   ----------------------------------
 
@@ -98,13 +97,6 @@ plt.clim([-1,3])
 plt.xlabel('[Arcsec]')
 plt.ylabel('[Arcsec]')
 plt.colorbar()
-
-
-
-#%% Science source
-
-src=Source(optBand   = 'K',\
-           magnitude = param['magnitude'])
 
 #%% -----------------------     DEFORMABLE MIRROR   ----------------------------------
 # mis-registrations object
@@ -221,6 +213,7 @@ plt.ylabel('WFS slopes STD')
 
 #%%
 # These are the calibration data used to close the loop
+wfs.is_geometric = False
 
 calib_CL    = calib_KL_geo
 M2C_CL      = M2C_KL.copy()
@@ -231,8 +224,6 @@ tel.resetOPD()
 # initialize DM commands
 dm.coefs=0
 ngs*tel*dm*wfs
-wfs.is_geometric = False
-
 tel+atm
 
 # dm.coefs[100] = -1
@@ -263,7 +254,7 @@ plot_obj = cl_plot(list_fig          = [atm.OPD,tel.mean_removed_OPD,wfs.cam.fra
                    type_fig          = ['imshow','imshow','imshow','scatter','plot','imshow','imshow'],\
                    list_title        = ['Turbulence OPD','Residual OPD','WFS Detector','DM Commands',None,None,None],\
                    list_lim          = [None,None,None,None,None,[-4,0],[-4,0]],\
-                   list_label        = [None,None,None,None,['Time','WFE [nm]'],['AO Short Exposure PSF',''],['Science Long Exposure PSF','']],\
+                   list_label        = [None,None,None,None,['Time','WFE [nm]'],['Short Exposure PSF',''],['Long Exposure_PSF','']],\
                    n_subplot         = [4,2],\
                    list_display_axis = [None,None,None,None,True,None,None],\
                    list_ratio        = [[0.95,0.95,0.1],[1,1,1,1]], s=5)
@@ -283,7 +274,7 @@ for i in range(param['nLoop']):
     # save turbulent phase
     turbPhase = tel.src.phase
     # propagate to the WFS with the CL commands applied
-    ngs*tel*dm*wfs
+    tel*dm*wfs
         
     dm.coefs=dm.coefs-gainCL*np.matmul(reconstructor,wfsSignal)
     # store the slopes after computing the commands => 2 frames delay
@@ -292,15 +283,12 @@ for i in range(param['nLoop']):
     print('Elapsed time: ' + str(b-a) +' s')
     # update displays if required
     if display==True:        
-        tel.computePSF(2)
-        SE_PSF_AO = tel.PSF_norma_zoom.copy()
-        src*tel
         tel.computePSF(4)
         if i>15:
             SE_PSF.append(np.log10(tel.PSF_norma_zoom))
             LE_PSF = np.mean(SE_PSF, axis=0)
         
-        cl_plot(list_fig   = [atm.OPD,tel.mean_removed_OPD,wfs.cam.frame,dm.coefs,[np.arange(i+1),residual[:i+1]],np.log10(SE_PSF_AO), LE_PSF],
+        cl_plot(list_fig   = [atm.OPD,tel.mean_removed_OPD,wfs.cam.frame,dm.coefs,[np.arange(i+1),residual[:i+1]],np.log10(tel.PSF_norma_zoom), LE_PSF],
                                plt_obj = plot_obj)
         plt.pause(0.1)
         if plot_obj.keep_going is False:
@@ -311,3 +299,4 @@ for i in range(param['nLoop']):
     OPD=tel.OPD[np.where(tel.pupil>0)]
 
     print('Loop'+str(i)+'/'+str(param['nLoop'])+' Turbulence: '+str(total[i])+' -- Residual:' +str(residual[i])+ '\n')
+
