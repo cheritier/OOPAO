@@ -115,7 +115,7 @@ def set_paralleling_setup(wfs,ELT = True, nThread = None, nJob = None):
                 mkl_set_num_threads(int(n_cpu//4))
                 wfs.nJobs = n_cpu//2
             
-            print(' YOU SHOULD CONSIDER ADDING A CASE IN AO_modules.tools.set_paralleling_setup.py! ')     
+            print(' YOU SHOULD CONSIDER ADDING A CASE IN OOPAO.tools.set_paralleling_setup.py! ')
             print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
     else:
         mkl_set_num_threads(2)

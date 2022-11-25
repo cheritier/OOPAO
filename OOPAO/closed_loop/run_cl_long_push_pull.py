@@ -13,6 +13,7 @@ import numpy as np
 from ..MisRegistration import MisRegistration
 from ..calibration.CalibrationVault import CalibrationVault
 from ..mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
+from ..tools.displayTools import cl_plot
 from ..tools.tools import createFolder, emptyClass
 
 
@@ -199,7 +200,6 @@ def run_cl_long_push_pull(param,obj):
 
     #% ------------------------------------ setu the display  ------------------------------------
     if obj.display:
-            from AO_modules.tools.displayTools import cl_plot
             plt.close('all')
             list_fig = [obj.atm.OPD, obj.tel.OPD, [np.arange(param['nModes']),np.diag(obj.gOpt)],[np.arange(cl_data.nLoop),cl_data.ao_residuals]]
             

@@ -119,7 +119,7 @@ class Pyramid:
             self.convert_for_numpy = np_cp.asnumpy
             self.nJobs = 1
             self.mempool = np_cp.get_default_memory_pool()
-            from AO_modules.tools.tools import get_gpu_memory
+            from .tools.tools import get_gpu_memory
             self.mem_gpu = get_gpu_memory()
             
             print('GPU available!')    
