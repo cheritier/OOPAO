@@ -9,8 +9,7 @@ import numpy as np
 import skimage.transform as sk
 
 from ..MisRegistration import MisRegistration
-from ..calibration.InteractionMatrix import InteractionMatrix
-from ..calibration.InteractionMatrix import InteractionMatrixFromPhaseScreen
+from ..calibration.InteractionMatrix import InteractionMatrix, InteractionMatrixFromPhaseScreen
 from ..mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
 from ..mis_registration_identification_algorithm.computeMetaSensitivyMatrix import computeMetaSensitivityMatrix
 from ..tools.interpolateGeometricalTransformation import (anamorphosisImageMatrix,
