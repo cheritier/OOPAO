@@ -9,10 +9,12 @@ import time
 
 import matplotlib.pyplot as plt
 import numpy as np
+from joblib import Parallel, delayed
 
 from ..MisRegistration import MisRegistration
 from ..calibration.CalibrationVault import CalibrationVault
 from ..mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
+from ..tools.displayTools import cl_plot
 from ..tools.tools import createFolder
 
 
@@ -184,7 +186,6 @@ def run_cl_sinusoidal_modulation(param,obj):
     
     # setup the display
     if obj.display:
-            from AO_modules.tools.displayTools import cl_plot
             plt.close('all')
             list_fig = [obj.atm.OPD, obj.tel.OPD, [np.arange(param['nModes']),np.diag(obj.gOpt)],[np.arange(nLoop),ao_residuals]]
             
@@ -394,10 +395,6 @@ def run_cl_sinusoidal_modulation(param,obj):
 
    
 #%% SLOPESMAPS DEMODULATION
-    from joblib import Parallel,delayed
-
-
-    
     def demodulate_function(obj, buffer_wfs, modal_coefs, i_mode, n_period):        
         # test that the n_period can be requested
         N_requested = int((n_period) *obj.n_iteration_per_period[i_mode])

@@ -133,6 +133,8 @@ pwfs_model
 # M4 fits files
 AO_modules/M4_model/influence_functions/*.fits
 AO_modules/M4_model/*.fits
+OOPAO/M4_model/influence_functions/*.fits
+OOPAO/M4_model/*.fits
 
 # json files 
 *.json

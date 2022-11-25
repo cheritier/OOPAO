@@ -16,7 +16,10 @@ from OOPAO.MisRegistration import MisRegistration
 from OOPAO.Pyramid import Pyramid
 from OOPAO.Source import Source
 from OOPAO.Telescope import Telescope
-from OOPAO.tools.displayTools import displayMap
+from OOPAO.Zernike import Zernike
+from OOPAO.calibration.CalibrationVault import CalibrationVault
+from OOPAO.calibration.InteractionMatrix import InteractionMatrix
+from OOPAO.tools.displayTools import cl_plot, displayMap
 # %% -----------------------     read parameter file   ----------------------------------
 from parameter_files.parameterFile_VLT_I_Band_PWFS import initializeParameterFile
 
@@ -152,7 +155,6 @@ plt.title('WFS Camera Frame')
 #                            nMeasurements    = 100)
 
 #%% ZERNIKE Polynomials
-from OOPAO.Zernike import Zernike
 # create Zernike Object
 Z = Zernike(tel,300)
 # compute polynomials for given telescope
@@ -170,9 +172,7 @@ displayMap(tel.OPD)
 
 # amplitude of the modes in m
 stroke=1e-9
-# Modal Interaction Matrix 
-from OOPAO.calibration.InteractionMatrix import InteractionMatrix
-
+# Modal Interaction Matrix
 
 #%%
 M2C_zonal = np.eye(dm.nValidAct)
@@ -194,9 +194,6 @@ plt.ylabel('WFS slopes STD')
 
 #%%
 
-from OOPAO.calibration.CalibrationVault import CalibrationVault
-
-
 # Modal interaction matrix
 calib_zernike = CalibrationVault(calib_zonal.D@M2C_zernike)
 
@@ -207,7 +204,6 @@ plt.ylabel('WFS slopes STD')
 
 #%%
 
-from OOPAO.tools.displayTools import cl_plot
 tel.resetOPD()
 # initialize DM commands
 dm.coefs=0

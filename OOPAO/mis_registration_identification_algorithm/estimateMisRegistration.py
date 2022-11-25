@@ -9,7 +9,7 @@ import numpy as np
 import skimage.transform as sk
 
 from ..MisRegistration import MisRegistration
-from ..calibration.InteractionMatrix import InteractionMatrix
+from ..calibration.InteractionMatrix import InteractionMatrix, InteractionMatrixFromPhaseScreen
 from ..mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
 from ..mis_registration_identification_algorithm.computeMetaSensitivyMatrix import computeMetaSensitivityMatrix
 from ..tools.interpolateGeometricalTransformation import (anamorphosisImageMatrix,
@@ -97,7 +97,6 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
     misRegistration_out = MisRegistration(misRegistrationZeroPoint)
     
     if fast:
-        from AO_modules.calibration.InteractionMatrix import InteractionMatrixFromPhaseScreen
 
         dm_0.coefs = np.squeeze(basis.modes)
         tel*dm_0
