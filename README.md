@@ -102,7 +102,7 @@ numpy.show_config()
 
 
 ## CONTRIBUTORS
-C.T. Heritier, C. Vérinaud, B. Engler
+C.T. Heritier, C. Vérinaud, B. Engler, J. Aveiro
 
 
 ## ACKNOWLEDGEMENTS
