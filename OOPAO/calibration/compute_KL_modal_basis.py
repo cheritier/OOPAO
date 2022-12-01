@@ -8,7 +8,7 @@ Created on Wed Oct 21 10:57:29 2020
 import numpy as np
 from astropy.io import fits as pfits
 
-import ao_cockpit_psim as aou
+import OOPAO.calibration.ao_cockpit_psim as aou
 from ..tools.tools import createFolder
 
 
