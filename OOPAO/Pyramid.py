@@ -138,6 +138,8 @@ class Pyramid:
         self.telescope                  = telescope                                         # telescope attached to the wfs
         if self.telescope.resolution/nSubap <4 or (self.telescope.resolution/nSubap)%2 !=0:
             raise ValueError('The resolution should be an even number and be a multiple of 2**i where i>=2')
+        if self.telescope.src is None:
+            raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
         self.delta_theta                = delta_theta                                       # delta theta in degree to change the position of the modulation point (default is 0 <=> modulation point on the edge of two sides of the pyramid)
         self.nTheta_user_defined        = nTheta_user_defined                               # user defined number of modulation point
         self.extraModulationFactor      = extraModulationFactor                             # Extra Factor to increase/reduce the number of modulation point (extraModulationFactor = 1 means 4 modulation points added, 1 for each quadrant)

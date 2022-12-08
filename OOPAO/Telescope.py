@@ -113,13 +113,13 @@ class Telescope:
         self.pupilReflectivity           = self.pupil.astype(float)*pupilReflectivity                   # A non uniform reflectivity can be input by the user
         self.pixelArea                   = np.sum(self.pupil)                                           # Total number of pixels in the pupil area
         self.pupilLogical                = np.where(np.reshape(self.pupil,resolution*resolution)>0)     # index of valid pixels in the pupil
-        self.src                         = Source(optBand = 'V', magnitude = 0, display_properties=False)                                                # temporary source object associated to the telescope object
+        self.src                         = None                                               # temporary source object associated to the telescope object
         self.OPD                         = self.pupil.astype(float)                                     # set the initial OPD
         self.OPD_no_pupil                = 1+self.pupil.astype(float)*0                                     # set the initial OPD
-        self.em_field                    = self.pupilReflectivity*np.exp(1j*self.src.phase)
+        # self.em_field                    = self.pupilReflectivity*np.exp(1j*self.src.phase)
         self.tag                         = 'telescope'                                                  # tag of the object
         self.isPaired                    = False                                                        # indicate if telescope object is paired with an atmosphere object
-        self.spatialFilter              = None
+        self.spatialFilter               = None
 
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TELESCOPE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         print('{: ^18s}'.format('Diameter')                     + '{: ^18s}'.format(str(self.D))                                        +'{: ^18s}'.format('[m]'   ))
@@ -133,48 +133,44 @@ class Telescope:
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF COMPUTATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
     def computePSF(self,zeroPaddingFactor=2):
-        if hasattr(self,'src'): 
-            # number of pixel considered 
-            N       = int(zeroPaddingFactor * self.resolution)        
-            center  = N//2           
-            norma   = N
-            
-            if self.spatialFilter is not None:
-                self.spatialFilter.set_spatial_filter(zeroPaddingFactor = zeroPaddingFactor)
-                mask = self.spatialFilter.mask
-                amp_mask = self.amplitude_filtered
-                phase = self.phase_filtered
-            else:
-                mask = 1
-                amp_mask = 1
-                phase = self.src.phase
-                
-            # zeroPadded support for the FFT
-            supportPadded = np.zeros([N,N],dtype='complex')
-            supportPadded [center-self.resolution//2:center+self.resolution//2,center-self.resolution//2:center+self.resolution//2] = amp_mask*self.pupil*self.pupilReflectivity*np.sqrt(self.src.fluxMap)*np.exp(1j*phase)
-            [xx,yy]                         = np.meshgrid(np.linspace(0,N-1,N),np.linspace(0,N-1,N))
-            self.phasor                     = np.exp(-(1j*np.pi*(N+1)/N)*(xx+yy))
-
-
-
-            # axis in arcsec
-            self.xPSF_arcsec       = [-206265*(self.src.wavelength/self.D) * (self.resolution/2), 206265*(self.src.wavelength/self.D) * (self.resolution/2)]
-            self.yPSF_arcsec       = [-206265*(self.src.wavelength/self.D) * (self.resolution/2), 206265*(self.src.wavelength/self.D) * (self.resolution/2)]
-            
-            # axis in radians
-            self.xPSF_rad   = [-(self.src.wavelength/self.D) * (self.resolution/2),(self.src.wavelength/self.D) * (self.resolution/2)]
-            self.yPSF_rad   = [-(self.src.wavelength/self.D) * (self.resolution/2),(self.src.wavelength/self.D) * (self.resolution/2)]
-            
-            # PSF computation
-            self.PSF        = (np.abs(np.fft.fft2(supportPadded*self.phasor)*mask/norma)**2)            
-            self.PSF_norma  = self.PSF/self.PSF.max()   
-            N_trunc = int(np.floor(2*N/6))
-            self.PSF_norma_zoom  = self.PSF_norma[N_trunc:-N_trunc,N_trunc:-N_trunc]
-
-        else:
-            print('Error: no NGS associated to the Telescope. Combine a tel object with an ngs using ngs*tel')
-            return -1
+        if self.src is None:
+            raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')            # number of pixel considered 
+        N       = int(zeroPaddingFactor * self.resolution)        
+        center  = N//2           
+        norma   = N
         
+        if self.spatialFilter is not None:
+            self.spatialFilter.set_spatial_filter(zeroPaddingFactor = zeroPaddingFactor)
+            mask = self.spatialFilter.mask
+            amp_mask = self.amplitude_filtered
+            phase = self.phase_filtered
+        else:
+            mask = 1
+            amp_mask = 1
+            phase = self.src.phase
+            
+        # zeroPadded support for the FFT
+        supportPadded = np.zeros([N,N],dtype='complex')
+        supportPadded [center-self.resolution//2:center+self.resolution//2,center-self.resolution//2:center+self.resolution//2] = amp_mask*self.pupil*self.pupilReflectivity*np.sqrt(self.src.fluxMap)*np.exp(1j*phase)
+        [xx,yy]                         = np.meshgrid(np.linspace(0,N-1,N),np.linspace(0,N-1,N))
+        self.phasor                     = np.exp(-(1j*np.pi*(N+1)/N)*(xx+yy))
+
+
+
+        # axis in arcsec
+        self.xPSF_arcsec       = [-206265*(self.src.wavelength/self.D) * (self.resolution/2), 206265*(self.src.wavelength/self.D) * (self.resolution/2)]
+        self.yPSF_arcsec       = [-206265*(self.src.wavelength/self.D) * (self.resolution/2), 206265*(self.src.wavelength/self.D) * (self.resolution/2)]
+        
+        # axis in radians
+        self.xPSF_rad   = [-(self.src.wavelength/self.D) * (self.resolution/2),(self.src.wavelength/self.D) * (self.resolution/2)]
+        self.yPSF_rad   = [-(self.src.wavelength/self.D) * (self.resolution/2),(self.src.wavelength/self.D) * (self.resolution/2)]
+        
+        # PSF computation
+        self.PSF        = (np.abs(np.fft.fft2(supportPadded*self.phasor)*mask/norma)**2)            
+        self.PSF_norma  = self.PSF/self.PSF.max()   
+        N_trunc = int(np.floor(2*N/6))
+        self.PSF_norma_zoom  = self.PSF_norma[N_trunc:-N_trunc,N_trunc:-N_trunc]
+    
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF DISPLAY %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def showPSF(self,zoom = 1):
         # display the full PSF or zoom on the core of the PSF
@@ -214,24 +210,25 @@ class Telescope:
     @OPD.setter
     def OPD(self,val):
         self._OPD = val
-        if type(val) is not list:
-            if self.src.tag == 'source':
-                self.src.phase = self._OPD*2*np.pi/self.src.wavelength
-                if np.ndim(self.OPD)==2:
-                    self.mean_removed_OPD = (self.OPD - np.mean(self.OPD[np.where(self.pupil ==1)]))*self.pupil
+        if self.src is not None:
+            if type(val) is not list:
+                if self.src.tag == 'source':
+                    self.src.phase = self._OPD*2*np.pi/self.src.wavelength
+                    if np.ndim(self.OPD)==2:
+                        self.mean_removed_OPD = (self.OPD - np.mean(self.OPD[np.where(self.pupil ==1)]))*self.pupil
+                else:
+                    if self.src.tag == 'asterism':
+                        for i in range(self.src.n_source):
+                            self.src.src[i].phase = self._OPD*2*np.pi/self.src.src[i].wavelength
+                    else:
+                        raise TypeError('The wrong object was attached to the telescope')                                      
             else:
                 if self.src.tag == 'asterism':
-                    for i in range(self.src.n_source):
-                        self.src.src[i].phase = self._OPD*2*np.pi/self.src.src[i].wavelength
-                else:
-                    raise TypeError('The wrong object was attached to the telescope')                                      
-        else:
-            if self.src.tag == 'asterism':
-                if len(self._OPD)==self.src.n_source:
-                    for i in range(self.src.n_source):
-                        self.src.src[i].phase = self._OPD[i]*2*np.pi/self.src.src[i].wavelength
-                else:
-                    raise TypeError('A list of OPD cannnot be propagated to a single source')
+                    if len(self._OPD)==self.src.n_source:
+                        for i in range(self.src.n_source):
+                            self.src.src[i].phase = self._OPD[i]*2*np.pi/self.src.src[i].wavelength
+                    else:
+                        raise TypeError('A list of OPD cannnot be propagated to a single source')
                     
                     
     @property        
@@ -241,23 +238,25 @@ class Telescope:
     @OPD_no_pupil.setter
     def OPD_no_pupil(self,val):
         self._OPD_no_pupil = val
-        if type(val) is not list:
-            if self.src.tag == 'source':
-                self.src.phase_no_pupil = self._OPD_no_pupil*2*np.pi/self.src.wavelength
+        if self.src is not None:
+
+            if type(val) is not list:
+                if self.src.tag == 'source':
+                    self.src.phase_no_pupil = self._OPD_no_pupil*2*np.pi/self.src.wavelength
+                else:
+                    if self.src.tag == 'asterism':
+                        for i in range(self.src.n_source):
+                            self.src.src[i].phase_no_pupil = self._OPD_no_pupil*2*np.pi/self.src.src[i].wavelength
+                    else:
+                        raise TypeError('The wrong object was attached to the telescope')                                      
             else:
                 if self.src.tag == 'asterism':
-                    for i in range(self.src.n_source):
-                        self.src.src[i].phase_no_pupil = self._OPD_no_pupil*2*np.pi/self.src.src[i].wavelength
-                else:
-                    raise TypeError('The wrong object was attached to the telescope')                                      
-        else:
-            if self.src.tag == 'asterism':
-                if len(self._OPD_no_pupil)==self.src.n_source:
-                    for i in range(self.src.n_source):
-                        self.src.src[i].phase_no_pupil = self._OPD_no_pupil[i]*2*np.pi/self.src.src[i].wavelength
-                else:
-                    raise TypeError('The lenght of the OPD list ('+str(len(self._OPD_no_pupil))+') does not match the number of sources ('+str(self.src.n_source)+')')
-                    
+                    if len(self._OPD_no_pupil)==self.src.n_source:
+                        for i in range(self.src.n_source):
+                            self.src.src[i].phase_no_pupil = self._OPD_no_pupil[i]*2*np.pi/self.src.src[i].wavelength
+                    else:
+                        raise TypeError('The lenght of the OPD list ('+str(len(self._OPD_no_pupil))+') does not match the number of sources ('+str(self.src.n_source)+')')
+                        
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TELESCOPE INTERACTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
     
@@ -290,7 +289,10 @@ class Telescope:
             if obj.tag=='detector':
                 self.computePSF()
                 obj.frame = obj.rebin(self.PSF,(obj.resolution,obj.resolution))
-                
+         
+            if obj.tag=='NCPA':
+                    self.OPD += obj.OPD
+                    
             if obj.tag=='spatialFilter':
                 self.spatialFilter  = obj
                 N                   = obj.resolution
@@ -338,9 +340,10 @@ class Telescope:
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TELESCOPE METHODS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def resetOPD(self):
         # re-initialize the telescope OPD to a flat wavefront
-        if self.src.tag == 'asterism':
-            self.OPD = [self.pupil.astype(float) for i in range(self.src.n_source)]
-            self.OPD_no_pupil = [self.pupil.astype(float)*0 +1 for i in range(self.src.n_source)]
+        if self.src is not None:
+            if self.src.tag == 'asterism':
+                self.OPD = [self.pupil.astype(float) for i in range(self.src.n_source)]
+                self.OPD_no_pupil = [self.pupil.astype(float)*0 +1 for i in range(self.src.n_source)]
         else:
             self.OPD = self.pupil.astype(float)
             self.OPD_no_pupil = 1+0*self.pupil.astype(float)

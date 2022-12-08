@@ -97,15 +97,17 @@ class Atmosphere:
         self.tag                    = 'atmosphere'      # Tag of the object
         self.nExtra                 = 2                 # number of extra pixel to generate the phase screens
         self.wavelength             = 500*1e-9          # Wavelengt used to define the properties of the atmosphere
-        self.tel                    = telescope         # associated telescope object
+        self.telescope              = telescope         # associated telescope object
+        if self.telescope.src is None:
+            raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
         self.mode                   = mode              # DEBUG -> first phase screen generation mode
         self.seeingArcsec           = 206265*(self.wavelength/self.r0)
         self.asterism               = asterism          # case when multiple sources are considered (LGS and NGS)
         self.param                  = param
         if self.asterism is not None:
-            self.oversampling_factor    = np.max((np.asarray(self.asterism.coordinates)[:,0]/(self.tel.resolution/2)))
+            self.oversampling_factor    = np.max((np.asarray(self.asterism.coordinates)[:,0]/(self.telescope.resolution/2)))
         else:
-            self.oversampling_factor = self.tel.src.coordinates[0]/(self.tel.resolution/2)
+            self.oversampling_factor = self.telescope.src.coordinates[0]/(self.telescope.resolution/2)
         
         
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATM INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
@@ -174,32 +176,32 @@ class Atmosphere:
         layer.vX            = layer.windSpeed*np.sin(np.deg2rad(layer.direction))      
         
         # Diameter and resolution of the layer including the Field Of View and the number of extra pixels
-        layer.D             = self.tel.D+2*np.tan(self.tel.fov/2)*layer.altitude*self.oversampling_factor
-        layer.resolution    = int(np.ceil((self.tel.resolution/self.tel.D)*layer.D))
+        layer.D             = self.telescope.D+2*np.tan(self.telescope.fov/2)*layer.altitude*self.oversampling_factor
+        layer.resolution    = int(np.ceil((self.telescope.resolution/self.telescope.D)*layer.D))
         
-        layer.D_fov             = self.tel.D+2*np.tan(self.tel.fov/2)*layer.altitude
-        layer.resolution_fov    = int(np.ceil((self.tel.resolution/self.tel.D)*layer.D))
+        layer.D_fov             = self.telescope.D+2*np.tan(self.telescope.fov/2)*layer.altitude
+        layer.resolution_fov    = int(np.ceil((self.telescope.resolution/self.telescope.D)*layer.D))
         
         layer.center = layer.resolution//2
         
         if self.asterism is None:
-            [x_z,y_z] = pol2cart(self.tel.src.coordinates[0]*(layer.D_fov-self.tel.D)/self.tel.D,np.deg2rad(self.tel.src.coordinates[1]))
+            [x_z,y_z] = pol2cart(self.telescope.src.coordinates[0]*(layer.D_fov-self.telescope.D)/self.telescope.D,np.deg2rad(self.telescope.src.coordinates[1]))
      
             center_x = int(y_z)+layer.resolution//2
             center_y = int(x_z)+layer.resolution//2
         
             layer.pupil_footprint = np.zeros([layer.resolution,layer.resolution])
-            layer.pupil_footprint[center_x-self.tel.resolution//2:center_x+self.tel.resolution//2,center_y-self.tel.resolution//2:center_y+self.tel.resolution//2 ] = 1
+            layer.pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution//2,center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2 ] = 1
         else:
             layer.pupil_footprint= []
             for i in range(self.asterism.n_source):
-                 [x_z,y_z] = pol2cart(self.asterism.coordinates[i][0]*(layer.D_fov-self.tel.D)/self.tel.D,np.deg2rad(self.asterism.coordinates[i][1]))
+                 [x_z,y_z] = pol2cart(self.asterism.coordinates[i][0]*(layer.D_fov-self.telescope.D)/self.telescope.D,np.deg2rad(self.asterism.coordinates[i][1]))
      
                  center_x = int(y_z)+layer.resolution//2
                  center_y = int(x_z)+layer.resolution//2
             
                  pupil_footprint = np.zeros([layer.resolution,layer.resolution])
-                 pupil_footprint[center_x-self.tel.resolution//2:center_x+self.tel.resolution//2,center_y-self.tel.resolution//2:center_y+self.tel.resolution//2 ] = 1
+                 pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution//2,center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2 ] = 1
                  layer.pupil_footprint.append(pupil_footprint)   
         # layer pixel size
         layer.d0            = layer.D/layer.resolution
@@ -270,8 +272,8 @@ class Atmosphere:
 
     def updateLayer(self,layer):
         self.ps_loop    = layer.D / (layer.resolution)
-        ps_turb_x       = layer.vX*self.tel.samplingTime
-        ps_turb_y       = layer.vY*self.tel.samplingTime
+        ps_turb_x       = layer.vX*self.telescope.samplingTime
+        ps_turb_y       = layer.vY*self.telescope.samplingTime
         
         if layer.vX==0 and layer.vY==0:
             layer.phase = layer.phase
@@ -329,62 +331,62 @@ class Atmosphere:
             self.updateLayer(tmpLayer)
             phase_support = self.fill_phase_support(tmpLayer,phase_support,i_layer)
         self.set_OPD(phase_support)
-        if self.tel.isPaired:
-            self*self.tel
+        if self.telescope.isPaired:
+            self*self.telescope
             
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATM METHODS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def initialize_phase_support(self):
         if self.asterism is None:
-            phase_support = np.zeros([self.tel.resolution,self.tel.resolution])
+            phase_support = np.zeros([self.telescope.resolution,self.telescope.resolution])
         else:
             phase_support = []
             for i in range(self.asterism.n_source):
-                phase_support.append(np.zeros([self.tel.resolution,self.tel.resolution]))
+                phase_support.append(np.zeros([self.telescope.resolution,self.telescope.resolution]))
         return phase_support
     def fill_phase_support(self,tmpLayer,phase_support,i_layer):
         if self.asterism is None:
-            phase_support+= np.reshape(tmpLayer.phase[np.where(tmpLayer.pupil_footprint==1)],[self.tel.resolution,self.tel.resolution])* np.sqrt(self.fractionalR0[i_layer])
+            phase_support+= np.reshape(tmpLayer.phase[np.where(tmpLayer.pupil_footprint==1)],[self.telescope.resolution,self.telescope.resolution])* np.sqrt(self.fractionalR0[i_layer])
             # wavelenfth scaling
             tmpLayer.phase *= self.wavelength/2/np.pi
         else:
             for i in range(self.asterism.n_source):
                 if self.asterism.src[i].type == 'LGS':
-                    sub_im = np.reshape(tmpLayer.phase[np.where(tmpLayer.pupil_footprint[i]==1)],[self.tel.resolution,self.tel.resolution])
-                    alpha_cone = np.arctan(self.tel.D/2/self.asterism.altitude[i])
+                    sub_im = np.reshape(tmpLayer.phase[np.where(tmpLayer.pupil_footprint[i]==1)],[self.telescope.resolution,self.telescope.resolution])
+                    alpha_cone = np.arctan(self.telescope.D/2/self.asterism.altitude[i])
                     h = self.asterism.altitude[i]-tmpLayer.altitude
                     if np.isinf(h):
-                        r =self.tel.D/2
+                        r =self.telescope.D/2
                     else:
                         r = h*np.tan(alpha_cone)
-                    ratio = self.tel.D/r/2
+                    ratio = self.telescope.D/r/2
                     cube_in = np.atleast_3d(sub_im).T
                     
                     pixel_size_in   = tmpLayer.D/tmpLayer.resolution
                     pixel_size_out  = pixel_size_in/ratio
-                    resolution_out  = self.tel.resolution
+                    resolution_out  = self.telescope.resolution
 
                     phase_support[i]+= np.squeeze(interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out)).T* np.sqrt(self.fractionalR0[i_layer])
 
                 else:
-                    phase_support[i]+= np.reshape(tmpLayer.phase[np.where(tmpLayer.pupil_footprint[i]==1)],[self.tel.resolution,self.tel.resolution])* np.sqrt(self.fractionalR0[i_layer])
+                    phase_support[i]+= np.reshape(tmpLayer.phase[np.where(tmpLayer.pupil_footprint[i]==1)],[self.telescope.resolution,self.telescope.resolution])* np.sqrt(self.fractionalR0[i_layer])
         return phase_support
     
     def set_OPD(self,phase_support):
         if self.asterism is None:
             self.OPD_no_pupil   = phase_support*self.wavelength/2/np.pi
-            self.OPD            = self.OPD_no_pupil*self.tel.pupil
+            self.OPD            = self.OPD_no_pupil*self.telescope.pupil
         else:
             self.OPD =[]
             self.OPD_no_pupil = []
             for i in range(self.asterism.n_source):
                 self.OPD_no_pupil.append(phase_support[i]*self.wavelength/2/np.pi)
-                self.OPD.append(self.OPD_no_pupil[i]*self.tel.pupil)
+                self.OPD.append(self.OPD_no_pupil[i]*self.telescope.pupil)
         return
     def get_covariance_matrices(self,layer):
         # Compute the covariance matrices
         compute_covariance_matrices = True
 
-        if self.tel.fov == 0: 
+        if self.telescope.fov == 0: 
             try:
                 c=time.time()        
                 self.ZZt_r0 = self.ZZt_r0
@@ -434,7 +436,7 @@ class Atmosphere:
                 
                     print('saving for future...')
                     data = dict()
-                    data['pupil'] = self.tel.pupil
+                    data['pupil'] = self.telescope.pupil
                     data['ZZt_inv'] = self.ZZt_inv
                             
                     data_encoded  = jsonpickle.encode(data)
@@ -486,8 +488,8 @@ class Atmosphere:
             setattr(self,'layer_'+str(i_layer+1),tmpLayer )
             phase_support = self.fill_phase_support(tmpLayer,phase_support,i_layer)
         self.set_OPD(phase_support)
-        if self.tel.isPaired:
-            self*self.tel
+        if self.telescope.isPaired:
+            self*self.telescope
 
 
     def print_atm_at_wavelength(self,wavelength):
@@ -514,7 +516,7 @@ class Atmosphere:
         print('{: ^18s}'.format('r0') + '{: ^18s}'.format(str(self.r0)+' [m]' ))
         print('{: ^18s}'.format('L0') + '{: ^18s}'.format(str(self.L0)+' [m]' ))
         print('{: ^18s}'.format('Seeing (V)') + '{: ^18s}'.format(str(np.round(self.seeingArcsec,2))+' ["]'))
-        print('{: ^18s}'.format('Frequency') + '{: ^18s}'.format(str(np.round(1/self.tel.samplingTime,2))+' [Hz]' ))
+        print('{: ^18s}'.format('Frequency') + '{: ^18s}'.format(str(np.round(1/self.telescope.samplingTime,2))+' [Hz]' ))
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         
     def __mul__(self,obj):
@@ -544,37 +546,37 @@ class Atmosphere:
             ax.imshow(tmpLayer.phase,extent = [-tmpLayer.D/2,tmpLayer.D/2,-tmpLayer.D/2,tmpLayer.D/2])
             center = tmpLayer.D/2
             [x_tel,y_tel] = pol2cart(tmpLayer.D_fov/2, np.linspace(0,2*np.pi,100,endpoint=True))  
-            if self.tel.src.tag =='asterism':
-                for i_source in range(len(self.tel.src.src)):
+            if self.telescope.src.tag =='asterism':
+                for i_source in range(len(self.telescope.src.src)):
                     
-                    [x_c,y_c] = pol2cart(self.tel.D/2, np.linspace(0,2*np.pi,100,endpoint=True))
-                    alpha_cone = np.arctan(self.tel.D/2/self.tel.src.src[i_source].altitude)
+                    [x_c,y_c] = pol2cart(self.telescope.D/2, np.linspace(0,2*np.pi,100,endpoint=True))
+                    alpha_cone = np.arctan(self.telescope.D/2/self.telescope.src.src[i_source].altitude)
                     
-                    h = self.tel.src.src[i_source].altitude-tmpLayer.altitude
+                    h = self.telescope.src.src[i_source].altitude-tmpLayer.altitude
                     if np.isinf(h):
-                        r =self.tel.D/2
+                        r =self.telescope.D/2
                     else:
                         r = h*np.tan(alpha_cone)
                     [x_cone,y_cone] = pol2cart(r, np.linspace(0,2*np.pi,100,endpoint=True))
                     
-                    [x_z,y_z] = pol2cart(self.tel.src.src[i_source].coordinates[0]*(tmpLayer.D_fov-self.tel.D)/self.tel.resolution,np.deg2rad(self.tel.src.src[i_source].coordinates[1]))
+                    [x_z,y_z] = pol2cart(self.telescope.src.src[i_source].coordinates[0]*(tmpLayer.D_fov-self.telescope.D)/self.telescope.resolution,np.deg2rad(self.telescope.src.src[i_source].coordinates[1]))
                     center = 0
                     [x_c,y_c] = pol2cart(tmpLayer.D_fov/2, np.linspace(0,2*np.pi,100,endpoint=True))  
                 
                     ax.plot(x_cone+x_z+center,y_cone+y_z+center,'-', color = col [i_source])        
                     ax.fill(x_cone+x_z+center,y_cone+y_z+center,y_z+center, alpha = 0.25, color = col[i_source])
             else:
-                [x_c,y_c] = pol2cart(self.tel.D/2, np.linspace(0,2*np.pi,100,endpoint=True))
-                alpha_cone = np.arctan(self.tel.D/2/self.tel.src.altitude)
+                [x_c,y_c] = pol2cart(self.telescope.D/2, np.linspace(0,2*np.pi,100,endpoint=True))
+                alpha_cone = np.arctan(self.telescope.D/2/self.telescope.src.altitude)
                 
-                h = self.tel.src.altitude-tmpLayer.altitude
+                h = self.telescope.src.altitude-tmpLayer.altitude
                 if np.isinf(h):
-                    r =self.tel.D/2
+                    r =self.telescope.D/2
                 else:
                     r = h*np.tan(alpha_cone)
                 [x_cone,y_cone] = pol2cart(r, np.linspace(0,2*np.pi,100,endpoint=True))
                 
-                [x_z,y_z] = pol2cart(self.tel.src.coordinates[0]*(tmpLayer.D_fov-self.tel.D)/self.tel.resolution,np.deg2rad(self.tel.src.coordinates[1]))
+                [x_z,y_z] = pol2cart(self.telescope.src.coordinates[0]*(tmpLayer.D_fov-self.telescope.D)/self.telescope.resolution,np.deg2rad(self.telescope.src.coordinates[1]))
             
                 center = 0
                 [x_c,y_c] = pol2cart(tmpLayer.D_fov/2, np.linspace(0,2*np.pi,100,endpoint=True))  
@@ -626,7 +628,7 @@ class Atmosphere:
              del self.XXt
              del self.ZXt
              del self.ZZt_inv
-             self.initializeAtmosphere(self.tel)
+             self.initializeAtmosphere(self.telescope)
     @property
     def windSpeed(self):
          return self._windSpeed
@@ -645,8 +647,8 @@ class Atmosphere:
                     tmpLayer.windSpeed = val[i_layer]
                     tmpLayer.vY            = tmpLayer.windSpeed*np.cos(np.deg2rad(tmpLayer.direction))                    
                     tmpLayer.vX            = tmpLayer.windSpeed*np.sin(np.deg2rad(tmpLayer.direction))
-                    ps_turb_x = tmpLayer.vX*self.tel.samplingTime
-                    ps_turb_y = tmpLayer.vY*self.tel.samplingTime
+                    ps_turb_x = tmpLayer.vX*self.telescope.samplingTime
+                    ps_turb_y = tmpLayer.vY*self.telescope.samplingTime
                     tmpLayer.ratio[0] = ps_turb_x/self.ps_loop
                     tmpLayer.ratio[1] = ps_turb_y/self.ps_loop
                     setattr(self,'layer_'+str(i_layer+1),tmpLayer )
@@ -671,8 +673,8 @@ class Atmosphere:
                     tmpLayer.direction = val[i_layer]
                     tmpLayer.vY            = tmpLayer.windSpeed*np.cos(np.deg2rad(tmpLayer.direction))                    
                     tmpLayer.vX            = tmpLayer.windSpeed*np.sin(np.deg2rad(tmpLayer.direction))
-                    ps_turb_x = tmpLayer.vX*self.tel.samplingTime
-                    ps_turb_y = tmpLayer.vY*self.tel.samplingTime
+                    ps_turb_x = tmpLayer.vX*self.telescope.samplingTime
+                    ps_turb_y = tmpLayer.vY*self.telescope.samplingTime
                     tmpLayer.ratio[0] = ps_turb_x/self.ps_loop
                     tmpLayer.ratio[1] = ps_turb_y/self.ps_loop
                     setattr(self,'layer_'+str(i_layer+1),tmpLayer )
