@@ -166,7 +166,10 @@ class Telescope:
         self.yPSF_rad   = [-(self.src.wavelength/self.D) * (self.resolution/2),(self.src.wavelength/self.D) * (self.resolution/2)]
         
         # PSF computation
-        self.PSF        = (np.abs(np.fft.fft2(supportPadded*self.phasor)*mask/norma)**2)            
+        if self.spatialFilter is not None:
+            self.PSF        = np.fft.fftshift(np.abs(np.fft.fft2(supportPadded)*mask/norma)**2)            
+        else:
+            self.PSF        = (np.abs(np.fft.fft2(supportPadded*self.phasor)*mask/norma)**2)            
         self.PSF_norma  = self.PSF/self.PSF.max()   
         N_trunc = int(np.floor(2*N/6))
         self.PSF_norma_zoom  = self.PSF_norma[N_trunc:-N_trunc,N_trunc:-N_trunc]
@@ -344,9 +347,9 @@ class Telescope:
             if self.src.tag == 'asterism':
                 self.OPD = [self.pupil.astype(float) for i in range(self.src.n_source)]
                 self.OPD_no_pupil = [self.pupil.astype(float)*0 +1 for i in range(self.src.n_source)]
-        else:
-            self.OPD = self.pupil.astype(float)
-            self.OPD_no_pupil = 1+0*self.pupil.astype(float)
+            else:
+                self.OPD = self.pupil.astype(float)
+                self.OPD_no_pupil = 1+0*self.pupil.astype(float)
             
     def apply_spiders(self,angle,thickness_spider,offset_X = None, offset_Y=None):
         pup = np.copy(self.pupil)
