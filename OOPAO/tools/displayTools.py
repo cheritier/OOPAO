@@ -393,7 +393,9 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = 
            # SCATTER
                     if type_fig[count] == 'scatter':
                         data_tmp = list_fig[count]
-                        scatter_tmp = sp_tmp.scatter(data_tmp[0],data_tmp[1],c=data_tmp[2],marker = 'o', s =s)
+                        n = mpl.colors.Normalize(vmin = min(data_tmp[2]), vmax = max(data_tmp[2]))
+                        m = mpl.cm.ScalarMappable(norm=n)
+                        scatter_tmp = sp_tmp.scatter(data_tmp[0],data_tmp[1],c=m.to_rgba(data_tmp[2]),marker = 'o', s =s)
                         setattr(plt_obj,'im_'+str(count),scatter_tmp)  
                         sp_tmp.set_facecolor([0,0.1,0.25])
                         for spine in sp_tmp.spines.values():
@@ -453,7 +455,10 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = 
                         m = mpl.cm.ScalarMappable(norm=n)
 
                         im_tmp = getattr(plt_obj,'im_'+str(count))
-                        im_tmp.set_facecolor(m.to_rgba(data))
+
+                        im_tmp.set_facecolors(m.to_rgba(data))
+                        im_tmp.set_clim(vmin=min(data), vmax=max(data))
+
                         im_tmp.colorbar.update_normal(m)    
                 count+=1
     plt.draw()
