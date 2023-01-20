@@ -132,7 +132,7 @@ class Telescope:
         self.isInitialized= True
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF COMPUTATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
-    def computePSF(self,zeroPaddingFactor=2):
+    def computePSF(self,zeroPaddingFactor=2, N_crop = None):
         if self.src is None:
             raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')            # number of pixel considered 
         N       = int(zeroPaddingFactor * self.resolution)        
@@ -171,8 +171,10 @@ class Telescope:
         else:
             self.PSF        = (np.abs(np.fft.fft2(supportPadded*self.phasor)*mask/norma)**2)            
         self.PSF_norma  = self.PSF/self.PSF.max()   
-        N_trunc = int(np.floor(2*N/6))
-        self.PSF_norma_zoom  = self.PSF_norma[N_trunc:-N_trunc,N_trunc:-N_trunc]
+        if N_crop is None:
+            N_crop = int(np.floor(2*N/6))
+    
+        self.PSF_norma_zoom  = self.PSF_norma[N_crop:-N_crop,N_crop:-N_crop]
     
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF DISPLAY %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def showPSF(self,zoom = 1):
@@ -367,6 +369,8 @@ class Telescope:
             x = np.linspace(-self.D/2,self.D/2,self.resolution)
             [X,Y] = np.meshgrid(x,x)
             X+=offset_X[i]
+            Y+=offset_Y[i]
+
             map_dist = np.abs(X*np.cos(np.deg2rad(angle_val)) + Y*np.sin(np.deg2rad(-angle_val)))
     
             if 0<=angle_val<90:
