@@ -531,6 +531,8 @@ class Atmosphere:
             layer_index = list(np.arange(self.nLayer))
         if type(layer_index) is not list:
             raise TypeError(' layer_index should be a list') 
+        normalized_speed = np.asarray(self.windSpeed)/max(self.windSpeed)
+
         col = getColorOrder() 
         if fig_index is None:
             
@@ -589,6 +591,8 @@ class Atmosphere:
             ax.set_title('Altitude '+str(tmpLayer.altitude)+' m')
             ax.plot(x_tel+center,y_tel+center,'--',color = 'k')
             
+            ax.arrow(center, center, center+normalized_speed[i_l]*(tmpLayer.D_fov/2)*np.cos(np.deg2rad(tmpLayer.direction)),center+normalized_speed[i_l]*(tmpLayer.D_fov/2)*np.sin(np.deg2rad(tmpLayer.direction)),length_includes_head=True,width=0.25, facecolor = [0,0,0])
+            ax.text(center+tmpLayer.D_fov/8*np.cos(np.deg2rad(tmpLayer.direction)), center+tmpLayer.D_fov/8*np.sin(np.deg2rad(tmpLayer.direction)),str(self.windSpeed[i_l])+' m/s', fontweight=100,color=[1,1,1],fontsize = 18)
  # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATM PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
    
     
