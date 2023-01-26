@@ -415,7 +415,11 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = 
                         if plt_obj.list_label[count] is not None:
                             plt.xlabel(plt_obj.list_label[count][0])
                             plt.ylabel(plt_obj.list_label[count][1]) 
-                
+        COLOR = 'black'
+        mpl.rcParams['text.color'] = COLOR
+        mpl.rcParams['axes.labelcolor'] = COLOR
+        mpl.rcParams['xtick.color'] = COLOR
+        mpl.rcParams['ytick.color'] = COLOR
         def hover(event):
             if event.inaxes == plt_obj.ax_0_1:
                 cont, ind = f.contains(event)        
