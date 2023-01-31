@@ -88,6 +88,8 @@ class ShackHartmann:
         """ 
         self.tag                            = 'shackHartmann'
         self.telescope                      = telescope
+        if self.telescope.src is None:
+            raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
         self.is_geometric                   = is_geometric
         self.nSubap                         = nSubap
         self.lightRatio                     = lightRatio
