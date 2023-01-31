@@ -504,6 +504,11 @@ class Atmosphere:
         return
         
     def print_atm(self):
+        # Keep this ancient function name for compatibility
+        print_properties(self)
+        
+        
+    def print_properties(self):
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         print('{: ^18s}'.format('Layer') + '{: ^18s}'.format('Direction [deg]')+ '{: ^18s}'.format('Speed [m/s]')+ '{: ^18s}'.format('Altitude [m]')+ '{: ^18s}'.format('Cn2 [m-2/3]') )
         print('------------------------------------------------------------------------------------------')
