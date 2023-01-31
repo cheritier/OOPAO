@@ -263,16 +263,8 @@ class Pyramid:
         self.telescope.resetOPD()
         self.wfs_measure(phase_in=self.telescope.src.phase)
         
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PYRAMID WFS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        print('{: ^18s}'.format('Pupils Diameter')      + '{: ^18s}'.format(str(self.nSubap))                       +'{: ^18s}'.format('[pixels]'   ))
-        print('{: ^18s}'.format('Pupils Separation')    + '{: ^18s}'.format(str(self.n_pix_separation))             +'{: ^18s}'.format('[pixels]'   ))
-        print('{: ^18s}'.format('FoV')                  + '{: ^18s}'.format(str(np.round(self.fov,2)))              +'{: ^18s}'.format('[arcsec]'   ))
-        print('{: ^18s}'.format('TT Modulation')        + '{: ^18s}'.format(str(self.modulation))                   +'{: ^18s}'.format('[lamda/D]'  ))
-        print('{: ^18s}'.format('PSF Core Sampling')    + '{: ^18s}'.format(str(1+self.psfCentering*3))             +'{: ^18s}'.format('[pixel(s)]' ))
-        print('{: ^18s}'.format('Valid Pixels')         + '{: ^18s}'.format(str(self.nSignal))                    +'{: ^18s}'.format('[pixel(s)]' ))
-        print('{: ^18s}'.format('Signal Computation')   + '{: ^18s}'.format(str(self.postProcessing)                                                ))
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-
+        self.print_properties()
+        
 ## %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS INITIALIZATION PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def mask_computation(self):
         print('Pyramid Mask initialization...')
@@ -957,6 +949,17 @@ class Pyramid:
                             print('          '+str(a[0])+': '+str(np.shape(a[1])))    
 
 
+    def print_properties(self):
+        
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PYRAMID WFS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        print('{: ^18s}'.format('Pupils Diameter')      + '{: ^18s}'.format(str(self.nSubap))                       +'{: ^18s}'.format('[pixels]'   ))
+        print('{: ^18s}'.format('Pupils Separation')    + '{: ^18s}'.format(str(self.n_pix_separation))             +'{: ^18s}'.format('[pixels]'   ))
+        print('{: ^18s}'.format('FoV')                  + '{: ^18s}'.format(str(np.round(self.fov,2)))              +'{: ^18s}'.format('[arcsec]'   ))
+        print('{: ^18s}'.format('TT Modulation')        + '{: ^18s}'.format(str(self.modulation))                   +'{: ^18s}'.format('[lamda/D]'  ))
+        print('{: ^18s}'.format('PSF Core Sampling')    + '{: ^18s}'.format(str(1+self.psfCentering*3))             +'{: ^18s}'.format('[pixel(s)]' ))
+        print('{: ^18s}'.format('Valid Pixels')         + '{: ^18s}'.format(str(self.nSignal))                    +'{: ^18s}'.format('[pixel(s)]' ))
+        print('{: ^18s}'.format('Signal Computation')   + '{: ^18s}'.format(str(self.postProcessing)                                                ))
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
-                                   
+   
         
