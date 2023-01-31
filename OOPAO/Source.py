@@ -204,3 +204,9 @@ class Source:
                         if np.ndim(a[1])>1:
                             print('          '+str(a[0])+': '+str(np.shape(a[1])))   
             
+    def print_properties(self):
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOURCE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        print('{: ^21s}'.format('Altitude')                     + '{: ^18s}'.format(str(self.altitude))                   +'{: ^18s}'.format('[m]'))
+        print('{: ^21s}'.format('Magnitude')                                    + '{: ^18s}'.format(str(self.magnitude)) )
+        print('{: ^21s}'.format('Optical band')                      + '{: ^18s}'.format(self.optBand))
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
