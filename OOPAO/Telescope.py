@@ -121,14 +121,8 @@ class Telescope:
         self.isPaired                    = False                                                        # indicate if telescope object is paired with an atmosphere object
         self.spatialFilter               = None
 
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TELESCOPE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        print('{: ^18s}'.format('Diameter')                     + '{: ^18s}'.format(str(self.D))                                        +'{: ^18s}'.format('[m]'   ))
-        print('{: ^18s}'.format('Resolution')                   + '{: ^18s}'.format(str(self.resolution))                               +'{: ^18s}'.format('[pixels]'   ))
-        print('{: ^18s}'.format('Pixel Size')                   + '{: ^18s}'.format(str(np.round(self.pixelSize,2)))                    +'{: ^18s}'.format('[m]'   ))
-        print('{: ^18s}'.format('Surface')                      + '{: ^18s}'.format(str(np.round(self.pixelArea*self.pixelSize**2)))    +'{: ^18s}'.format('[m2]'  ))
-        print('{: ^18s}'.format('Central Obstruction')          + '{: ^18s}'.format(str(100*self.centralObstruction))                   +'{: ^18s}'.format('[% of diameter]' ))
-        print('{: ^18s}'.format('Pixels in the pupil')           + '{: ^18s}'.format(str(self.pixelArea))                                +'{: ^18s}'.format('[pixels]' ))
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        self.print_properties()
+
         self.isInitialized= True
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF COMPUTATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
@@ -551,6 +545,15 @@ class Telescope:
                             print('          '+str(a[0])+': '+str(np.shape(a[1])))    
 
 
+    def print_properties(self):
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TELESCOPE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        print('{: ^18s}'.format('Diameter')                     + '{: ^18s}'.format(str(self.D))                                        +'{: ^18s}'.format('[m]'   ))
+        print('{: ^18s}'.format('Resolution')                   + '{: ^18s}'.format(str(self.resolution))                               +'{: ^18s}'.format('[pixels]'   ))
+        print('{: ^18s}'.format('Pixel Size')                   + '{: ^18s}'.format(str(np.round(self.pixelSize,2)))                    +'{: ^18s}'.format('[m]'   ))
+        print('{: ^18s}'.format('Surface')                      + '{: ^18s}'.format(str(np.round(self.pixelArea*self.pixelSize**2)))    +'{: ^18s}'.format('[m2]'  ))
+        print('{: ^18s}'.format('Central Obstruction')          + '{: ^18s}'.format(str(100*self.centralObstruction))                   +'{: ^18s}'.format('[% of diameter]' ))
+        print('{: ^18s}'.format('Pixels in the pupil')           + '{: ^18s}'.format(str(self.pixelArea))                                +'{: ^18s}'.format('[pixels]' ))
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
 
 
