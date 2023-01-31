@@ -132,6 +132,54 @@ class Telescope:
         self.isInitialized= True
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF COMPUTATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
+    def computeCoronoPSF(self,zeroPaddingFactor=2):
+        if hasattr(self,'src'): 
+            N       = int(zeroPaddingFactor * self.resolution)        
+            center  = N//2           
+
+            [xx,yy] = np.meshgrid(np.linspace(0,N-1,N),np.linspace(0,N-1,N))
+            xxc = xx - N/2
+            yyc = yy - N/2
+
+            self.focalMask = np.sqrt(xx**2 + yy**2) < 2 * zeroPaddingFactor
+            apodizerZP = np.zeros([N,N],dtype='double')
+            apodizerZP[center-self.resolution//2:center+self.resolution//2,center-self.resolution//2:center+self.resolution//2] = self.pupil
+            self.apodizer  = apodizerZP
+            self.lyotStop  = np.sqrt(xxc**2 + yyc**2) < self.resolution/2 * 0.8
+            phase = self.src.phase
+            amp_mask = 1
+
+            # axis in arcsec
+            self.xPSF_arcsec       = [-206265*(self.src.wavelength/self.D) * (self.resolution/2), 206265*(self.src.wavelength/self.D) * (self.resolution/2)]
+            self.yPSF_arcsec       = [-206265*(self.src.wavelength/self.D) * (self.resolution/2), 206265*(self.src.wavelength/self.D) * (self.resolution/2)]
+            
+            # axis in radians
+            self.xPSF_rad   = [-(self.src.wavelength/self.D) * (self.resolution/2),(self.src.wavelength/self.D) * (self.resolution/2)]
+            self.yPSF_rad   = [-(self.src.wavelength/self.D) * (self.resolution/2),(self.src.wavelength/self.D) * (self.resolution/2)]
+            
+            # zero-padded support for electric field
+            supportPadded = np.zeros([N,N],dtype='complex')
+            supportPadded [center-self.resolution//2:center+self.resolution//2,center-self.resolution//2:center+self.resolution//2] = amp_mask*self.pupil*self.pupilReflectivity*np.sqrt(self.src.fluxMap)*np.exp(1j*phase)
+            self.phasor                     = np.exp(-(1j*np.pi*(N+1)/N)*(xx+yy))
+            
+
+            # Fields computation in A B C D planes
+            A = self.phasor * supportPadded * self.apodizer
+            B = np.fft.fft2(A) * self.focalMask
+            C = np.fft.fft2(B) * self.lyotStop
+            D = np.fft.fft2(C)
+
+            self.PSFc        = (np.abs(D)**2) / N**6            
+            self.PSFc_norma  = self.PSFc/self.PSFc.max()   
+            N_trunc = int(np.floor(2*N/6))
+            self.PSFc_norma_zoom  = self.PSFc_norma[N_trunc:-N_trunc,N_trunc:-N_trunc]
+
+        else:
+            print('Error: no NGS associated to the Telescope. Combine a tel object with an ngs using ngs*tel')
+            return -1
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF COMPUTATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
     def computePSF(self,zeroPaddingFactor=2):
         if hasattr(self,'src'): 
             # number of pixel considered 
