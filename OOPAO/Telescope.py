@@ -12,7 +12,6 @@ import numpy as np
 
 from .Source import Source
 
-
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 class Telescope:
     
@@ -121,16 +120,83 @@ class Telescope:
         self.isPaired                    = False                                                        # indicate if telescope object is paired with an atmosphere object
         self.spatialFilter               = None
 
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TELESCOPE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        print('{: ^18s}'.format('Diameter')                     + '{: ^18s}'.format(str(self.D))                                        +'{: ^18s}'.format('[m]'   ))
-        print('{: ^18s}'.format('Resolution')                   + '{: ^18s}'.format(str(self.resolution))                               +'{: ^18s}'.format('[pixels]'   ))
-        print('{: ^18s}'.format('Pixel Size')                   + '{: ^18s}'.format(str(np.round(self.pixelSize,2)))                    +'{: ^18s}'.format('[m]'   ))
-        print('{: ^18s}'.format('Surface')                      + '{: ^18s}'.format(str(np.round(self.pixelArea*self.pixelSize**2)))    +'{: ^18s}'.format('[m2]'  ))
-        print('{: ^18s}'.format('Central Obstruction')          + '{: ^18s}'.format(str(100*self.centralObstruction))                   +'{: ^18s}'.format('[% of diameter]' ))
-        print('{: ^18s}'.format('Pixels in the pupil')           + '{: ^18s}'.format(str(self.pixelArea))                                +'{: ^18s}'.format('[pixels]' ))
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        self.print_properties()
+
         self.isInitialized= True
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF COMPUTATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+    def computeCoronoPSF(self,zeroPaddingFactor=2, display = False):
+        if self.src is None:
+            raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')            # number of pixel considered 
+        N       = int(zeroPaddingFactor * self.resolution)        
+        center  = N//2           
+
+        [xx,yy] = np.meshgrid(np.linspace(0,N-1,N),np.linspace(0,N-1,N))
+        xxc = xx - (N-1)/2
+        yyc = yy - (N-1)/2
+
+        coronagraphDiameter = 4.5 # diameter in L/D of imaging wavelength (same as wfs for now)
+        self.pupilPadded = np.sqrt(xxc**2 + yyc**2) < self.resolution/2
+        self.pupilSpiderPadded = np.zeros((N,N))
+        self.pupilSpiderPadded[center-self.resolution//2:center+self.resolution//2,center-self.resolution//2:center+self.resolution//2] = self.pupil
+        self.focalMask = np.sqrt(xxc**2 + yyc**2) > coronagraphDiameter/2 * zeroPaddingFactor
+        self.apodizer  = self.pupilPadded
+        self.lyotStop  = (np.sqrt((xxc-1.0)**2 + (yyc-1.0)**2) < self.resolution/2 * 0.9) * self.pupilSpiderPadded
+
+        phase = self.src.phase
+        amp_mask = 1
+
+        # axis in arcsec
+        self.xPSF_arcsec       = [-206265*(self.src.wavelength/self.D) * (self.resolution/2), 206265*(self.src.wavelength/self.D) * (self.resolution/2)]
+        self.yPSF_arcsec       = [-206265*(self.src.wavelength/self.D) * (self.resolution/2), 206265*(self.src.wavelength/self.D) * (self.resolution/2)]
+        
+        # axis in radians
+        self.xPSF_rad   = [-(self.src.wavelength/self.D) * (self.resolution/2),(self.src.wavelength/self.D) * (self.resolution/2)]
+        self.yPSF_rad   = [-(self.src.wavelength/self.D) * (self.resolution/2),(self.src.wavelength/self.D) * (self.resolution/2)]
+        
+        # zero-padded support for electric field
+        supportPadded = np.zeros([N,N],dtype='complex')
+        supportPadded [center-self.resolution//2:center+self.resolution//2,center-self.resolution//2:center+self.resolution//2] = amp_mask*self.pupil*self.pupilReflectivity*np.sqrt(self.src.fluxMap)*np.exp(1j*phase)
+        self.phasor                     = np.exp(-(1j*np.pi*(N+1)/N)*(xx+yy))
+        
+
+        # Fields computation in A B C D planes
+        A = self.phasor * supportPadded * self.apodizer
+        B = np.fft.fft2(A) * self.focalMask
+        C = np.fft.fft2(B) * self.lyotStop
+        D = np.fft.fft2(C)
+
+        self.PSFc        = (np.abs(D)**2) / N**6            
+        self.PSFc_norma  = self.PSFc/self.PSFc.max()   
+        N_trunc = int(np.floor(2*N/6))
+        self.PSFc_norma_zoom  = self.PSFc_norma[N_trunc:-N_trunc,N_trunc:-N_trunc]
+
+        if display is True:
+            #subplot(r,c) provide the no. of rows and columns
+            fig1 = plt.figure(num=1, figsize=(16, 6), dpi=80)
+            fig1.suptitle('Pupil & FP electric fields', fontsize=16)
+            axarr = fig1.subplots(1,4) 
+            axarr[0].imshow(np.log(np.abs(A)))
+            axarr[0].title.set_text('Entrance pupil plane A')
+            axarr[1].imshow(np.log(np.abs(B)))
+            axarr[1].title.set_text('After focal plane B')
+            axarr[2].imshow(np.log(np.abs(C)))
+            axarr[2].title.set_text('After Lyot stop plane C')
+            axarr[3].imshow(np.log(np.abs(D)))
+            axarr[3].title.set_text('Detector plane D')
+    
+            #subplot(r,c) provide the no. of rows and columns
+            fig2 = plt.figure(num=2, figsize=(12, 6), dpi=80)
+            fig2.suptitle('Pupil & FP masks')
+            axarr = fig2.subplots(1,3) 
+            axarr[0].imshow(self.apodizer)
+            axarr[1].imshow(self.focalMask)
+            axarr[2].imshow(self.lyotStop)
+
+            
+    
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF COMPUTATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
 
     def computePSF(self,zeroPaddingFactor=2, N_crop = None):
         if self.src is None:
@@ -502,6 +568,15 @@ class Telescope:
                             print('          '+str(a[0])+': '+str(np.shape(a[1])))    
 
 
+    def print_properties(self):
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TELESCOPE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        print('{: ^18s}'.format('Diameter')                     + '{: ^18s}'.format(str(self.D))                                        +'{: ^18s}'.format('[m]'   ))
+        print('{: ^18s}'.format('Resolution')                   + '{: ^18s}'.format(str(self.resolution))                               +'{: ^18s}'.format('[pixels]'   ))
+        print('{: ^18s}'.format('Pixel Size')                   + '{: ^18s}'.format(str(np.round(self.pixelSize,2)))                    +'{: ^18s}'.format('[m]'   ))
+        print('{: ^18s}'.format('Surface')                      + '{: ^18s}'.format(str(np.round(self.pixelArea*self.pixelSize**2)))    +'{: ^18s}'.format('[m2]'  ))
+        print('{: ^18s}'.format('Central Obstruction')          + '{: ^18s}'.format(str(100*self.centralObstruction))                   +'{: ^18s}'.format('[% of diameter]' ))
+        print('{: ^18s}'.format('Pixels in the pupil')           + '{: ^18s}'.format(str(self.pixelArea))                                +'{: ^18s}'.format('[pixels]' ))
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
 
 

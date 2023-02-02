@@ -153,7 +153,7 @@ class Atmosphere:
         self.hasNotBeenInitialized  = False        
         # save the resulting phase screen in OPD  
         self.set_OPD(phase_support)
-        self.print_atm()
+        self.print_properties()
             
     def buildLayer(self,telescope,r0,L0,i_layer,compute_turbulence = True):
         """
@@ -502,8 +502,13 @@ class Atmosphere:
         print('Seeing \t' + str(np.round(seeingArcsec_wvl,2)) + str('\t ["]'))
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         return
-        
+    
     def print_atm(self):
+             # Keep this ancient function name for compatibility
+             self.print_properties()
+             
+       
+    def print_properties(self):
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         print('{: ^18s}'.format('Layer') + '{: ^18s}'.format('Direction [deg]')+ '{: ^18s}'.format('Speed [m/s]')+ '{: ^18s}'.format('Altitude [m]')+ '{: ^18s}'.format('Cn2 [m-2/3]') )
         print('------------------------------------------------------------------------------------------')

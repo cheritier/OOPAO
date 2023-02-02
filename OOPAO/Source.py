@@ -77,13 +77,10 @@ class Source:
         else:
             
             self.type     = 'NGS'
+
         if self.display_properties:
-            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOURCE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%') 
-            print('{: ^18s}'.format('Source') +'{: ^18s}'.format('Wavelength')+ '{: ^18s}'.format('Zenith [arcsec]')+ '{: ^18s}'.format('Azimuth [deg]')+ '{: ^18s}'.format('Altitude [m]')+ '{: ^18s}'.format('Magnitude') + '{: ^18s}'.format('Flux [phot/m2/s]') )
-            print('------------------------------------------------------------------------------------------------------------------------------')
+            self.print_properties()
             
-            print('{: ^18s}'.format(self.type) +'{: ^18s}'.format(str(self.wavelength))+ '{: ^18s}'.format(str(self.coordinates[0]))+ '{: ^18s}'.format(str(self.coordinates[1]))+'{: ^18s}'.format(str(np.round(self.altitude,2)))+ '{: ^18s}'.format(str(self.magnitude))+'{: ^18s}'.format(str(np.round(self.nPhoton,1))) )
-            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%') 
         self.is_initialized = True
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOURCE INTERACTION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
@@ -204,3 +201,9 @@ class Source:
                         if np.ndim(a[1])>1:
                             print('          '+str(a[0])+': '+str(np.shape(a[1])))   
             
+    def print_properties(self):
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOURCE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%') 
+        print('{: ^18s}'.format('Source') +'{: ^18s}'.format('Wavelength')+ '{: ^18s}'.format('Zenith [arcsec]')+ '{: ^18s}'.format('Azimuth [deg]')+ '{: ^18s}'.format('Altitude [m]')+ '{: ^18s}'.format('Magnitude') + '{: ^18s}'.format('Flux [phot/m2/s]') )
+        print('------------------------------------------------------------------------------------------------------------------------------')        
+        print('{: ^18s}'.format(self.type) +'{: ^18s}'.format(str(self.wavelength))+ '{: ^18s}'.format(str(self.coordinates[0]))+ '{: ^18s}'.format(str(self.coordinates[1]))+'{: ^18s}'.format(str(np.round(self.altitude,2)))+ '{: ^18s}'.format(str(self.magnitude))+'{: ^18s}'.format(str(np.round(self.nPhoton,1))) )
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%') 
