@@ -227,3 +227,27 @@ def compute_fourier_mode(pupil,spatial_frequency,angle_deg,zeropadding = 2):
     mode = S/S.std()
     
     return mode
+
+#%%
+def circularProfile(img):
+    # Compute circular average profile from an image, reference to center of image
+    # Get image parameters
+    a = img.shape[0]
+    b = img.shape[1]
+    # Image center
+    cen_x = a//2
+    cen_y = b//2
+    # Find radial distances
+    [X, Y] = np.meshgrid(np.arange(b) - cen_x, np.arange(a) - cen_y)
+    R = np.sqrt(np.square(X) + np.square(Y))
+    rad = np.arange(1, np.max(R), 1)
+    intensity = np.zeros(len(rad))
+    index = 0
+    bin_size = 1
+    for i in rad:
+        mask = (np.greater(R, i - bin_size) & np.less(R, i + bin_size))
+        values = img[mask]
+        intensity[index] = np.mean(values)
+        index += 1
+    return intensity
+
