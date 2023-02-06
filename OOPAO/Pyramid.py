@@ -102,6 +102,10 @@ class Pyramid:
         _ wfs.random_state_background    : a random state cycle can be defined to reproduces random sequences of noise -- default is based on the current clock time   
         _ wfs.fov                        : Field of View of the Pyramid in arcsec
 
+        The main properties of the object can be displayed using :
+            wfs.print_properties()
+
+
         the following properties can be updated on the fly:
             _ wfs.modulation            : update the modulation radius and update the reference signal
             _ wfs.cam.photonNoise       : Photon noise can be set to True or False
@@ -224,9 +228,9 @@ class Pyramid:
         # joblib settings for parallization
         if self.gpu_available is False:
             if n_cpu > 16:
-                self.nJobs                      = 32                                                                 # number of jobs for the joblib package
+                self.nJobs                      = 8                                                                 # number of jobs for the joblib package
             else:
-                self.nJobs                      = 8
+                self.nJobs                      = 6
             self.n_max = 20*500
         else:
             # quantify GPU max memory usage
