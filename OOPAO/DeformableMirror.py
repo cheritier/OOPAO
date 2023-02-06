@@ -89,7 +89,7 @@ class DeformableMirror:
         _ dm.nValidAct         : number of valid actuators
         _ dm.nAct              : Total number of actuator along the diameter (valid only for the default case using cartesian fried geometry).
                                  Otherwise nAct = dm.nValidAct.
-        _ dm.coordinates       : coordinates in [m] of the dm actuators
+        _ dm.coordinates       : coordinates in [m] of the dm actuators (should be input as a 2D array of dimension [nAct,2])
         _ dm.pitch             : pitch used to compute the gaussian influence functions
         _ dm.misReg            : MisRegistration object associated to the dm object
         
@@ -270,6 +270,9 @@ class DeformableMirror:
         # If the coordinates are specified
             
         else:
+            if np.shape(coordinates)[1] !=2:
+                raise AttributeError('Wrong size for the DM coordinates, the (x,y) coordinates should be input as a 2D array of dimension [nAct,2]')
+                
             print_('Coordinates loaded...',print_dm_properties)
 
             self.xIF0 = coordinates[:,0]
