@@ -15,7 +15,7 @@ from .Source import Source
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 class Telescope:
     
-    def __init__(self,resolution, diameter,samplingTime=0.001,centralObstruction = 0,fov = 0,pupil=None,pupilReflectivity=1):
+    def __init__(self,resolution, diameter,samplingTime=0.001,centralObstruction = 0,fov = 0,pupil=None,pupilReflectivity=1,display_optical_path= False):
         """
         ************************** REQUIRED PARAMETERS **************************
         
@@ -33,7 +33,9 @@ class Telescope:
         _ pupil                 : A user-defined pupil mask can be input to the Telescope object. It should consist of a binary array. 
         _ pupilReflectivcty     : Defines the reflectivity of the Telescope object. If not set to 1, it can be input as a 2D map of uneven reflectivy correspondong to the pupil mask. 
                                   This property can be set after the initialization of the Telescope object.
-                                      
+        The main properties of the object can be displayed using :
+            tel.print_properties()      
+                                  
         ************************** ADDING SPIDERS *******************************
         It is possible to add spiders to the telescope pupil using the following property: 
             
@@ -44,6 +46,15 @@ class Telescope:
             - thickness is the width of the spider in [m]
             - offset_X is a list (same lenght as angle) of shift X to apply to the individual spider  in [m]
             - offset_Y is a list (same lenght as angle) of shift Y to apply to the individual spider  in [m]
+   
+        ************************** PRINTING THE OPTICAL PATH *******************************
+        It is possible to print the current optical path to verify through which object the light went through using the print_optical_path method:
+                
+                tel.print_optical_path()
+        
+        If desired, the optical path can be printed at each time the light is propagated to a WFS object setting the display_optical_path property to True:
+            tel.display_optical_path = True
+        
         
         ************************** COUPLING A SOURCE OBJECT **************************
         
@@ -96,6 +107,8 @@ class Telescope:
         self.samplingTime                = samplingTime              # AO loop speed
         self.isPetalFree                 = False                     # Flag to remove the petalling effect with ane ELT system. 
         self.index_pixel_petals          = None                      # indexes of the pixels corresponfong to the M1 petals. They need to be set externally
+        self.optical_path                = None                      # indexes of the pixels corresponfong to the M1 petals. They need to be set externally
+
 #        Case where the pupil is not input: circular pupil with central obstruction    
         if pupil is None:
             D           = self.resolution+1
@@ -119,7 +132,7 @@ class Telescope:
         self.tag                         = 'telescope'                                                  # tag of the object
         self.isPaired                    = False                                                        # indicate if telescope object is paired with an atmosphere object
         self.spatialFilter               = None
-
+        self.display_optical_path        = display_optical_path
         self.print_properties()
 
         self.isInitialized= True
@@ -351,6 +364,12 @@ class Telescope:
         else:    
               # interaction with WFS object: Propagation of the phase screen
             if obj.tag=='pyramid' or obj.tag == 'double_wfs' or obj.tag=='shackHartmann':
+                self.optical_path.append([obj.tag,id(obj)])
+                if self.display_optical_path is True:
+                    self.print_optical_path()
+                self.optical_path = self.optical_path[:-1]
+
+
                 if type(self.OPD) is list:
                     raise ValueError('Error! There is a mis-match between the number of Sources ('+str(len(self.OPD))+') and the number of WFS (1)')
                 else:
@@ -358,13 +377,21 @@ class Telescope:
                     obj.wfs_measure(phase_in = self.src.phase)               # propagation of the telescope-source phase screen to the pyramid-detector
             # interaction with detector: computation of the PSF
             if obj.tag=='detector':
+                if self.optical_path[-1] != obj.tag: 
+                    self.optical_path.append([obj.tag,id(obj)])
+
                 self.computePSF()
                 obj.frame = obj.rebin(self.PSF,(obj.resolution,obj.resolution))
          
             if obj.tag=='NCPA':
-                    self.OPD += obj.OPD
+                self.optical_path.append([obj.tag,id(obj)])
+
+                self.OPD += obj.OPD
                     
             if obj.tag=='spatialFilter':
+                self.optical_path.append([obj.tag,id(obj)])
+
+
                 self.spatialFilter  = obj
                 N                   = obj.resolution
                 EF_in               = np.zeros([N,N],dtype='complex')
@@ -380,6 +407,9 @@ class Telescope:
                 return self
             
             if obj.tag=='deformableMirror':  
+                if  self.optical_path[-1][1]!=id(obj):
+                    self.optical_path.append([obj.tag,id(obj)])
+
                 pupil = np.atleast_3d(self.pupil)
                 
                 if self.src.tag == 'source':
@@ -412,13 +442,26 @@ class Telescope:
     def resetOPD(self):
         # re-initialize the telescope OPD to a flat wavefront
         if self.src is not None:
+            self.optical_path = [[self.src.type + '('+self.src.optBand+')', id(self.src)]]
+            self.optical_path.append([self.tag,id(self)])
             if self.src.tag == 'asterism':
                 self.OPD = [self.pupil.astype(float) for i in range(self.src.n_source)]
                 self.OPD_no_pupil = [self.pupil.astype(float)*0 +1 for i in range(self.src.n_source)]
             else:
                 self.OPD = self.pupil.astype(float)
                 self.OPD_no_pupil = 1+0*self.pupil.astype(float)
-            
+                
+    def print_optical_path(self):
+        if self.optical_path is not None:
+            tmp_path = ''
+            for i in range(len(self.optical_path)):
+                tmp_path += self.optical_path[i][0]
+                if i <len(self.optical_path)-1:
+                    tmp_path += ' ~~> '
+            print(tmp_path)
+        else:
+            print('No light propagated through the telescope')      
+                
     def apply_spiders(self,angle,thickness_spider,offset_X = None, offset_Y=None):
         pup = np.copy(self.pupil)
         max_offset = self.centralObstruction*self.D/2 - thickness_spider/2
@@ -525,6 +568,9 @@ class Telescope:
     # Combining with an atmosphere object
     def __add__(self,obj):
         if obj.tag == 'atmosphere':
+            self.optical_path =[[self.src.type + '('+self.src.optBand+')',id(self.src)]]
+            self.optical_path.append([obj.tag,id(obj)])
+            self.optical_path.append([self.tag,id(self)])
             self.isPaired   = True
             self.OPD  = obj.OPD.copy()
             self.OPD_no_pupil  = obj.OPD_no_pupil.copy()
@@ -541,6 +587,8 @@ class Telescope:
     # Separating from an atmosphere object
     def __sub__(self,obj):
         if obj.tag == 'atmosphere':
+            self.optical_path =[[self.src.type + '('+self.src.optBand+')',id(self.src)]]
+            self.optical_path.append([self.tag,id(self)])
             self.isPaired   = False  
             self.resetOPD()   
             print('Telescope and Atmosphere separated!')
@@ -575,8 +623,15 @@ class Telescope:
         print('{: ^18s}'.format('Pixel Size')                   + '{: ^18s}'.format(str(np.round(self.pixelSize,2)))                    +'{: ^18s}'.format('[m]'   ))
         print('{: ^18s}'.format('Surface')                      + '{: ^18s}'.format(str(np.round(self.pixelArea*self.pixelSize**2)))    +'{: ^18s}'.format('[m2]'  ))
         print('{: ^18s}'.format('Central Obstruction')          + '{: ^18s}'.format(str(100*self.centralObstruction))                   +'{: ^18s}'.format('[% of diameter]' ))
-        print('{: ^18s}'.format('Pixels in the pupil')           + '{: ^18s}'.format(str(self.pixelArea))                                +'{: ^18s}'.format('[pixels]' ))
+        print('{: ^18s}'.format('Pixels in the pupil')          + '{: ^18s}'.format(str(self.pixelArea))                                +'{: ^18s}'.format('[pixels]' ))
+        if self.src:
+            print('{: ^18s}'.format('Source '+self.src.type)            + '{: ^18s}'.format(str(np.round(1e9*self.src.wavelength,2)))            +'{: ^18s}'.format('[nm]' ))
+        else:
+            print('{: ^18s}'.format('Source')            + '{: ^18s}'.format('None')                                             +'{: ^18s}'.format('' ))
+
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        self.print_optical_path()
+            
 
 
 
