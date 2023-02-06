@@ -72,6 +72,9 @@ class Atmosphere:
         _ atm.seeingArcsec                          : seeing in arcsec at 500 nm
         _ atm.layer_X                               : access the child object corresponding to the layer X where X starts at 0   
         
+        The main properties of the object can be displayed using :
+            atm.print_properties()
+            
         the following properties can be updated on the fly:
             _ atm.r0            
             _ atm.windSpeed      
@@ -525,10 +528,16 @@ class Atmosphere:
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         
     def __mul__(self,obj):
-        obj.OPD=self.OPD
-        obj.OPD_no_pupil=self.OPD_no_pupil
-        obj.isPaired=True
-        return obj
+        if obj.tag == 'telescope':
+            obj.optical_path =[[obj.src.type,id(obj.src)]]
+            obj.optical_path.append([self.tag,id(self)])
+            obj.optical_path.append([obj.tag,id(obj)])
+            obj.OPD          = self.OPD
+            obj.OPD_no_pupil = self.OPD_no_pupil
+            obj.isPaired     = True
+            return obj
+        else:
+            raise AttributeError('The atmosphere can be multiplied only with a Telescope object! ')
     
     
     def display_atm_layers(self,layer_index= None,fig_index = None):
