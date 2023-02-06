@@ -79,10 +79,9 @@ class ShackHartmann:
         _ wfs.fov_pixel_binned_arcsec    : Field of View of the pixel in arcsec
         
         the following properties can be updated on the fly:
-            _ wfs.modulation            : update the modulation radius and update the reference signal
+            _ wfs.is_geometric          : switch between diffractive and geometric shackHartmann
             _ wfs.cam.photonNoise       : Photon noise can be set to True or False
             _ wfs.cam.readoutNoise      : Readout noise can be set to True or False
-            _ wfs.backgroundNoise       : Background noise can be set to True or False
             _ wfs.lightRatio            : reset the valid subaperture selection considering the new value
         
         """ 
@@ -506,8 +505,12 @@ class ShackHartmann:
                 if self.is_LGS:
                     I = np.fft.fftshift(np.abs((np.fft.ifft2(np.fft.fft2(I)*self.C))),axes = [1,2])
 
+                # Crop to get the spot at shannon sampling
+                self.maps_intensity =  I[:,self.n_pix_subap//2:-self.n_pix_subap//2,self.n_pix_subap//2:-self.n_pix_subap//2]
+                
                 # bin the 2D spots intensity to get the desired number of pixel per subaperture
-                self.maps_intensity =  bin_ndarray(I,[I.shape[0], self.n_pix_subap//self.binning_factor,self.n_pix_subap//self.binning_factor], operation='sum')
+                if self.binning_factor>1:
+                    self.maps_intensity =  bin_ndarray(self.maps_intensity,[self.maps_intensity.shape[0], self.n_pix_subap//self.binning_factor,self.n_pix_subap//self.binning_factor], operation='sum')
             
                 # add photon/readout noise to 2D spots
                 if self.cam.photonNoise!=0:

@@ -529,7 +529,7 @@ class Atmosphere:
         
     def __mul__(self,obj):
         if obj.tag == 'telescope':
-            obj.optical_path =[[obj.src.type,id(obj.src)]]
+            obj.optical_path =[[obj.src.type + '('+obj.src.optBand+')',id(obj.src)]]
             obj.optical_path.append([self.tag,id(self)])
             obj.optical_path.append([obj.tag,id(obj)])
             obj.OPD          = self.OPD

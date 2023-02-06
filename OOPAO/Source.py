@@ -36,6 +36,10 @@ class Source:
         _ src.nPhoton   : number of photons per m2 per s. if this property is changed after the initialization, the magnitude is automatically updated to the right value. 
         _ src.fluxMap   : 2D map of the number of photons per pixel per frame (depends on the loop frequency defined by tel.samplingTime)  
         _ src.display_properties : display the properties of the src object
+        
+        The main properties of the object can be displayed using :
+            src.print_properties()
+            
         ************************** OPTIONAL PROPERTIES **************************
         _ altitude              : altitude of the source. Default is inf (NGS) 
         _ laser_coordinates     : The coordinates in [m] of the laser launch telescope
@@ -101,7 +105,13 @@ class Source:
         # assign the source object to the telescope object
 
         self.fluxMap    = telescope.pupilReflectivity*self.nPhoton*telescope.samplingTime*(telescope.D/telescope.resolution)**2
-        
+        if telescope.optical_path is None:
+            telescope.optical_path = []
+            telescope.optical_path.append([self.type + '('+self.optBand+')',id(self)])
+            telescope.optical_path.append([telescope.tag,id(telescope)])
+        else:
+            telescope.optical_path[0] =[self.type + '('+self.optBand+')',id(self)]
+            
         return telescope
      
     
