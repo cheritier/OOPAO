@@ -35,7 +35,7 @@ except:
 
 
 class ShackHartmann:
-    def __init__(self,nSubap,telescope,lightRatio,threshold_cog = 0.01,is_geometric = False, binning_factor = 1,padding_extension_factor = 1, threshold_convolution = 0.05):
+    def __init__(self,nSubap,telescope,lightRatio,threshold_cog = 0.01,is_geometric = False, binning_factor = 1,padding_extension_factor = 1, threshold_convolution = 0.05,shannon_sampling = False):
         """
         ************************** REQUIRED PARAMETERS **************************
         
@@ -52,7 +52,8 @@ class ShackHartmann:
         _ threshold_cog             : threshold (with respect to the maximum value of the image) to apply to compute the center of gravity of the spots
         _ is_geometric              : if True, enables the geometric Shack Hartmann (direct measurement of gradient) if False, the diffractive computation is considered (default)
         _ binning_factor            : binning factor of the detector -- default Value is 1
-        
+        _ shannon_sampling          : If True, the lenslet array spots are sampled at the same sampling as the FFT (2 pix per FWHM). If False, the sampling is 1 pix per FWHM (default).
+            
         # LGS related properties
         _ padding_extension_factor  : zero-padding factor oon the spots intensity images. This is a fast way to provide a larger field of view before the convolution with LGS spots is achieved and allow to prevent wrapping effects
         _threshold_convolution      : threshold considered to force the gaussian spots (elungated spots) to go to zero on the edges
@@ -100,7 +101,7 @@ class ShackHartmann:
         self.padding_extension_factor       = padding_extension_factor
         self.threshold_convolution          = threshold_convolution
         self.threshold_cog                  = threshold_cog
-
+        self.shannon_sampling               = shannon_sampling
 
         # case where the spots are zeropadded to provide larger fOV
         if padding_extension_factor>2:
@@ -136,7 +137,7 @@ class ShackHartmann:
         self.random_state_background        = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
         
         # field of views
-        self.fov_lenslet_arcsec         = self.n_pix_subap*206265*self.binning_factor/self.padding_extension_factor*self.telescope.src.wavelength/(self.telescope.D/self.nSubap)
+        self.fov_lenslet_arcsec         = (self.n_pix_subap*206265*self.binning_factor/self.padding_extension_factor*self.telescope.src.wavelength/(self.telescope.D/self.nSubap))/(1+self.shannon_sampling)
         self.fov_pixel_arcsec           = self.fov_lenslet_arcsec/ self.n_pix_subap
         self.fov_pixel_binned_arcsec    = self.fov_lenslet_arcsec/ self.n_pix_subap_init
 
@@ -498,8 +499,13 @@ class ShackHartmann:
                     I = np.fft.fftshift(np.abs((np.fft.ifft2(np.fft.fft2(I)*self.C))),axes = [1,2])
 
                 # Crop to get the spot at shannon sampling
-                self.maps_intensity =  I[:,self.n_pix_subap//2:-self.n_pix_subap//2,self.n_pix_subap//2:-self.n_pix_subap//2]
-                
+                if self.shannon_sampling:
+                    self.maps_intensity =  I[:,self.n_pix_subap//2:-self.n_pix_subap//2,self.n_pix_subap//2:-self.n_pix_subap//2]
+                    if self.binning_factor>1:
+                        self.maps_intensity =  bin_ndarray(self.maps_intensity,[self.maps_intensity.shape[0], self.n_pix_subap//self.binning_factor,self.n_pix_subap//self.binning_factor], operation='sum')
+                else:
+                    self.maps_intensity =  bin_ndarray(I,[I.shape[0], self.n_pix_subap//self.binning_factor,self.n_pix_subap//self.binning_factor], operation='sum')
+
                 # bin the 2D spots intensity to get the desired number of pixel per subaperture
                 if self.binning_factor>1:
                     self.maps_intensity =  bin_ndarray(self.maps_intensity,[self.maps_intensity.shape[0], self.n_pix_subap//self.binning_factor,self.n_pix_subap//self.binning_factor], operation='sum')
@@ -642,9 +648,12 @@ class ShackHartmann:
         print('{: ^20s}'.format('Pixel FoV')            + '{: ^18s}'.format(str(np.round(self.fov_pixel_binned_arcsec,2)))      +'{: ^18s}'.format('[arcsec]'   ))
         print('{: ^20s}'.format('Subapertue FoV')       + '{: ^18s}'.format(str(np.round(self.fov_lenslet_arcsec,2)))           +'{: ^18s}'.format('[arcsec]'  ))
         print('{: ^20s}'.format('Valid Subaperture')    + '{: ^18s}'.format(str(str(self.nValidSubaperture))))                   
+        print('{: ^20s}'.format('Binning Factor')    + '{: ^18s}'.format(str(str(self.binning_factor))))                   
+
         if self.is_LGS:    
             print('{: ^20s}'.format('Spot Elungation')    + '{: ^18s}'.format(str(100*np.round(self.elungation_factor,3)))      +'{: ^18s}'.format('% of a subap' ))
         print('{: ^20s}'.format('Geometric WFS')    + '{: ^18s}'.format(str(self.is_geometric)))
+        print('{: ^20s}'.format('Shannon Sampling')    + '{: ^18s}'.format(str(self.shannon_sampling)))
 
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')        
         if self.is_geometric:
