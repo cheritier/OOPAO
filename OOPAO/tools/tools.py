@@ -13,9 +13,75 @@ import jsonpickle
 import numpy as np
 import skimage.transform as sk
 from astropy.io import fits as pfits
+from OOPAO.tools import *
+import matplotlib.pyplot as plt
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% USEFUL FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+def crop(imageArray, center, size, axis):
+    # returns an subimage centered on CENTER (two values x and y integer), 
+    # of size SIZE (integer), 
+    # considering any datacube IMAGEARRAY (np array) of size NxMxL
+    if imageArray.ndim == 2:
+        return imageArray[center[0]-size//2:center[0]+size//2,center[1]-size//2:center[1]+size//2]
+
+    if imageArray.ndim == 3:
+        if axis == 0:
+            return imageArray[:,center[0]-size//2:center[0]+size//2,center[1]-size//2:center[1]+size//2]
+        if axis == 1:
+            return imageArray[center[0]-size//2:center[0]+size//2,:,center[1]-size//2:center[1]+size//2]
+        if axis == 2:
+            return imageArray[center[0]-size//2:center[0]+size//2,center[1]-size//2:center[1]+size//2, :]
+
+
+
+
+def strehlMeter(PSF, tel, zeroPaddingFactor = 2, display = True):
+    # Measures the Strehl ratio from a focal plane image
+    # Method : compute the ratio of the OTF on the OTF of Airy pattern
+
+    # Compute Airy pattern : zero OPD PSF from tel objet
+    tel.resetOPD()
+    tel.computePSF(zeroPaddingFactor)    
+    Airy = tel.PSF
+    sizeAiry = Airy.shape[0]
+    sizePSF  = PSF.shape[0]
+    sizeMin  = np.min((sizeAiry, sizePSF))
+    Airy = crop(Airy, (np.int16(sizeAiry/2),np.int16(sizeAiry/2)), np.int16(sizeMin), axis = 3)
+    PSF  = crop(PSF,  (np.int16(sizePSF/2),np.int16(sizePSF/2)),   np.int16(sizeMin), axis = 3)
+        
+    # Compute OTF for PSF and Airy
+    OTF  = np.abs(np.fft.fftshift(np.fft.fft2(PSF)))
+    OTFa = np.abs(np.fft.fftshift(np.fft.fft2(Airy)))
+    OTF = OTF / np.max(OTF)
+    OTFa = OTFa / np.max(OTFa)
+    # Compute intensity profiles
+    profile  = tools.circularProfile(OTF)
+    profilea = tools.circularProfile(OTFa)
+    profilea = profilea / np.max(profilea)
+    profile  = profile / np.max(profile)
+    profilea = profilea[0:np.int64(tel.resolution * zeroPaddingFactor/2)]
+    profile  = profile[0:np.int64(tel.resolution * zeroPaddingFactor/2)]
+
+    if display:        
+        # plot OTF profiles for visualization
+        xArray  = np.linspace(0,1, np.int64(tel.resolution * zeroPaddingFactor/2))
+        plt.plot(xArray, profile, label = 'OTF')
+        plt.plot(xArray, profilea, label = 'Perfect OTF')
+        plt.legend()
+        plt.yscale('log')
+        plt.ylim((1e-4,1))
+        plt.xlim((0, 1))
+        plt.xlabel('Spatial frequency in the pupil [D/Lambda]')
+        plt.ylabel('OTF profile [normalized to peak]')
+        # plt.imshow(tel.pupil, extent = [0.1, 0.3, 0.001, 0.01])
+        # plt.text(0.2,0.001, 'Pupil')
+        print('Strehl ratio [%] : ', np.sum(OTF) / np.sum(OTFa) * 100)
+
+
+        
 def print_(input_text,condition):
     if condition:
         print(input_text)
