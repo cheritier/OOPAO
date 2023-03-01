@@ -60,7 +60,7 @@ class Pyramid:
         _ lightRatio            : criterion to select the valid subaperture based on flux considerations
         _ n_pix_separation      : number of pixels separating the Pyramid Pupils in number of pixels of the detector    -- default value is 2 pixels
         _ n_pix_edge            : number of pixel at the edge of the Pyramid Pupils in number of pixels of the detector -- default value is n_pix_separation's value
-        _ postProcessing        : processing of the signals ('fullFrame' or 'slopesMaps')                               -- default value is 'slopesMaps'
+        _ postProcessing        : processing of the signals ('fullFrame','slopesMaps','fullFrame_incidence_flux','slopesMaps_incidence_flux')                               -- default value is 'slopesMaps'
         
         DEPRECIATED PARAMETERS:
         _ pupilSeparationRatio  : Separation ratio of the PWFS pupils (Diameter/Distance Center to Center) -- DEPRECIATED -> use n_pix_separation instead)
@@ -386,20 +386,20 @@ class Pyramid:
                 self.validSignal    = np.concatenate((self.validI4Q,self.validI4Q))
                 self.nSignal        = int(np.sum(self.validSignal))
                 
-            if self.postProcessing == 'fullFrame':
+            if self.postProcessing == 'fullFrame' or self.postProcessing == 'fullFrame_incidence_flux':
                 # select the valid pixels of the detector according to the flux (case full-frame)
                 self.validSignal = (self.initFrame>=self.lightRatio*self.initFrame.max())   
                 self.nSignal        = int(np.sum(self.validSignal))
         else:
             print('You are using a user-defined mask for the selection of the valid pixel')
-            if self.postProcessing == 'slopesMaps':
+            if self.postProcessing == 'slopesMaps' or self.postProcessing == 'slopesMaps_incidence_flux':
                 
                 # select the valid pixels of the detector according to the flux (case full-frame)
                 self.validI4Q       =  self.userValidSignal
                 self.validSignal    = np.concatenate((self.validI4Q,self.validI4Q))
                 self.nSignal        = int(np.sum(self.validSignal))
                 
-            if self.postProcessing == 'fullFrame':            
+            if self.postProcessing == 'fullFrame' or self.postProcessing == 'fullFrame_incidence_flux':            
                 self.validSignal    = self.userValidSignal  
                 self.nSignal        = int(np.sum(self.validSignal))
                     
@@ -681,6 +681,16 @@ class Pyramid:
             slopes     = slopesMaps[np.where(self.validSignal==1)]
             return slopesMaps,slopes
         
+        if self.postProcessing == 'fullFrame_incidence_flux':
+            # global normalization
+            subArea     = (self.telescope.D / self.nSubap)**2
+            norma       = np.float64(self.telescope.src.nPhoton*self.telescope.samplingTime*subArea)/4
+            # 2D full-frame
+            fullFrameMaps  = (cameraFrame / norma )  - self.referenceSignal_2D
+            # full-frame vector
+            fullFrame  = fullFrameMaps[np.where(self.validSignal==1)]
+            
+            return fullFrameMaps,fullFrame
         if self.postProcessing == 'fullFrame':
             # global normalization
             norma = np.sum(cameraFrame[self.validSignal])
@@ -776,14 +786,14 @@ class Pyramid:
                 self.validPix           = (self.initFrame>=self.lightRatio*self.initFrame.max())   
                 
                 # save the number of signals depending on the case    
-                if self.postProcessing == 'slopesMaps':
+                if self.postProcessing == 'slopesMaps' or self.postProcessing == 'slopesMaps_incidence_flux':
                     self.nSignal        = np.sum(self.validSignal)
                     # display
                     xPix,yPix = np.where(self.validI4Q==1)
                     plt.figure()
                     plt.imshow(self.I4Q.T)
                     plt.plot(xPix,yPix,'+')
-                if self.postProcessing == 'fullFrame':
+                if self.postProcessing == 'fullFrame' or self.postProcessing == 'fullFrame_incidence_flux':
                     self.nSignal        = np.sum(self.validPix)  
                 print('Done!')
 
