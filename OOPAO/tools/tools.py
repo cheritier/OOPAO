@@ -20,28 +20,37 @@ import matplotlib.pyplot as plt
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% USEFUL FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-def crop(imageArray, center, size, axis):
-    # returns an subimage centered on CENTER (two values x and y integer), 
+def crop(imageArray, size, axis):
+    # returns an subimage centered on CENTER (assumed to be the center of image), 
     # of size SIZE (integer), 
     # considering any datacube IMAGEARRAY (np array) of size NxMxL
     if imageArray.ndim == 2:
+        sizeImage = imageArray.shape[0]
+        center = np.array((sizeImage//2, sizeImage//2))
         return imageArray[center[0]-size//2:center[0]+size//2,center[1]-size//2:center[1]+size//2]
 
     if imageArray.ndim == 3:
         if axis == 0:
+            sizeImage = imageArray.shape[1]
+            center = np.array((sizeImage//2, sizeImage//2))
             return imageArray[:,center[0]-size//2:center[0]+size//2,center[1]-size//2:center[1]+size//2]
         if axis == 1:
+            sizeImage = imageArray.shape[0]
+            center = np.array((sizeImage//2, sizeImage//2))
             return imageArray[center[0]-size//2:center[0]+size//2,:,center[1]-size//2:center[1]+size//2]
         if axis == 2:
+            sizeImage = imageArray.shape[0]
+            center = np.array((sizeImage//2, sizeImage//2))
             return imageArray[center[0]-size//2:center[0]+size//2,center[1]-size//2:center[1]+size//2, :]
 
 
 
 
-def strehlMeter(PSF, tel, zeroPaddingFactor = 2, display = True):
-    # Measures the Strehl ratio from a focal plane image
+def strehlMeter(PSF, tel, zeroPaddingFactor = 2, display = True, title = ''):
+    # Measures the Strehl ratio from a focal plane image PSF
     # Method : compute the ratio of the OTF on the OTF of Airy pattern
-
+    # Airy pattern is computed from tel.pupil function, with a sampling of zeroPaddingFactor
+    
     # Compute Airy pattern : zero OPD PSF from tel objet
     tel.resetOPD()
     tel.computePSF(zeroPaddingFactor)    
@@ -49,8 +58,8 @@ def strehlMeter(PSF, tel, zeroPaddingFactor = 2, display = True):
     sizeAiry = Airy.shape[0]
     sizePSF  = PSF.shape[0]
     sizeMin  = np.min((sizeAiry, sizePSF))
-    Airy = crop(Airy, (np.int16(sizeAiry/2),np.int16(sizeAiry/2)), np.int16(sizeMin), axis = 3)
-    PSF  = crop(PSF,  (np.int16(sizePSF/2),np.int16(sizePSF/2)),   np.int16(sizeMin), axis = 3)
+    Airy = crop(Airy, np.int16(sizeMin), axis = 3)
+    PSF  = crop(PSF,  np.int16(sizeMin), axis = 3)
         
     # Compute OTF for PSF and Airy
     OTF  = np.abs(np.fft.fftshift(np.fft.fft2(PSF)))
@@ -68,18 +77,23 @@ def strehlMeter(PSF, tel, zeroPaddingFactor = 2, display = True):
     if display:        
         # plot OTF profiles for visualization
         xArray  = np.linspace(0,1, np.int64(tel.resolution * zeroPaddingFactor/2))
-        plt.plot(xArray, profile, label = 'OTF')
+        plt.plot(xArray, profile, label = 'OTF', lineWidth = '2')
         plt.plot(xArray, profilea, label = 'Perfect OTF')
+        plt.title(title)
         plt.legend()
-        plt.yscale('log')
         plt.ylim((1e-4,1))
         plt.xlim((0, 1))
-        plt.xlabel('Spatial frequency in the pupil [D/Lambda]')
-        plt.ylabel('OTF profile [normalized to peak]')
-        # plt.imshow(tel.pupil, extent = [0.1, 0.3, 0.001, 0.01])
-        # plt.text(0.2,0.001, 'Pupil')
+        plt.xlabel('Spatial frequency in the pupil [D/Lambda]', fontsize = 15)
+        plt.ylabel('OTF profile [normalized to peak]', fontsize = 15)
+        # plt.yscale('log')
+        plt.imshow(tel.pupil, extent = [0.6, 0.8, 0.6, 0.8])
+        plt.text(0.65,0.575, 'Pupil')
+        plt.imshow(np.log(crop(PSF, np.int16(8 * zeroPaddingFactor), 3)), extent = [0.75, 0.95, 0.3, 0.5])
+        plt.text(0.8,0.275, 'PSF')
+        plt.imshow(np.log(crop(Airy, np.int16(8 * zeroPaddingFactor), 3)), extent = [0.5, 0.7, 0.3, 0.5])
+        plt.text(0.55,0.275, 'Airy')
         print('Strehl ratio [%] : ', np.sum(OTF) / np.sum(OTFa) * 100)
-
+        
 
         
 def print_(input_text,condition):
