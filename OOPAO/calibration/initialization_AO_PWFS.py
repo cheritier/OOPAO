@@ -82,10 +82,9 @@ def run_initialization_AO_PWFS(param):
                   telescope             = tel,\
                   modulation            = param['modulation'],\
                   lightRatio            = param['lightThreshold'],\
-                  pupilSeparationRatio  = param['pupilSeparationRatio'],\
+                  n_pix_separation      = param['n_pix_separation'],\
                   calibModulation       = param['calibrationModulation'],\
                   psfCentering          = param['psfCentering'],\
-                  edgePixel             = param['edgePixel'],\
                   postProcessing        = param['postProcessing'])    
     # set_paralleling_setup(wfs, ELT = False)
     # propagate the light through the WFS
@@ -103,11 +102,11 @@ def run_initialization_AO_PWFS(param):
                                  deformableMirror   = dm,\
                                  param              = param,\
                                  nameFolder         = None,\
-                                 nameFile           = None,\
+                                 nameFile           = param['modal_basis_name'],\
                                  remove_piston      = True,\
                                  HHtName            = None,\
                                  baseName           = None ,\
-                                 mem_available      = 8.1e9,\
+                                 mem_available      = 1.1e9,\
                                  minimF             = False,\
                                  nmo                = 1000,\
                                  ortho_spm          = True,\
