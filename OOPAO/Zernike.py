@@ -17,10 +17,10 @@ import numpy as np
 
 class Zernike:
     def __init__(self, telObject, J=1):
-        self.resolution = telObject.resolution
-        self.D = telObject.D
+        self.resolution         = telObject.resolution
+        self.D                  = telObject.D
         self.centralObstruction = telObject.centralObstruction    
-        self.nModes = J
+        self.nModes             = J
     
     def zernike_tel(self, tel, j):
         """
