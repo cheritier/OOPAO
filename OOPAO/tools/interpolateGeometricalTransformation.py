@@ -323,6 +323,70 @@ def binning_optimized(cube_in,binning_factor):
         
         
         
+     
+
+def interpolate_cube_special(cube_in, sx, sy, pixel_size_in, pixel_size_out, resolution_out, shape_out = None, mis_registration = None, order = 1, joblib_prefer = 'threads', joblib_nJobs = 4):
+    if mis_registration is None:
+        mis_registration = MisRegistration()
+    nAct,nx, ny = cube_in.shape  
+             
+    sx_vect = sx
+    sy_vect = sy
+    # size of the influence functions maps
+    resolution_in       = int(nx)   
         
+    # compute the ratio between both pixel scale.
+    ratio                  = pixel_size_in/pixel_size_out
+    # after the interpolation the image will be shifted of a fraction of pixel extra if ratio is not an integer
+    extra = (ratio)%1 
+    
+    # difference in pixels between both resolutions    
+    nPix = resolution_in-resolution_out
+    
+    
+    extra = extra/2 + (np.floor(ratio)-1)*0.5
+    nCrop =  (nPix/2)
+    # allocate memory to store the influence functions
+    influMap = np.zeros([resolution_in,resolution_in])  
+    
+    #-------------------- The Following Transformations are applied in the following order -----------------------------------
+       
+    # 1) Down scaling to get the right pixel size according to the resolution of M1
+    downScaling     = anamorphosisImageMatrix(influMap,0,[ratio,ratio])
+    
+    # 2) transformations for the mis-registration
+    anamMatrix              = anamorphosisImageMatrix(influMap,mis_registration.anamorphosisAngle,[1+mis_registration.radialScaling,1+mis_registration.tangentialScaling])
+    rotMatrix               = rotateImageMatrix(influMap,mis_registration.rotationAngle)
+    # shiftMatrix             = translationImageMatrix(influMap,[mis_registration.shiftY/pixel_size_out,mis_registration.shiftX/pixel_size_out]) #units are in m
+    
+    # Shift of half a pixel to center the images on an even number of pixels
+    alignmentMatrix         = translationImageMatrix(influMap,[extra-nCrop,extra-nCrop])
+        
+    # 3) Global transformation matrix
+    # transformationMatrix    = downScaling + anamMatrix + rotMatrix + shiftMatrix + alignmentMatrix
+    
+    # def globalTransformation(image,sx,sy):
+    #         output  = sk.warp(image,(transformationMatrix).inverse,output_shape = [resolution_out,resolution_out],order=order)
+    #         return output
+    
+    # definition of the function that is run in parallel for each 
+    def reconstruction(map_2D,sx,sy):
+        mis_registration.shiftX = sx    
+        mis_registration.shiftY = sy
+
+        shiftMatrix             = translationImageMatrix(influMap,[mis_registration.shiftY/pixel_size_out,mis_registration.shiftX/pixel_size_out]) #units are in m
+        transformationMatrix    = downScaling + anamMatrix + rotMatrix + shiftMatrix + alignmentMatrix
+        output =  sk.warp(map_2D,(transformationMatrix).inverse,output_shape = [resolution_out,resolution_out],order=order)
+        return output
+    
+    # print('interpolating... ')    
+    def joblib_reconstruction():
+        Q=Parallel(n_jobs = joblib_nJobs,prefer = joblib_prefer)(delayed(reconstruction)(i,j,k) for i,j,k in zip(cube_in,sx_vect,sy_vect))
+        return Q 
+    
+    cube_out =  np.asarray(joblib_reconstruction())
+    # print('...Done!')    
+
+    return cube_out   
         
         
