@@ -172,7 +172,7 @@ def display_wfs_signals(wfs,signals,returnOutput=False, norma = False):
         if returnOutput:
             return out
 
-def interactive_plot(x,y,im_array, im_array_ref, event_name ='button_press_event', n_fig = None):   
+def interactive_plot(x,y,im_array, im_array_ref, event_name ='button_press_event', n_fig = None, marker="o", line_style ="", color="k",x_log_scale=False, y_log_scale = False, zoom = 1,markersize=8, alpha = 1, title = ['','']):   
     # create figure and plot scatter
     if n_fig is None:
         fig = plt.figure()
@@ -181,11 +181,20 @@ def interactive_plot(x,y,im_array, im_array_ref, event_name ='button_press_event
     else:
         fig = plt.figure(n_fig)        
         ax = plt.subplot(111)
+        
+    if x_log_scale:
+        if y_log_scale:
+            line, = ax.loglog(x,y, ls=line_style,color = color, marker=marker, markersize = markersize)
+        else:
+            line, = ax.semilogx(x,y, ls=line_style,color = color, marker=marker, markersize = markersize)
+    else:
+        if y_log_scale:
+            line, = ax.semilogy(x,y, ls=line_style,color = color, marker=marker, markersize = markersize)
+        else:
+            line, = ax.plot(x,y, ls=line_style,color = color, marker=marker, markersize = markersize)
 
-    line, = ax.plot(x,y, ls="",color = 'k', marker="o", markersize = 10)
-    
     # create the annotations box
-    im = OffsetImage(im_array[0,:,:], zoom=2)
+    im = OffsetImage(im_array[0,:,:], zoom=zoom, alpha = alpha)
 
     xybox=(100., 100.)
     ab = AnnotationBbox(im, (0,0), xybox=xybox, xycoords='data',
@@ -212,9 +221,12 @@ def interactive_plot(x,y,im_array, im_array_ref, event_name ='button_press_event
             ab.xy =(x[ind], y[ind])
             # set the image corresponding to that point
             if event.button == 1:
+                ab.patch.set_facecolor('w')
                 im.set_data(im_array[ind,:,:])
             if event.button == 3:
+                ab.patch.set_facecolor('k')
                 im.set_data(im_array_ref[ind,:,:])
+
         else:
             #if the mouse is not over a scatter point
             ab.set_visible(False)
@@ -285,13 +297,13 @@ def compute_gif(cube, name, vect = None, vlim = None, fps = 2):
             labelbottom=False,
             labelleft=False)
     plt.tight_layout()
-    # SR =ax.text(50, 400,'SR: '+str(np.round(ao_res[20],1))+'%',color=(1,1,1),fontsize = 14,weight = 'bold')
+    SR =ax.text(50, 200,'SR: '+str(np.round(vect[0],1))+'%',color=(1,1,1),fontsize = 14,weight = 'bold')
 
     def init():
         tmp = np.copy(data[0,:,:])
         tmp[np.where(tmp==0)] = np.inf
         line.set_data(np.fliplr(np.flip(tmp.T)))
-        # ax.set_title('Time '+str(0) + ' ms -- WFE '+str(wfe[0])+' nm')
+        SR.set_text('SR: '+str(100*np.round(vect[0],2))+'%')
         if vlim is None:
             line.set_clim(vmin = np.min(data[0,:,:]), vmax = np.max(data[0,:,:]))
         else:
@@ -305,7 +317,7 @@ def compute_gif(cube, name, vect = None, vlim = None, fps = 2):
         tmp = np.copy(data[i,:,:])
         tmp[np.where(tmp==0)] = np.inf
         line.set_data(np.fliplr(np.flip(tmp.T)))
-        # SR.set_text('SR: '+str(np.round(ao_res[i],1))+'%')
+        SR.set_text('SR: '+str(100*np.round(vect[i],2))+'%')
         if vlim is None:
             line.set_clim(vmin = np.min(data[i,:,:]), vmax = np.max(data[i,:,:]))
         else:
@@ -315,11 +327,11 @@ def compute_gif(cube, name, vect = None, vlim = None, fps = 2):
     anim = animation.FuncAnimation(fig, animate, init_func=init,
                                     frames=data.shape[0], interval=100)
     
-    folder = '//winhome/home/cheritie/My Pictures/gif_from_python/'
+    folder = 'C:/Users/cheritier/Documents/gif_from_python/'
     anim.save(folder+name+'.gif', writer='imagemagick', fps=fps)
     return
 
-def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = None,list_ratio = None, list_title = None, list_lim = None,list_label = None, list_display_axis = None,s=16):
+def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = None,list_ratio = None, list_title = None, list_lim = None,list_label = None, list_display_axis = None,list_buffer =  None,s=16):
     
     n_im = len(list_fig)
     if n_subplot is None:
@@ -337,7 +349,7 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = 
         plt_obj = emptyClass()
         setattr(plt_obj,'gs',gs)
         plt_obj.list_label = list_label
-        
+        plt_obj.list_buffer = list_buffer        
         plt_obj.list_lim = list_lim
 
         plt_obj.keep_going = True
@@ -385,10 +397,11 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = 
                     if type_fig[count] == 'plot':
                         data_tmp = list_fig[count]
                         if len(data_tmp)==2:
-                            line_tmp, = sp_tmp.plot(data_tmp[0],data_tmp[1],'-x')
+                            line_tmp, = sp_tmp.plot(data_tmp[0],data_tmp[1],'-')      
                         else:
                             line_tmp, = sp_tmp.plot(data_tmp,'-o')         
                         setattr(plt_obj,'im_'+str(count),line_tmp)
+                        
                             
            # SCATTER
                     if type_fig[count] == 'scatter':
@@ -443,16 +456,26 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = 
                         else:
                             im_tmp.set_clim(vmin=plt_obj.list_lim[count][0],vmax=plt_obj.list_lim[count][1])
                     if getattr(plt_obj,'type_fig_'+str(count)) == 'plot':
+                        
                         if len(data)==2:
                             im_tmp =getattr(plt_obj,'im_'+str(count))
                             im_tmp.set_xdata(data[0])
                             im_tmp.set_ydata(data[1])
-                            im_tmp.axes.set_ylim([np.min(data[1])-0.1*np.abs(np.min(data[1])),np.max(data[1])+0.1*np.abs(np.max(data[1]))])
                             im_tmp.axes.set_xlim([np.min(data[0])-0.1*np.abs(np.min(data[0])),np.max(data[0])+0.1*np.abs(np.max(data[0]))])
+
+                            if plt_obj.list_lim[count] is None:
+                                im_tmp.axes.set_ylim([np.min(data[1])-0.1*np.abs(np.min(data[1])),np.max(data[1])+0.1*np.abs(np.max(data[1]))])
+                            else:
+                                im_tmp.axes.set_ylim([plt_obj.list_lim[count][0],plt_obj.list_lim[count][1]])                            
+
                         else:
                             im_tmp =getattr(plt_obj,'im_'+str(count))
                             im_tmp.set_ydata(data[0])
-                            im_tmp.axes.set_ylim([np.min(data[0])-0.1*np.abs(np.min(data[0])),np.max(data[0])+0.1*np.abs(np.max(data[0]))])
+                            if plt_obj.list_lim[count] is None:
+                                im_tmp.axes.set_ylim([np.min(data[0])-0.1*np.abs(np.min(data[0])),np.max(data[0])+0.1*np.abs(np.max(data[0]))])
+                            else:
+                                im_tmp.axes.set_ylim([plt_obj.list_lim[count][0],plt_obj.list_lim[count][1]])
+                                
                                                 
                     if getattr(plt_obj,'type_fig_'+str(count)) == 'scatter':
                         n = mpl.colors.Normalize(vmin = min(data), vmax = max(data))
