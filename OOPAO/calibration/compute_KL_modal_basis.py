@@ -11,8 +11,30 @@ from astropy.io import fits as pfits
 import OOPAO.calibration.ao_cockpit_psim as aou
 from ..tools.tools import createFolder
 
+def compute_KL_basis(tel,atm,dm):
+    
+    M2C_KL = compute_M2C(telescope            = tel,\
+                        atmosphere         = atm,\
+                        deformableMirror   = dm,\
+                        param              = None,\
+                        nameFolder         = None,\
+                        nameFile           = None,\
+                        remove_piston      = True,\
+                        HHtName            = None,\
+                        baseName           = None ,\
+                        mem_available      = None,\
+                        minimF             = False,\
+                        nmo                = None,\
+                        ortho_spm          = True,\
+                        SZ                 = np.int(2*tel.OPD.shape[0]),\
+                        nZer               = 3,\
+                        NDIVL              = 1,\
+                        recompute_cov=True,\
+                        save_output= False)
+        
+    return M2C_KL
 
-def compute_M2C(telescope, atmosphere, deformableMirror, param, nameFolder = None, nameFile = None,remove_piston = False,HHtName = None, baseName = None, SpM_2D = None, nZer = 3, SZ=None, mem_available = None, NDIVL = None, computeSpM = True, ortho_spm = True, computeSB = True, computeKL = True, minimF = False, P2F = None, alpha = None, beta = None, nmo = None, IF_2D = None, IFma = None, returnSB = False, returnHHt = False, recompute_cov = False,extra_name = ''):
+def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolder = None, nameFile = None,remove_piston = False,HHtName = None, baseName = None, SpM_2D = None, nZer = 3, SZ=None, mem_available = None, NDIVL = None, computeSpM = True, ortho_spm = True, computeSB = True, computeKL = True, minimF = False, P2F = None, alpha = None, beta = None, nmo = None, IF_2D = None, IFma = None, returnSB = False, returnHHt = False, recompute_cov = False,extra_name = '', save_output = True):
 
     """
     - HHtName       = None      extension for the HHt Covariance file
@@ -38,7 +60,7 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param, nameFolder = Non
     """
 
     if nmo is None:
-        nmo=param['nModes']
+        nmo = deformableMirror.nValidAct
         
     if deformableMirror.isM4:
         initName = 'M2C_M4_'
@@ -47,15 +69,18 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param, nameFolder = Non
     if baseName is not None:
         initName = initName + baseName+'_'
     if nameFolder is None:
-        nameFolder = param['pathInput']
-    
-    createFolder(nameFolder)
+        if param:
+            nameFolder = param['pathInput']
+        else:
+            nameFolder = ''
+    if save_output:
+        createFolder(nameFolder)
     
     if nameFile is None:
         try:
-            nameFile = initName + str(param['resolution'])+'_res'+param['extra']+extra_name
+            nameFile = initName + str(telescope.resolution)+'_res'+param['extra']+extra_name
         except:
-            nameFile = initName + str(param['resolution'])+'_res'+extra_name
+            nameFile = initName + str(telescope.resolution)+'_res'+extra_name
             
    
     # the function takes as an input an object with obj.tel, obj.atm,obj.
@@ -123,10 +148,11 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param, nameFolder = Non
         BLOCKL=nact//NDIVL
         REST=nact-BLOCKL*NDIVL
         HHt = aou.DO_HHt(IF_2D,PSD_atm,df,pupil,BLOCKL,REST,SZ,0)
-        try:
-            aou.save(nameFolder+'HHt_PSD_df_'+HHtName+'.pkl',[HHt, PSD_atm, df])
-        except:    
-            aou.save(nameFolder+'HHt_PSD_df_'+initName+'r'+str(r0)+'_SZ'+str(SZ)+'.pkl',[HHt, PSD_atm, df])
+        if save_output:
+            try:
+                aou.save(nameFolder+'HHt_PSD_df_'+HHtName+'.pkl',[HHt, PSD_atm, df])
+            except:    
+                aou.save(nameFolder+'HHt_PSD_df_'+initName+'r'+str(r0)+'_SZ'+str(SZ)+'.pkl',[HHt, PSD_atm, df])
 
     
 #%% ----------PRECOMPUTE MOST USED QUANTITIES   ----------    
@@ -155,18 +181,23 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param, nameFolder = Non
 #%% ----------COMPUTE SPECIFIC MODES BASIS    ----------  
     if minimF == True:
         if P2F is None:
-            P2F=np.float64(pfits.getdata(param['pathInput']+'P2F.fits'))*1.e6 #( in N/m)
-            
-            P2Ff=np.zeros([nact,nact],dtype=np.float64)
-            if nact>892:
-                nap=nact//6
-                for k in range(0,6):
-                    P2Ff[k*nap:(k+1)*nap,k*nap:(k+1)*nap] = P2F.copy()
-                    
-                K=np.asmatrix(P2Ff)
-                del P2Ff
-            else:
-                K = np.asmatrix(P2F) 
+            try:
+                P2F=np.float64(pfits.getdata(param['pathInput']+'P2F.fits'))*1.e6 #( in N/m)
+                
+                P2Ff=np.zeros([nact,nact],dtype=np.float64)
+                if nact>892:
+                    nap=nact//6
+                    for k in range(0,6):
+                        P2Ff[k*nap:(k+1)*nap,k*nap:(k+1)*nap] = P2F.copy()
+                        
+                    K=np.asmatrix(P2Ff)
+                    del P2Ff
+                else:
+                    K = np.asmatrix(P2F) 
+            except:
+                print('Could not find the P2F matrix.. ignoring the force minimization')
+                minimF = False
+                        
 
         if alpha is None:
             alpha = 1.e-18
@@ -257,22 +288,29 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param, nameFolder = Non
             BASIS = np.asarray(BASIS[:,1:])
             print('Piston removed from the modal basis!' )
 # save output in fits file
-        hdr=pfits.Header()
-        hdr['TITLE'] = initName+'_KL' #'M4_KL'
-        empty_primary = pfits.PrimaryHDU(header=hdr)
-    ## CAREFUL THE CUBE IS SAVED AS A NON SPARSE MATRIX
-        primary_hdu = pfits.ImageHDU(BASIS)
-        hdu = pfits.HDUList([empty_primary, primary_hdu])
-        hdu.writeto(nameFolder+nameFile+'.fits',overwrite=True)
+        if save_output:
+
+            hdr=pfits.Header()
+            hdr['TITLE'] = initName+'_KL' #'M4_KL'
+            empty_primary = pfits.PrimaryHDU(header=hdr)
+        ## CAREFUL THE CUBE IS SAVED AS A NON SPARSE MATRIX
+            primary_hdu = pfits.ImageHDU(BASIS)
+            hdu = pfits.HDUList([empty_primary, primary_hdu])
+            hdu.writeto(nameFolder+nameFile+'.fits',overwrite=True)
         return np.asarray(BASIS)
         
     if returnSB == True:
-        hdr=pfits.Header()
-        hdr['TITLE'] = initName+'_SB' #'M4_KL'
-        empty_primary = pfits.PrimaryHDU(header=hdr)
-    ## CAREFUL THE CUBE IS SAVED AS A NON SPARSE MATRIX
-        primary_hdu = pfits.ImageHDU(BASIS)
-        hdu = pfits.HDUList([empty_primary, primary_hdu])
-        hdu.writeto(nameFolder+nameFile+'.fits',overwrite=True)
- 
+        if save_output:
+    
+            hdr=pfits.Header()
+            hdr['TITLE'] = initName+'_SB' #'M4_KL'
+            empty_primary = pfits.PrimaryHDU(header=hdr)
+        ## CAREFUL THE CUBE IS SAVED AS A NON SPARSE MATRIX
+            primary_hdu = pfits.ImageHDU(BASIS)
+            hdu = pfits.HDUList([empty_primary, primary_hdu])
+            hdu.writeto(nameFolder+nameFile+'.fits',overwrite=True)
+     
         return np.asarray(BASIS),SB
+
+
+

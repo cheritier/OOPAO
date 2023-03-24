@@ -16,11 +16,11 @@ def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis
             extra_dm_mis_registration = MisRegistration()
         try:
                 if param['pitch'] is None:
-                    pitch = 0
+                    pitch = None
                 else:
                     pitch = param['pitch'] 
         except:
-                pitch = 0
+                pitch = None
         if wfs is None:
             
             # case synthetic DM - with user-defined coordinates
@@ -41,7 +41,7 @@ def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis
                                         nSubap       = param['nSubaperture'],\
                                         mechCoupling = param['mechanicalCoupling'],\
                                         coordinates  = coordinates,\
-                                        pitch        = 0,\
+                                        pitch        = None,\
                                         misReg       = misRegistration_tmp + extra_dm_mis_registration,\
                                         M4_param     = param,\
                                         print_dm_properties = print_dm_properties,\
@@ -65,7 +65,7 @@ def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis
                         nSubap       = param['nSubaperture'],\
                         mechCoupling = param['mechanicalCoupling'],\
                         coordinates  = coord,\
-                        pitch        = 0,\
+                        pitch        = None,\
                         misReg       = misRegistration_tmp + extra_dm_mis_registration,\
                         modes        = np.reshape(modes,[tel.resolution**2,modes.shape[2]]),\
                         M4_param     = param,\

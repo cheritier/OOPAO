@@ -51,19 +51,19 @@ class MisRegistration:
                 
                 
         if self.radialScaling ==0 and self.tangentialScaling ==0:
-            self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)            +'_deg_'\
+            self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)            +'_'\
                               'sX_'         + str('%.2f' %(self.shiftX))                 +'_m_'\
                               'sY_'         + str('%.2f' %(self.shiftY))                 +'_m_'\
-                              'anamAngle_'  + str('%.2f' %self.anamorphosisAngle)        +'_deg_'\
-                              'radScal_'    + str('%.2f' %(self.radialScaling+1.))       +'_'\
-                              'tangScal_'   + str('%.2f' %(self.tangentialScaling+1.)) 
+                              'anam_'  + str('%.2f' %self.anamorphosisAngle)        +'_'\
+                              'mR_'    + str('%.2f' %(self.radialScaling+1.))       +'_'\
+                              'mT_'   + str('%.2f' %(self.tangentialScaling+1.)) 
         else:
-             self.misRegName = 'rot_'       + str('%.2f' %self.rotationAngle)            +'_deg_'\
+             self.misRegName = 'rot_'       + str('%.2f' %self.rotationAngle)            +'_'\
                           'sX_'             + str('%.2f' %(self.shiftX))                 +'_m_'\
                           'sY_'             + str('%.2f' %(self.shiftY))                 +'_m_'\
-                          'anamAngle_'      + str('%.2f' %self.anamorphosisAngle)        +'_deg_'\
-                          'radScal_'        + str('%.4f' %(self.radialScaling+1.))       +'_'\
-                          'tangScal_'       + str('%.4f' %(self.tangentialScaling+1.)) 
+                          'anam_'      + str('%.2f' %self.anamorphosisAngle)        +'_'\
+                          'mR_'        + str('%.4f' %(self.radialScaling+1.))       +'_'\
+                          'mT_'       + str('%.4f' %(self.tangentialScaling+1.)) 
                             
         self.isInitialized = True
 
@@ -113,19 +113,19 @@ class MisRegistration:
         self._rotationAngle  = val
         if self.isInitialized: 
             if self.radialScaling ==0 and self.tangentialScaling ==0:
-                self.misRegName        = 'rot_'        + str('%.2f' %val)            +'_deg_'\
+                self.misRegName        = 'rot_'        + str('%.2f' %val)            +'_'\
                           'sX_'             + str('%.2f' %(self.shiftX))                 +'_m_'\
                           'sY_'             + str('%.2f' %(self.shiftY))                 +'_m_'\
-                          'anamAngle_'  + str('%.2f' %self.anamorphosisAngle)        +'_deg_'\
-                          'radScal_'      + str('%.2f' %(self.radialScaling+1.))       +'_'\
-                          'tangScal_'  + str('%.2f' %(self.tangentialScaling+1.))     
+                          'anam_'  + str('%.2f' %self.anamorphosisAngle)        +'_'\
+                          'mR_'      + str('%.2f' %(self.radialScaling+1.))       +'_'\
+                          'mT_'  + str('%.2f' %(self.tangentialScaling+1.))     
             else:
-                self.misRegName        = 'rot_'        + str('%.2f' %val)            +'_deg_'\
+                self.misRegName        = 'rot_'        + str('%.2f' %val)            +'_'\
                           'sX_'             + str('%.2f' %(self.shiftX))                 +'_m_'\
                           'sY_'             + str('%.2f' %(self.shiftY))                 +'_m_'\
-                          'anamAngle_'  + str('%.2f' %self.anamorphosisAngle)        +'_deg_'\
-                          'radScal_'      + str('%.4f' %(self.radialScaling+1.))       +'_'\
-                          'tangScal_'  + str('%.4f' %(self.tangentialScaling+1.))  
+                          'anam_'  + str('%.2f' %self.anamorphosisAngle)        +'_'\
+                          'mR_'      + str('%.4f' %(self.radialScaling+1.))       +'_'\
+                          'mT_'  + str('%.4f' %(self.tangentialScaling+1.))  
         
     @property
     def shiftX(self):
@@ -136,19 +136,19 @@ class MisRegistration:
         self._shiftX  = val
         if self.isInitialized:  
             if self.radialScaling ==0 and self.tangentialScaling ==0:
-                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)    +'_deg_'\
+                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)    +'_'\
                       'sX_'             + str('%.2f' %(val))                         +'_m_'\
                       'sY_'             + str('%.2f' %(self.shiftY))                 +'_m_'\
-                      'anamAngle_'  + str('%.2f' %self.anamorphosisAngle)        +'_deg_'\
-                      'radScal_'      + str('%.2f' %(self.radialScaling+1.))       +'_'\
-                      'tangScal_'  + str('%.2f' %(self.tangentialScaling+1.))     
+                      'anam_'  + str('%.2f' %self.anamorphosisAngle)        +'_'\
+                      'mR_'      + str('%.2f' %(self.radialScaling+1.))       +'_'\
+                      'mT_'  + str('%.2f' %(self.tangentialScaling+1.))     
             else:
-                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)    +'_deg_'\
+                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)    +'_'\
                       'sX_'             + str('%.2f' %(val))                         +'_m_'\
                       'sY_'             + str('%.2f' %(self.shiftY))                 +'_m_'\
-                      'anamAngle_'  + str('%.2f' %self.anamorphosisAngle)        +'_deg_'\
-                      'radScal_'      + str('%.4f' %(self.radialScaling+1.))       +'_'\
-                      'tangScal_'  + str('%.4f' %(self.tangentialScaling+1.))             
+                      'anam_'  + str('%.2f' %self.anamorphosisAngle)        +'_'\
+                      'mR_'      + str('%.4f' %(self.radialScaling+1.))       +'_'\
+                      'mT_'  + str('%.4f' %(self.tangentialScaling+1.))             
     
     
     
@@ -161,19 +161,19 @@ class MisRegistration:
         self._shiftY  = val
         if self.isInitialized:  
             if self.radialScaling ==0 and self.tangentialScaling ==0:
-                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)    +'_deg_'\
+                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)    +'_'\
                       'sX_'             + str('%.2f' %(self.shiftX))                 +'_m_'\
                       'sY_'             + str('%.2f' %(val))                         +'_m_'\
-                      'anamAngle_'  + str('%.2f' %self.anamorphosisAngle)        +'_deg_'\
-                      'radScal_'      + str('%.2f' %(self.radialScaling+1.))       +'_'\
-                      'tangScal_'  + str('%.2f' %(self.tangentialScaling+1.))   
+                      'anam_'  + str('%.2f' %self.anamorphosisAngle)        +'_'\
+                      'mR_'      + str('%.2f' %(self.radialScaling+1.))       +'_'\
+                      'mT_'  + str('%.2f' %(self.tangentialScaling+1.))   
             else:
-                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)    +'_deg_'\
+                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)    +'_'\
                       'sX_'             + str('%.2f' %(self.shiftX))                 +'_m_'\
                       'sY_'             + str('%.2f' %(val))                         +'_m_'\
-                      'anamAngle_'  + str('%.2f' %self.anamorphosisAngle)        +'_deg_'\
-                      'radScal_'      + str('%.4f' %(self.radialScaling+1.))       +'_'\
-                      'tangScal_'  + str('%.4f' %(self.tangentialScaling+1.))   
+                      'anam_'  + str('%.2f' %self.anamorphosisAngle)        +'_'\
+                      'mR_'      + str('%.4f' %(self.radialScaling+1.))       +'_'\
+                      'mT_'  + str('%.4f' %(self.tangentialScaling+1.))   
                       
     @property
     def anamorphosisAngle(self):
@@ -184,19 +184,19 @@ class MisRegistration:
         self._anamorphosisAngle  = val
         if self.isInitialized:  
             if self.radialScaling ==0 and self.tangentialScaling ==0:
-                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)            +'_deg_'\
+                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)            +'_'\
                       'sX_'             + str('%.2f' %(self.shiftX))                 +'_m_'\
                       'sY_'             + str('%.2f' %(self.shiftY))                 +'_m_'\
-                      'anamAngle_'  + str('%.2f' %val)        +'_deg_'\
-                      'radScal_'      + str('%.2f' %(self.radialScaling+1.))       +'_'\
-                      'tangScal_'  + str('%.2f' %(self.tangentialScaling+1.))   
+                      'anam_'  + str('%.2f' %val)        +'_'\
+                      'mR_'      + str('%.2f' %(self.radialScaling+1.))       +'_'\
+                      'mT_'  + str('%.2f' %(self.tangentialScaling+1.))   
             else:
-                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)            +'_deg_'\
+                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)            +'_'\
                       'sX_'             + str('%.2f' %(self.shiftX))                 +'_m_'\
                       'sY_'             + str('%.2f' %(self.shiftY))                 +'_m_'\
-                      'anamAngle_'  + str('%.2f' %val)        +'_deg_'\
-                      'radScal_'      + str('%.4f' %(self.radialScaling+1.))       +'_'\
-                      'tangScal_'  + str('%.4f' %(self.tangentialScaling+1.))   
+                      'anam_'  + str('%.2f' %val)        +'_'\
+                      'mR_'      + str('%.4f' %(self.radialScaling+1.))       +'_'\
+                      'mT_'  + str('%.4f' %(self.tangentialScaling+1.))   
                   
                   
     @property
@@ -208,19 +208,19 @@ class MisRegistration:
         self._radialScaling  = val
         if self.isInitialized:  
             if self.radialScaling ==0 and self.tangentialScaling ==0:
-                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)            +'_deg_'\
+                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)            +'_'\
                       'sX_'             + str('%.2f' %(self.shiftX))                 +'_m_'\
                       'sY_'             + str('%.2f' %(self.shiftY))                 +'_m_'\
-                      'anamAngle_'  + str('%.2f' %self.anamorphosisAngle)        +'_deg_'\
-                      'radScal_'      + str('%.2f' %(val+1.))       +'_'\
-                      'tangScal_'  + str('%.2f' %(self.tangentialScaling+1.))   
+                      'anam_'  + str('%.2f' %self.anamorphosisAngle)        +'_'\
+                      'mR_'      + str('%.2f' %(val+1.))       +'_'\
+                      'mT_'  + str('%.2f' %(self.tangentialScaling+1.))   
             else:
-                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)            +'_deg_'\
+                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)            +'_'\
                       'sX_'             + str('%.2f' %(self.shiftX))                 +'_m_'\
                       'sY_'             + str('%.2f' %(self.shiftY))                 +'_m_'\
-                      'anamAngle_'  + str('%.2f' %self.anamorphosisAngle)        +'_deg_'\
-                      'radScal_'      + str('%.4f' %(val+1.))       +'_'\
-                      'tangScal_'  + str('%.4f' %(self.tangentialScaling+1.))   
+                      'anam_'  + str('%.2f' %self.anamorphosisAngle)        +'_'\
+                      'mR_'      + str('%.4f' %(val+1.))       +'_'\
+                      'mT_'  + str('%.4f' %(self.tangentialScaling+1.))   
                   
                   
     @property
@@ -233,19 +233,19 @@ class MisRegistration:
         if self.isInitialized:  
             if self.radialScaling ==0 and self.tangentialScaling ==0:
 
-                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)            +'_deg_'\
-                      'sX_'             + str('%.2f' %(self.shiftX))                 +'_m_'\
-                      'sY_'             + str('%.2f' %(self.shiftY))                 +'_m_'\
-                      'anamAngle_'  + str('%.2f' %self.anamorphosisAngle)        +'_deg_'\
-                      'radScal_'      + str('%.2f' %(self.radialScaling+1.))       +'_'\
-                      'tangScal_'  + str('%.2f' %(val+1.))   
+                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)            +'_'\
+                      'X_'             + str('%.2f' %(self.shiftX))                 +'_'\
+                      'Y_'             + str('%.2f' %(self.shiftY))                 +'_'\
+                      'anam_'  + str('%.2f' %self.anamorphosisAngle)        +'_'\
+                      'mN_'      + str('%.2f' %(self.radialScaling+1.))       +'_'\
+                      'mT_'  + str('%.2f' %(val+1.))   
             else:
-                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)            +'_deg_'\
-                      'sX_'             + str('%.2f' %(self.shiftX))                 +'_m_'\
-                      'sY_'             + str('%.2f' %(self.shiftY))                 +'_m_'\
-                      'anamAngle_'  + str('%.2f' %self.anamorphosisAngle)        +'_deg_'\
-                      'radScal_'      + str('%.4f' %(self.radialScaling+1.))       +'_'\
-                      'tangScal_'  + str('%.4f' %(val+1.))      
+                self.misRegName = 'rot_'        + str('%.2f' %self.rotationAngle)            +'_'\
+                      'sX_'             + str('%.2f' %(self.shiftX))                 +'_'\
+                      'sY_'             + str('%.2f' %(self.shiftY))                 +'_'\
+                      'anam_'  + str('%.2f' %self.anamorphosisAngle)        +'_'\
+                      'mN_'      + str('%.4f' %(self.radialScaling+1.))       +'_'\
+                      'mT_'  + str('%.4f' %(val+1.))      
                   
                   
                   

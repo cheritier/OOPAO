@@ -13,6 +13,7 @@ import jsonpickle
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.random import RandomState
+import matplotlib.gridspec as gridspec
 
 from .phaseStats import ft_phase_screen, ft_sh_phase_screen, makeCovarianceMatrix
 from .tools.displayTools import getColorOrder
@@ -72,6 +73,9 @@ class Atmosphere:
         _ atm.seeingArcsec                          : seeing in arcsec at 500 nm
         _ atm.layer_X                               : access the child object corresponding to the layer X where X starts at 0   
         
+        The main properties of the object can be displayed using :
+            atm.print_properties()
+            
         the following properties can be updated on the fly:
             _ atm.r0            
             _ atm.windSpeed      
@@ -525,28 +529,51 @@ class Atmosphere:
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         
     def __mul__(self,obj):
-        obj.OPD=self.OPD
-        obj.OPD_no_pupil=self.OPD_no_pupil
-        obj.isPaired=True
-        return obj
+        if obj.tag == 'telescope':
+            obj.optical_path =[[obj.src.type + '('+obj.src.optBand+')',id(obj.src)]]
+            obj.optical_path.append([self.tag,id(self)])
+            obj.optical_path.append([obj.tag,id(obj)])
+            obj.OPD          = self.OPD.copy()
+            obj.OPD_no_pupil = self.OPD_no_pupil.copy()
+            obj.isPaired     = True
+            return obj
+        else:
+            raise AttributeError('The atmosphere can be multiplied only with a Telescope object! ')
     
     
     def display_atm_layers(self,layer_index= None,fig_index = None):
+        display_cn2 = False
+
         if layer_index is None:
             layer_index = list(np.arange(self.nLayer))
+            n_sp        = len(layer_index) 
+            display_cn2 = True
+            
         if type(layer_index) is not list:
             raise TypeError(' layer_index should be a list') 
         normalized_speed = np.asarray(self.windSpeed)/max(self.windSpeed)
 
         col = getColorOrder() 
         if fig_index is None:
-            
             fig_index = time.time_ns()
-        plt.figure(fig_index)
+            
+        
+        f = plt.figure(fig_index,figsize = [n_sp*4,3*(1+display_cn2)], edgecolor = None)
+        if display_cn2:
+            gs = gridspec.GridSpec(2,n_sp, height_ratios=[1,0.5], width_ratios=np.ones(n_sp), hspace=0.25, wspace=0.25)
+        else:
+            gs = gridspec.GridSpec(1,n_sp, height_ratios=np.ones(1), width_ratios=np.ones(n_sp), hspace=0.25, wspace=0.25)
+            
         axis_list = []
         for i in range(len(layer_index)):
-            axis_list.append(plt.subplot(1,len(layer_index),i+1))
-                             
+            axis_list.append(plt.subplot(gs[0,i]))                
+        if display_cn2:
+            plt.subplot(gs[1,:])         
+            plt.plot(self.altitude,self.fractionalR0,'-o')
+            plt.ylim([0,1])
+            plt.xlabel('Altitude [m]')
+            plt.ylabel('Cn2 Profile [m]')
+
         for i_l,ax in enumerate(axis_list):
             
             tmpLayer = getattr(self, 'layer_'+str(layer_index[i_l]+1))

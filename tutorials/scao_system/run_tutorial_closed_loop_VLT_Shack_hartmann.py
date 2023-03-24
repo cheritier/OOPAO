@@ -13,7 +13,7 @@ import numpy as np
 from OOPAO.Atmosphere import Atmosphere
 from OOPAO.DeformableMirror import DeformableMirror
 from OOPAO.MisRegistration import MisRegistration
-from OOPAO.Pyramid import Pyramid
+from OOPAO.ShackHartmann import ShackHartmann
 from OOPAO.Source import Source
 from OOPAO.Telescope import Telescope
 from OOPAO.Zernike import Zernike
@@ -21,7 +21,7 @@ from OOPAO.calibration.CalibrationVault import CalibrationVault
 from OOPAO.calibration.InteractionMatrix import InteractionMatrix
 from OOPAO.tools.displayTools import cl_plot, displayMap
 # %% -----------------------     read parameter file   ----------------------------------
-from parameter_files.parameterFile_VLT_I_Band_PWFS import initializeParameterFile
+from parameter_files.parameterFile_VLT_I_Band_SHWFS import initializeParameterFile
 
 param = initializeParameterFile()
 
@@ -34,7 +34,7 @@ plt.ion()
 tel = Telescope(resolution          = param['resolution'],\
                 diameter            = param['diameter'],\
                 samplingTime        = param['samplingTime'],\
-                centralObstruction  = param['centralObstruction'])
+                centralObstruction  = param['centralObstruction'],display_optical_path=True)
 
 #%% -----------------------     NGS   ----------------------------------
 # create the Source object
@@ -52,6 +52,12 @@ plt.xlabel('[Arcsec]')
 plt.ylabel('[Arcsec]')
 plt.colorbar()
 
+
+src = Source(optBand   = 'K',\
+           magnitude = param['magnitude'])
+
+# combine the NGS to the telescope using '*' operator:
+# src*tel
 #%% -----------------------     ATMOSPHERE   ----------------------------------
 
 # create the Atmosphere object
@@ -98,30 +104,37 @@ plt.xlabel('[m]')
 plt.ylabel('[m]')
 plt.title('DM Actuator Coordinates')
 
-#%% -----------------------     PYRAMID WFS   ----------------------------------
+#%% -----------------------     SH WFS   ----------------------------------
 
 # make sure tel and atm are separated to initialize the PWFS
 tel-atm
-
-wfs = Pyramid(nSubap                = param['nSubaperture'],\
+tel.resetOPD()
+wfs = ShackHartmann(nSubap          = param['nSubaperture'],\
               telescope             = tel,\
-              modulation            = param['modulation'],\
               lightRatio            = param['lightThreshold'],\
-              n_pix_separation      = param['n_pix_separation'],\
-              psfCentering          = param['psfCentering'],\
-              postProcessing        = param['postProcessing'])
+              binning_factor=1,\
+              is_geometric = False, shannon_sampling=True)
+
+
+
+#%
+wfs.cam.photonNoise = False
 
 tel*wfs
 plt.close('all')
 plt.figure()
 plt.imshow(wfs.cam.frame)
-plt.title('WFS Camera Frame')
+plt.title('WFS Camera Frame - Without Noise')
 
-
-
-
+wfs.cam.photonNoise = False
+tel*wfs
+plt.figure()
+plt.imshow(wfs.cam.frame)
+plt.title('WFS Camera Frame - With Noise')
 #%% -----------------------     Modal Basis   ----------------------------------
 # compute the modal basis
+from OOPAO.calibration.compute_KL_modal_basis import compute_KL_basis
+M2C_KL = compute_KL_basis(tel,atm,dm)
 # foldername_M2C  = None  # name of the folder to save the M2C matrix, if None a default name is used 
 # filename_M2C    = None  # name of the filename, if None a default name is used 
 # # KL Modal basis
@@ -175,6 +188,8 @@ stroke=1e-9
 # Modal Interaction Matrix
 
 #%%
+wfs.is_geometric = True
+
 M2C_zonal = np.eye(dm.nValidAct)
 # zonal interaction matrix
 calib_zonal = InteractionMatrix(  ngs            = ngs,\
@@ -184,7 +199,7 @@ calib_zonal = InteractionMatrix(  ngs            = ngs,\
                             wfs            = wfs,\
                             M2C            = M2C_zonal,\
                             stroke         = stroke,\
-                            nMeasurements  = 25,\
+                            nMeasurements  = 100,\
                             noise          = 'off')
 
 plt.figure()
@@ -193,6 +208,7 @@ plt.xlabel('Mode Number')
 plt.ylabel('WFS slopes STD')
 
 #%%
+# Modal interaction matrix
 
 # Modal interaction matrix
 calib_zernike = CalibrationVault(calib_zonal.D@M2C_zernike)
@@ -202,8 +218,11 @@ plt.plot(np.std(calib_zernike.D,axis=0))
 plt.xlabel('Mode Number')
 plt.ylabel('WFS slopes STD')
 
-#%%
+#%% switch to a diffractive SH-WFS
 
+wfs.is_geometric = False
+
+#%%
 tel.resetOPD()
 # initialize DM commands
 dm.coefs=0
@@ -239,18 +258,18 @@ wfsSignal               = np.arange(0,wfs.nSignal)*0
 SE_PSF = []
 LE_PSF = np.log10(tel.PSF_norma_zoom)
 
-plot_obj = cl_plot(list_fig          = [atm.OPD,tel.mean_removed_OPD,wfs.cam.frame,np.log10(wfs.get_modulation_frame(radius = 10)),[[0,0],[0,0]],[dm.coordinates[:,0],np.flip(dm.coordinates[:,1]),dm.coefs],np.log10(tel.PSF_norma_zoom),np.log10(tel.PSF_norma_zoom)],\
-                   type_fig          = ['imshow','imshow','imshow','imshow','plot','scatter','imshow','imshow'],\
-                   list_title        = ['Turbulence OPD','Residual OPD','WFS Detector','WFS Modulation Camera',None,None,None,None],\
-                   list_lim          = [None,None,None,[-3,0],None,None,[-4,0],[-4,0]],\
-                   list_label        = [None,None,None,None,['Time','WFE [nm]'],['DM Commands',''],['Short Exposure PSF',''],['Long Exposure_PSF','']],\
+plot_obj = cl_plot(list_fig          = [atm.OPD,tel.mean_removed_OPD,wfs.cam.frame,[dm.coordinates[:,0],np.flip(dm.coordinates[:,1]),dm.coefs],[[0,0],[0,0]],np.log10(tel.PSF_norma_zoom),np.log10(tel.PSF_norma_zoom)],\
+                   type_fig          = ['imshow','imshow','imshow','scatter','plot','imshow','imshow'],\
+                   list_title        = ['Turbulence OPD','Residual OPD','WFS Detector','DM Commands',None,None,None],\
+                   list_lim          = [None,None,None,None,None,[-4,0],[-4,0]],\
+                   list_label        = [None,None,None,None,['Time','WFE [nm]'],['Short Exposure PSF',''],['Long Exposure_PSF','']],\
                    n_subplot         = [4,2],\
-                   list_display_axis = [None,None,None,None,True,None,None,None],\
+                   list_display_axis = [None,None,None,None,True,None,None],\
                    list_ratio        = [[0.95,0.95,0.1],[1,1,1,1]], s=20)
 # loop parameters
-gainCL                  = 0.6
+gainCL                  = 0.4
 wfs.cam.photonNoise     = True
-display                 = False
+display                 = True
 
 reconstructor = M2C_CL@calib_CL.M
 
@@ -263,8 +282,9 @@ for i in range(param['nLoop']):
     # save turbulent phase
     turbPhase = tel.src.phase
     # propagate to the WFS with the CL commands applied
-    tel*dm*wfs
-        
+    ngs*tel*dm*wfs
+    src*tel
+    tel.print_optical_path()
     dm.coefs=dm.coefs-gainCL*np.matmul(reconstructor,wfsSignal)
     # store the slopes after computing the commands => 2 frames delay
     wfsSignal=wfs.signal
@@ -277,7 +297,7 @@ for i in range(param['nLoop']):
             SE_PSF.append(np.log10(tel.PSF_norma_zoom))
             LE_PSF = np.mean(SE_PSF, axis=0)
         
-        cl_plot(list_fig   = [atm.OPD,tel.mean_removed_OPD,wfs.cam.frame,np.log10(wfs.get_modulation_frame(radius=10)),[np.arange(i+1),residual[:i+1]],dm.coefs,np.log10(tel.PSF_norma_zoom), LE_PSF],
+        cl_plot(list_fig   = [atm.OPD,tel.mean_removed_OPD,wfs.cam.frame,dm.coefs,[np.arange(i+1),residual[:i+1]],np.log10(tel.PSF_norma_zoom), LE_PSF],
                                plt_obj = plot_obj)
         plt.pause(0.1)
         if plot_obj.keep_going is False:
@@ -295,4 +315,3 @@ plt.plot(total)
 plt.plot(residual)
 plt.xlabel('Time')
 plt.ylabel('WFE [nm]')
-

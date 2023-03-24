@@ -14,7 +14,7 @@ def initializeParameterFile():
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
-    param['r0'                   ] = 0.13                                           # value of r0 in the visibile in [m]
+    param['r0'                   ] = 0.3                                           # value of r0 in the visibile in [m]
     param['L0'                   ] = 30                                             # value of L0 in the visibile in [m]
     param['fractionnalR0'        ] = [0.45,0.1,0.1,0.25,0.1]                                            # Cn2 profile
     param['windSpeed'            ] = [10,12,11,15,20]                                           # wind speed of the different layers in [m.s-1]
@@ -25,11 +25,11 @@ def initializeParameterFile():
     
     param['diameter'             ] = 8                                             # diameter in [m]
     param['nSubaperture'         ] = 20                                             # number of PWFS subaperture along the telescope diameter
-    param['nPixelPerSubap'       ] = 8                                            # sampling of the PWFS subapertures
+    param['nPixelPerSubap'       ] = 4                                            # sampling of the PWFS subapertures
     param['resolution'           ] = param['nSubaperture']*param['nPixelPerSubap']  # resolution of the telescope driven by the PWFS
     param['sizeSubaperture'      ] = param['diameter']/param['nSubaperture']        # size of a sub-aperture projected in the M1 space
     param['samplingTime'         ] = 1/1000                                         # loop sampling time in [s]
-    param['centralObstruction'   ] = 0                                              # central obstruction in percentage of the diameter
+    param['centralObstruction'   ] = 0.112                                              # central obstruction in percentage of the diameter
     param['nMissingSegments'     ] = 0                                             # number of missing segments on the M1 pupil
     param['m1_reflectivity'      ] = 1                                   # reflectivity of the 798 segments
           
@@ -42,7 +42,7 @@ def initializeParameterFile():
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% DM PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     param['nActuator'            ] = param['nSubaperture']+1                                             # number of actuators 
     param['mechanicalCoupling'   ] = 0.45
-    param['isM4'                 ] = True                                           # tag for the deformable mirror class
+    param['isM4'                 ] = False                                           # tag for the deformable mirror class
     param['dm_coordinates'       ] = None                                           # tag for the eformable mirror class
     
     # mis-registrations                                                             
@@ -58,7 +58,7 @@ def initializeParameterFile():
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
-    param['modulation'            ] = 3                                             # modulation radius in ratio of wavelength over telescope diameter
+    param['modulation'            ] = 5                                             # modulation radius in ratio of wavelength over telescope diameter
     param['n_pix_separation'      ] = 4                                             # separation ratio between the PWFS pupils
     param['psfCentering'          ] = False                                         # centering of the FFT and of the PWFS mask on the 4 central pixels
     param['lightThreshold'        ] = 0.1                                           # light threshold to select the valid pixels
@@ -71,7 +71,7 @@ def initializeParameterFile():
     param['photonNoise'           ] = True                                         # Photon Noise enable  
     param['readoutNoise'          ] = 0                                            # Readout Noise value
     param['gainCL'                ] = 0.5                                          # integrator gain
-    param['nModes'                ] = 600                                          # number of KL modes controlled 
+    param['nModes'                ] = 300                                          # number of KL modes controlled 
     param['nPhotonPerSubaperture' ] = 1000                                         # number of photons per subaperture (update of ngs.magnitude)
     param['getProjector'          ] = True                                         # modal projector too get modal coefficients of the turbulence and residual phase
 
