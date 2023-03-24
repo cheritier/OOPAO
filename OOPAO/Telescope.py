@@ -383,10 +383,18 @@ class Telescope:
                 self.computePSF()
                 obj.frame = obj.rebin(self.PSF,(obj.resolution,obj.resolution))
          
+            if obj.tag=='OPD_map':
+                self.optical_path.append([obj.tag,id(obj)])
+
+                self.OPD += obj.OPD
+                self.OPD_no_pupil += obj.OPD
+                
             if obj.tag=='NCPA':
                 self.optical_path.append([obj.tag,id(obj)])
 
                 self.OPD += obj.OPD
+                self.OPD_no_pupil += obj.OPD
+
                     
             if obj.tag=='spatialFilter':
                 self.optical_path.append([obj.tag,id(obj)])
@@ -448,8 +456,8 @@ class Telescope:
                 self.OPD = [self.pupil.astype(float) for i in range(self.src.n_source)]
                 self.OPD_no_pupil = [self.pupil.astype(float)*0 +1 for i in range(self.src.n_source)]
             else:
-                self.OPD = self.pupil.astype(float)
-                self.OPD_no_pupil = 1+0*self.pupil.astype(float)
+                self.OPD = 0*self.pupil.astype(float)
+                self.OPD_no_pupil = 0*self.pupil.astype(float)
                 
     def print_optical_path(self):
         if self.optical_path is not None:
