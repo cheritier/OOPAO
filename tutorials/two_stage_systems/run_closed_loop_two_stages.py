@@ -129,7 +129,7 @@ obj_stage_2 = run_initialization_AO_PWFS(param_stage_2)
 param_stage_2['nPhotonPerSubaperture'] = 1000
 
 obj_stage_2.M2C_cl = obj_stage_2.M2C
-obj_stage_2.display= False
+obj_stage_2.display= True
 param_stage_2['gainCL'] = 0.3
 from OOPAO.closed_loop.run_cl_from_phase_screens import run_cl_from_phase_screens
 
