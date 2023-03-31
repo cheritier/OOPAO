@@ -702,7 +702,7 @@ class Pyramid:
             return fullFrameMaps,fullFrame
         
     def get_modulation_frame(self, radius = 6, norma = True):
-        self.modulation_camera_frame = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)
+        self.modulation_camera_frame = np.sum(np.abs(np.asarray(self.modulation_camera_em)/self.modulation_camera_em[0].shape[0])**2,axis=0)
        
         N_trunc = int(self.nRes/2 - radius*self.modulation*self.zeroPaddingFactor )
         
@@ -921,14 +921,13 @@ class Pyramid:
     
     def __mul__(self,obj): 
         if obj.tag=='detector':
-            I = self.pyramidFrame
+            I = self.pyramidFrame*(self.telescope.src.fluxMap.sum())/obj.frame.sum()
             obj.frame = (obj.rebin(I,(obj.resolution,obj.resolution)))
             if self.binning != 1:
                 try:
                     obj.frame = (obj.rebin(obj.frame,(obj.resolution//self.binning,obj.resolution//self.binning)))    
                 except:
                     print('ERROR: the shape of the detector ('+str(obj.frame.shape)+') is not valid with the binning value requested:'+str(self.binning)+'!')
-            obj.frame = obj.frame *(self.telescope.src.fluxMap.sum())/obj.frame.sum()
             
             if obj.photonNoise!=0:
                 obj.frame = self.random_state_photon_noise.poisson(obj.frame)
