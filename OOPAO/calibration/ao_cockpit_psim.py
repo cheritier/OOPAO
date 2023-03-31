@@ -771,12 +771,11 @@ def DO_HHt(ilal,PSD,df,pupil,BLOCKL,REST,SZ,verb):
     if verb==1: print('CREATING FFTW PLANS...')
 
     aa = pyfftw.empty_aligned((BLOCKL,SZ, SZ), dtype='complex128')
-    
-    cc = pyfftw.empty_aligned((REST,SZ, SZ), dtype='complex128')
-
     fft_object_aa = pyfftw.FFTW(aa,aa, axes=(1,2),flags=('FFTW_MEASURE',),direction='FFTW_FORWARD',threads=mp.cpu_count())
-  
-    fft_object_cc = pyfftw.FFTW(cc,cc, axes=(1,2),flags=('FFTW_MEASURE',),direction='FFTW_FORWARD',threads=mp.cpu_count())
+    
+    if REST!=0:
+        cc = pyfftw.empty_aligned((REST,SZ, SZ), dtype='complex128')
+        fft_object_cc = pyfftw.FFTW(cc,cc, axes=(1,2),flags=('FFTW_MEASURE',),direction='FFTW_FORWARD',threads=mp.cpu_count())
 
  
     ## CREATION OF COVARIANCE MATRIX TO STORE RESULT 
