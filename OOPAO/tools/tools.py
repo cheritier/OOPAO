@@ -15,19 +15,23 @@ import skimage.transform as sk
 from astropy.io import fits as pfits
 from OOPAO.tools import *
 import matplotlib.pyplot as plt
+from libraryToolsProcessing import cog
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% USEFUL FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-def crop(imageArray, size, axis):
+def crop(imageArray, size, axis, maximum = 0):
     # returns an subimage centered on CENTER (assumed to be the center of image), 
     # of size SIZE (integer), 
     # considering any datacube IMAGEARRAY (np array) of size NxMxL
     if imageArray.ndim == 2:
         sizeImage = imageArray.shape[0]
         center = np.array((sizeImage//2, sizeImage//2))
-        return imageArray[center[0]-size//2:center[0]+size//2,center[1]-size//2:center[1]+size//2]
+        if maximum == 1:
+            center = np.int16(cog(imageArray)) + np.int16(sizeImage/2)
+            print(center)
+        return imageArray[center[1]-size//2:center[1]+size//2,center[0]-size//2:center[0]+size//2]
 
     if imageArray.ndim == 3:
         if axis == 0:
@@ -67,8 +71,8 @@ def strehlMeter(PSF, tel, zeroPaddingFactor = 2, display = True, title = ''):
     OTF = OTF / np.max(OTF)
     OTFa = OTFa / np.max(OTFa)
     # Compute intensity profiles
-    profile  = tools.circularProfile(OTF)
-    profilea = tools.circularProfile(OTFa)
+    profile  = circularProfile(OTF)
+    profilea = circularProfile(OTFa)
     profilea = profilea / np.max(profilea)
     profile  = profile / np.max(profile)
     profilea = profilea[0:np.int64(tel.resolution * zeroPaddingFactor/2)]
@@ -88,10 +92,11 @@ def strehlMeter(PSF, tel, zeroPaddingFactor = 2, display = True, title = ''):
         # plt.yscale('log')
         plt.imshow(tel.pupil, extent = [0.6, 0.8, 0.6, 0.8])
         plt.text(0.65,0.575, 'Pupil')
-        plt.imshow(np.log(crop(PSF, np.int16(8 * zeroPaddingFactor), 3)), extent = [0.75, 0.95, 0.3, 0.5])
+        plt.imshow(np.log(crop(PSF, np.int16(8 * zeroPaddingFactor), 3, 1)), extent = [0.75, 0.95, 0.3, 0.5])
         plt.text(0.8,0.275, 'PSF')
         plt.imshow(np.log(crop(Airy, np.int16(8 * zeroPaddingFactor), 3)), extent = [0.5, 0.7, 0.3, 0.5])
         plt.text(0.55,0.275, 'Airy')
+        plt.title('Strehl ' + np.str_(round(np.sum(OTF) / np.sum(OTFa) * 100)) + '%')
         print('Strehl ratio [%] : ', np.sum(OTF) / np.sum(OTFa) * 100)
         
 
