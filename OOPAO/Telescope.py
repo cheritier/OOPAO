@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from .Source import Source
+from OOPAO.tools import *
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 class Telescope:
@@ -138,7 +139,11 @@ class Telescope:
         self.isInitialized= True
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF COMPUTATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
-    def computeCoronoPSF(self,zeroPaddingFactor=2, display = False):
+
+    def computeCoronoPSF(self,zeroPaddingFactor=2, display = False, coronagraphDiameter = 4.5):
+
+        # coronagraphDiameter is the FPM diameter in L/D of imaging wavelength
+
         if self.src is None:
             raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')            # number of pixel considered 
         N       = int(zeroPaddingFactor * self.resolution)        
@@ -148,18 +153,22 @@ class Telescope:
         xxc = xx - (N-1)/2
         yyc = yy - (N-1)/2
 
-        coronagraphDiameter = 4.5 # diameter in L/D of imaging wavelength (same as wfs for now)
         self.pupilPadded = np.sqrt(xxc**2 + yyc**2) < self.resolution/2
         self.pupilSpiderPadded = np.zeros((N,N))
         self.pupilSpiderPadded[center-self.resolution//2:center+self.resolution//2,center-self.resolution//2:center+self.resolution//2] = self.pupil
         self.focalMask = np.sqrt(xxc**2 + yyc**2) > coronagraphDiameter/2 * zeroPaddingFactor
         self.apodizer  = self.pupilPadded
         self.lyotStop  = (np.sqrt((xxc-1.0)**2 + (yyc-1.0)**2) < self.resolution/2 * 0.9) * self.pupilSpiderPadded
+        self.diffraction2meterGEO = self.src.wavelength/self.D * 36e6 # assumes GEO orbit 36 000 km
 
         phase = self.src.phase
         amp_mask = 1
 
-        # axis in arcsec
+        # axis limits in meters at GEO orbit
+        self.xPSF_mGEO         = [-self.resolution /2 * self.diffraction2meterGEO, self.resolution/2 * self.diffraction2meterGEO]
+        self.yPSF_mGEO         = [-self.resolution /2 * self.diffraction2meterGEO, self.resolution/2 * self.diffraction2meterGEO]
+
+        # axis in arcsec => BUG ? Assumes Shannon sampling only ?
         self.xPSF_arcsec       = [-206265*(self.src.wavelength/self.D) * (self.resolution/2), 206265*(self.src.wavelength/self.D) * (self.resolution/2)]
         self.yPSF_arcsec       = [-206265*(self.src.wavelength/self.D) * (self.resolution/2), 206265*(self.src.wavelength/self.D) * (self.resolution/2)]
         
@@ -256,20 +265,25 @@ class Telescope:
         self.PSF_norma_zoom  = self.PSF_norma[N_crop:-N_crop,N_crop:-N_crop]
     
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF DISPLAY %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
-    def showPSF(self,zoom = 1):
+    def showPSF(self,zoom = 1, GEO = False):
         # display the full PSF or zoom on the core of the PSF
         if hasattr(self, 'PSF'): 
             print('Displaying the PSF...')
         else:
             self.computePSF(6)
             print('Displaying the PSF...')
-
         if zoom:
             plt.imshow(self.PSF_trunc,extent = [self.xPSF_trunc[0],self.xPSF_trunc[1],self.xPSF_trunc[0],self.xPSF_trunc[1]])
+            plt.xlabel('[arcsec]')
+            plt.ylabel('[arcsec]')
+        elif GEO == True: # works only with zoom = False
+            plt.imshow(np.log(self.PSFc),extent = [self.xPSF_mGEO[0],self.xPSF_mGEO[1],self.xPSF_mGEO[0],self.xPSF_mGEO[1]])
+            plt.xlabel('[meters in GEO orbit]')
+            plt.ylabel('[meters in GEO orbit]')
         else:
             plt.imshow(self.PSF,extent = [self.xPSF[0],self.xPSF[1],self.xPSF[0],self.xPSF[1]])
-        plt.xlabel('[arcsec]')
-        plt.ylabel('[arcsec]')
+            plt.xlabel('[arcsec]')
+            plt.ylabel('[arcsec]')
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TELESCOPE PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
