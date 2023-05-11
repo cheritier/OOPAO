@@ -274,6 +274,33 @@ class Atmosphere:
         layer.mapShift[layer.outerMask==0]  = np.reshape(onePixelShiftedPhaseScreen,layer.resolution*layer.resolution)
         return onePixelShiftedPhaseScreen
 
+    def set_pupil_footprint(self):
+        
+        for i_layer in range(self.nLayer):
+            layer = getattr(self,'layer_'+str(i_layer+1)) 
+            if self.asterism is None:
+                [x_z,y_z] = pol2cart(self.telescope.src.coordinates[0]*(layer.D_fov-self.telescope.D)/self.telescope.D,np.deg2rad(self.telescope.src.coordinates[1]))
+     
+                center_x = int(y_z)+layer.resolution//2
+                center_y = int(x_z)+layer.resolution//2
+        
+                layer.pupil_footprint = np.zeros([layer.resolution,layer.resolution])
+                layer.pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution//2,center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2 ] = 1
+            else:
+                layer.pupil_footprint= []
+                for i in range(self.asterism.n_source):
+                    [x_z,y_z] = pol2cart(self.asterism.coordinates[i][0]*(layer.D_fov-self.telescope.D)/self.telescope.D,np.deg2rad(self.asterism.coordinates[i][1]))
+                    
+                    center_x = int(y_z)+layer.resolution//2
+                    center_y = int(x_z)+layer.resolution//2
+                    
+                    pupil_footprint = np.zeros([layer.resolution,layer.resolution])
+                    pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution//2,center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2 ] = 1
+                    layer.pupil_footprint.append(pupil_footprint)   
+            
+        
+        
+        
     def updateLayer(self,layer):
         self.ps_loop    = layer.D / (layer.resolution)
         ps_turb_x       = layer.vX*self.telescope.samplingTime
@@ -333,6 +360,8 @@ class Atmosphere:
         for i_layer in range(self.nLayer):
             tmpLayer=getattr(self,'layer_'+str(i_layer+1))
             self.updateLayer(tmpLayer)
+            # tmpLayer.phase *= self.wavelength/2/np.pi
+
             phase_support = self.fill_phase_support(tmpLayer,phase_support,i_layer)
         self.set_OPD(phase_support)
         if self.telescope.isPaired:
@@ -350,8 +379,6 @@ class Atmosphere:
     def fill_phase_support(self,tmpLayer,phase_support,i_layer):
         if self.asterism is None:
             phase_support+= np.reshape(tmpLayer.phase[np.where(tmpLayer.pupil_footprint==1)],[self.telescope.resolution,self.telescope.resolution])* np.sqrt(self.fractionalR0[i_layer])
-            # wavelenfth scaling
-            tmpLayer.phase *= self.wavelength/2/np.pi
         else:
             for i in range(self.asterism.n_source):
                 if self.asterism.src[i].type == 'LGS':
@@ -530,7 +557,19 @@ class Atmosphere:
         
     def __mul__(self,obj):
         if obj.tag == 'telescope':
-            obj.optical_path =[[obj.src.type + '('+obj.src.optBand+')',id(obj.src)]]
+            self.telescope = obj
+            self.set_pupil_footprint()     
+            phase_support = self.initialize_phase_support()
+            for i_layer in range(self.nLayer):
+                tmpLayer = getattr(self,'layer_'+str(i_layer+1))
+                phase_support = self.fill_phase_support(tmpLayer, phase_support, i_layer)
+                
+            self.set_OPD(phase_support)
+            if obj.src.tag == 'source':
+                obj.optical_path =[[obj.src.type + '('+obj.src.optBand+')',id(obj.src)]]
+            else:
+                obj.optical_path =[[obj.src.type,id(obj.src)]]
+                
             obj.optical_path.append([self.tag,id(self)])
             obj.optical_path.append([obj.tag,id(obj)])
             obj.OPD          = self.OPD.copy()
@@ -553,7 +592,6 @@ class Atmosphere:
             raise TypeError(' layer_index should be a list') 
         normalized_speed = np.asarray(self.windSpeed)/max(self.windSpeed)
 
-        col = getColorOrder() 
         if fig_index is None:
             fig_index = time.time_ns()
             
@@ -581,7 +619,10 @@ class Atmosphere:
             center = tmpLayer.D/2
             [x_tel,y_tel] = pol2cart(tmpLayer.D_fov/2, np.linspace(0,2*np.pi,100,endpoint=True))  
             if self.telescope.src.tag =='asterism':
-                for i_source in range(len(self.telescope.src.src)):
+                cm = plt.get_cmap('gist_rainbow')
+                col = []
+                for i_source in range(len(self.telescope.src.src)):                   
+                    col.append(cm(1.*i_source/len(self.telescope.src.src))) 
                     
                     [x_c,y_c] = pol2cart(self.telescope.D/2, np.linspace(0,2*np.pi,100,endpoint=True))
                     alpha_cone = np.arctan(self.telescope.D/2/self.telescope.src.src[i_source].altitude)
