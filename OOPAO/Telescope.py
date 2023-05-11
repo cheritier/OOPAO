@@ -450,12 +450,15 @@ class Telescope:
     def resetOPD(self):
         # re-initialize the telescope OPD to a flat wavefront
         if self.src is not None:
-            self.optical_path = [[self.src.type + '('+self.src.optBand+')', id(self.src)]]
-            self.optical_path.append([self.tag,id(self)])
+
             if self.src.tag == 'asterism':
+                self.optical_path = [[self.src.type, id(self.src)]]
+                self.optical_path.append([self.tag,id(self)])
                 self.OPD = [self.pupil.astype(float) for i in range(self.src.n_source)]
                 self.OPD_no_pupil = [self.pupil.astype(float)*0 +1 for i in range(self.src.n_source)]
             else:
+                self.optical_path = [[self.src.type + '('+self.src.optBand+')', id(self.src)]]
+                self.optical_path.append([self.tag,id(self)])
                 self.OPD = 0*self.pupil.astype(float)
                 self.OPD_no_pupil = 0*self.pupil.astype(float)
                 
@@ -576,12 +579,15 @@ class Telescope:
     # Combining with an atmosphere object
     def __add__(self,obj):
         if obj.tag == 'atmosphere':
-            self.optical_path =[[self.src.type + '('+self.src.optBand+')',id(self.src)]]
-            self.optical_path.append([obj.tag,id(obj)])
-            self.optical_path.append([self.tag,id(self)])
-            self.isPaired   = True
-            self.OPD  = obj.OPD.copy()
-            self.OPD_no_pupil  = obj.OPD_no_pupil.copy()
+            # obj.set_pupil_footprint()
+            # self.optical_path =[[self.src.type + '('+self.src.optBand+')',id(self.src)]]
+            # self.optical_path.append([obj.tag,id(obj)])
+            # self.optical_path.append([self.tag,id(self)])
+            # self.isPaired   = True
+            obj*self
+
+            # self.OPD  = obj.OPD.copy()
+            # self.OPD_no_pupil  = obj.OPD_no_pupil.copy()
 
             if self.isPetalFree:
                     self.removePetalling()  
