@@ -6,6 +6,7 @@ Created on Wed Mar 18 09:26:22 2020
 """
 import numpy as np
 import time
+import tqdm
 from .CalibrationVault import CalibrationVault
 
 
@@ -41,8 +42,9 @@ def InteractionMatrix(ngs,atm,tel,dm,wfs,M2C,stroke,phaseOffset=0,nMeasurements=
     else:
         phaseBuffer = phaseOffset
 
+    print('Interaction Matrix Computation:' )
         
-    for i in range(nCycle):  
+    for i in tqdm.tqdm(range(nCycle)):  
         if nModes>1:
             if i==nCycle-1:
                 if nExtra != 0:
