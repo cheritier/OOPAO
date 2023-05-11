@@ -15,7 +15,6 @@ import skimage.transform as sk
 from astropy.io import fits as pfits
 from OOPAO.tools import *
 import matplotlib.pyplot as plt
-from libraryToolsProcessing import cog
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% USEFUL FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -29,7 +28,7 @@ def crop(imageArray, size, axis, maximum = 0):
         sizeImage = imageArray.shape[0]
         center = np.array((sizeImage//2, sizeImage//2))
         if maximum == 1:
-            center = np.int16(cog(imageArray)) + np.int16(sizeImage/2)
+            center = np.int16(centroid(imageArray)) + np.int16(sizeImage/2)
             print(center)
         return imageArray[center[1]-size//2:center[1]+size//2,center[0]-size//2:center[0]+size//2]
 
