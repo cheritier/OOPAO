@@ -231,7 +231,7 @@ class Pyramid:
                 self.nJobs                      = 8                                                                 # number of jobs for the joblib package
             else:
                 self.nJobs                      = 6
-            self.n_max = 20*500
+            self.n_max = 1e9
         else:
             # quantify GPU max memory usage
             A = np.ones([self.nRes,self.nRes]) + 1j*np.ones([self.nRes,self.nRes])
@@ -642,10 +642,10 @@ class Pyramid:
             cameraFrame=self.cam.frame
         if self.postProcessing == 'slopesMaps':
             # slopes-maps computation
-            I1              = self.grabQuadrant(1,cameraFrame=0)*self.validI4Q
-            I2              = self.grabQuadrant(2,cameraFrame=0)*self.validI4Q
-            I3              = self.grabQuadrant(3,cameraFrame=0)*self.validI4Q
-            I4              = self.grabQuadrant(4,cameraFrame=0)*self.validI4Q
+            I1              = self.grabQuadrant(1,cameraFrame=None)*self.validI4Q
+            I2              = self.grabQuadrant(2,cameraFrame=None)*self.validI4Q
+            I3              = self.grabQuadrant(3,cameraFrame=None)*self.validI4Q
+            I4              = self.grabQuadrant(4,cameraFrame=None)*self.validI4Q
             # global normalisation
             I4Q        = I1+I2+I3+I4
             norma      = np.mean(I4Q[self.validI4Q])
@@ -660,10 +660,10 @@ class Pyramid:
     
         if self.postProcessing == 'slopesMaps_incidence_flux':
             # slopes-maps computation
-            I1              = self.grabQuadrant(1,cameraFrame=0)*self.validI4Q
-            I2              = self.grabQuadrant(2,cameraFrame=0)*self.validI4Q
-            I3              = self.grabQuadrant(3,cameraFrame=0)*self.validI4Q
-            I4              = self.grabQuadrant(4,cameraFrame=0)*self.validI4Q
+            I1              = self.grabQuadrant(1,cameraFrame=None)*self.validI4Q
+            I2              = self.grabQuadrant(2,cameraFrame=None)*self.validI4Q
+            I3              = self.grabQuadrant(3,cameraFrame=None)*self.validI4Q
+            I4              = self.grabQuadrant(4,cameraFrame=None)*self.validI4Q
 
             # global normalisation
             I4Q         = I1+I2+I3+I4
@@ -713,12 +713,12 @@ class Pyramid:
         
         return modulation_camera_frame_zoom
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% GRAB QUADRANTS FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
-    def grabQuadrant(self,n,cameraFrame=0):
+    def grabQuadrant(self,n,cameraFrame=None):
         
         nExtraPix   = int(np.round((np.max(self.pupilSeparationRatio)-1)*self.telescope.resolution/(self.telescope.resolution/self.nSubap)/2/self.binning))
         centerPixel = int(np.round((self.cam.resolution/self.binning)/2))
         n_pixels    = int(np.ceil(self.nSubap/self.binning))
-        if cameraFrame ==0:
+        if cameraFrame is None:
             cameraFrame=self.cam.frame.copy()
             
         if self.rooftop is None:
