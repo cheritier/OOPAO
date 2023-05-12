@@ -81,8 +81,8 @@ def strehlMeter(PSF, tel, zeroPaddingFactor = 2, display = True, title = ''):
     if display:        
         # plot OTF profiles for visualization
         xArray  = np.linspace(0,1, np.int64(tel.resolution * zeroPaddingFactor/2))
-        plt.plot(xArray, profile, label = 'OTF', lineWidth = '2')
-        plt.plot(xArray, profilea, label = 'Perfect OTF')
+        plt.semilogy(xArray, profile, label = 'OTF', lineWidth = '2')
+        plt.semilogy(xArray, profilea, label = 'Perfect OTF')
         plt.title(title)
         plt.legend()
         plt.ylim((1e-4,1))
@@ -90,13 +90,13 @@ def strehlMeter(PSF, tel, zeroPaddingFactor = 2, display = True, title = ''):
         plt.xlabel('Spatial frequency in the pupil [D/Lambda]', fontsize = 15)
         plt.ylabel('OTF profile [normalized to peak]', fontsize = 15)
         # plt.yscale('log')
-        plt.imshow(tel.pupil, extent = [0.6, 0.8, 0.6, 0.8])
-        plt.text(0.65,0.575, 'Pupil')
-        plt.imshow(np.log(crop(PSF, np.int16(8 * zeroPaddingFactor), 3, 1)), extent = [0.75, 0.95, 0.3, 0.5])
-        plt.text(0.8,0.275, 'PSF')
-        plt.imshow(np.log(crop(Airy, np.int16(8 * zeroPaddingFactor), 3)), extent = [0.5, 0.7, 0.3, 0.5])
-        plt.text(0.55,0.275, 'Airy')
-        plt.title('Strehl ' + np.str_(round(np.sum(OTF) / np.sum(OTFa) * 100)) + '%')
+        # plt.imshow(tel.pupil, extent = [0.6, 0.8, 0.6, 0.8])
+        # plt.text(0.65,0.575, 'Pupil')
+        # plt.imshow(np.log(crop(PSF, np.int16(8 * zeroPaddingFactor), 3, 1)), extent = [0.75, 0.95, 0.3, 0.5])
+        # plt.text(0.8,0.275, 'PSF')
+        # plt.imshow(np.log(crop(Airy, np.int16(8 * zeroPaddingFactor), 3)), extent = [0.5, 0.7, 0.3, 0.5])
+        # plt.text(0.55,0.275, 'Airy')
+        # plt.title('Strehl ' + np.str_(round(np.sum(OTF) / np.sum(OTFa) * 100)) + '%')
         print('Strehl ratio [%] : ', np.sum(OTF) / np.sum(OTFa) * 100)
         
 
