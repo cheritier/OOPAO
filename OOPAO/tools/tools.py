@@ -312,8 +312,8 @@ def compute_fourier_mode(pupil,spatial_frequency,angle_deg,zeropadding = 2):
     
     return mode
 
-#%%
-def circularProfile(img):
+
+def circularProfile(img, maximum = False):
     # Compute circular average profile from an image, reference to center of image
     # Get image parameters
     a = img.shape[0]
@@ -321,6 +321,13 @@ def circularProfile(img):
     # Image center
     cen_x = a//2
     cen_y = b//2
+
+    if maximum == True:
+        cogMaximum = centroid(img,threshold = 0.1*img.max())
+        cen_x = cogMaximum[0] + a/2
+        cen_y = cogMaximum[1] + b/2
+        print('Maximum position = [px]')
+        print(cen_x, cen_y)
     # Find radial distances
     [X, Y] = np.meshgrid(np.arange(b) - cen_x, np.arange(a) - cen_y)
     R = np.sqrt(np.square(X) + np.square(Y))
