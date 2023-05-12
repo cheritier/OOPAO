@@ -324,7 +324,7 @@ def circularProfile(img, maximum = False):
     cen_y = b//2
 
     if maximum == True:
-        cogMaximum = cog(img)
+        cogMaximum = centroid(img,threshold = 0.1*img.max())
         cen_x = cogMaximum[0] + a/2
         cen_y = cogMaximum[1] + b/2
         print('Maximum position = [px]')
