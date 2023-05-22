@@ -175,7 +175,11 @@ def getPetalModes(tel,dm,i_petal):
             #    initiliaze dm coef
             petal = np.zeros(dm.nValidAct)
             petal[(i_petal-1)*892:i_petal*892]=-np.ones(892)
-            dm.coefs = petal
+            if dm.floating_precision==32:
+                dm.coefs = np.float32(petal)
+            else:
+                dm.coefs = petal
+
             tel*dm
             tmp = np.abs(tel.OPD) > 1
             out = tmp  
@@ -184,7 +188,10 @@ def getPetalModes(tel,dm,i_petal):
             for i in range(len(i_petal)):
                 petal = np.zeros(dm.nValidAct)
                 petal[(i_petal[i]-1)*892:i_petal[i]*892]=-np.ones(892)
-                dm.coefs = petal
+                if dm.floating_precision==32:
+                    dm.coefs = np.float32(petal)
+                else:
+                    dm.coefs = petal
                 tel*dm
                 tmp = np.abs(tel.OPD) > 1
                 out[:,:,i] = tmp

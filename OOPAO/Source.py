@@ -217,3 +217,6 @@ class Source:
         print('------------------------------------------------------------------------------------------------------------------------------')        
         print('{: ^18s}'.format(self.type) +'{: ^18s}'.format(str(self.wavelength))+ '{: ^18s}'.format(str(self.coordinates[0]))+ '{: ^18s}'.format(str(self.coordinates[1]))+'{: ^18s}'.format(str(np.round(self.altitude,2)))+ '{: ^18s}'.format(str(self.magnitude))+'{: ^18s}'.format(str(np.round(self.nPhoton,1))) )
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%') 
+    def __repr__(self):
+        self.print_properties()
+        return ' '

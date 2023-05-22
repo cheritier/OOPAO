@@ -104,3 +104,6 @@ class Asterism:
                         if np.ndim(a[1])>1:
                             print('          '+str(a[0])+': '+str(np.shape(a[1])))   
             
+    def __repr__(self):
+        self.print_properties()
+        return ' '

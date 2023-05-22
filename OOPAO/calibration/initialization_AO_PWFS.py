@@ -112,7 +112,7 @@ def run_initialization_AO_PWFS(param):
                                  ortho_spm          = True,\
                                  SZ                 = np.int(2*tel.OPD.shape[0]),\
                                  nZer               = 3,\
-                                 NDIVL              = 1)
+                                 NDIVL              = 4)
         print('Done')
     
 

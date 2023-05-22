@@ -975,5 +975,7 @@ class Pyramid:
         print('{: ^18s}'.format('Signal Computation')   + '{: ^18s}'.format(str(self.postProcessing)                                                ))
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
-   
+    def __repr__(self):
+        self.print_properties()
+        return ' '
         

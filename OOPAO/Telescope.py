@@ -662,5 +662,7 @@ class Telescope:
             
 
 
-
+    def __repr__(self):
+        self.print_properties()
+        return ' '
 
