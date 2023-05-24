@@ -81,7 +81,7 @@ def strehlMeter(PSF, tel, zeroPaddingFactor = 2, display = True, title = ''):
         # plot OTF profiles for visualization
         plt.figure()
         xArray  = np.linspace(0,1, np.int64(tel.resolution * zeroPaddingFactor/2))
-        plt.semilogy(xArray, profile, label = 'OTF', lineWidth = '2')
+        plt.semilogy(xArray, profile, label = 'OTF', linewidth = '2')
         plt.semilogy(xArray, profilea, label = 'Perfect OTF')
         plt.title(title + ' Strehl ' + str(np.round(np.sum(OTF) / np.sum(OTFa) * 100, 1)))
         plt.legend()
@@ -100,8 +100,8 @@ def strehlMeter(PSF, tel, zeroPaddingFactor = 2, display = True, title = ''):
         # plt.imshow(np.log(crop(Airy, np.int16(8 * zeroPaddingFactor), 3)), extent = [0.5, 0.7, 0.3, 0.5])
         # plt.text(0.55,0.275, 'Airy')
         # plt.title('Strehl ' + np.str_(round(np.sum(OTF) / np.sum(OTFa) * 100)) + '%')
-        print('Strehl ratio [%] : ', np.sum(OTF) / np.sum(OTFa) * 100)
-        return np.sum(OTF) / np.sum(OTFa) * 100
+    print('Strehl ratio [%] : ', np.sum(OTF) / np.sum(OTFa) * 100)
+    return np.sum(OTF) / np.sum(OTFa) * 100
 
         
 def print_(input_text,condition):
