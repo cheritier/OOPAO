@@ -12,7 +12,36 @@ import numpy as np
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
 class Source:    
-    def __init__(self,optBand,magnitude,coordinates = [0,0],altitude = np.inf, laser_coordinates = [0,0] ,Na_profile = None,FWHM_spot_up = None,display_properties=True):
+    def __init__(self,optBand:str,magnitude:float,coordinates:list = [0,0],altitude:float = np.inf, laser_coordinates:list = [0,0] ,Na_profile:float = None,FWHM_spot_up:float = None,display_properties:bool=True):
+        """SOURCE
+        A source object can be defined as a point source at infinite distance (NGS) or as a extended object
+
+        Parameters
+        ----------
+        optBand : str
+            The optical band of the source (see the method photometry)
+            ex, 'V' corresponds to a wavelength of 500 nm
+.
+        magnitude : float
+            The magnitude of the star.
+        coordinates : list, optional
+            DESCRIPTION. The default is [0,0].
+        altitude : float, optional
+            DESCRIPTION. The default is np.inf.
+        laser_coordinates : list, optional
+            DESCRIPTION. The default is [0,0].
+        Na_profile : float, optional
+            DESCRIPTION. The default is None.
+        FWHM_spot_up : float, optional
+            DESCRIPTION. The default is None.
+        display_properties : bool, optional
+            DESCRIPTION. The default is True.
+
+        Returns
+        -------
+        None.
+
+        """
         """
         ************************** REQUIRED PARAMETERS **************************
         
@@ -96,6 +125,9 @@ class Source:
         
         if np.ndim(telescope.OPD) ==3:
             telescope.resetOPD()
+
+        telescope.OPD = telescope.OPD*telescope.pupil # here to ensure that a new pupil is taken into account
+
         # update the phase of the source
         self.phase      = telescope.OPD*2*np.pi/self.wavelength
         self.phase_no_pupil      = telescope.OPD_no_pupil*2*np.pi/self.wavelength
@@ -177,12 +209,12 @@ class Source:
         if self.is_initialized:
 
             print('NGS flux updated!')
-            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOURCE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOURCE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
             print('Wavelength \t'+str(round(self.wavelength*1e6,3)) + ' \t [microns]') 
             print('Optical Band \t'+self.optBand) 
             print('Magnitude \t' + str(self.magnitude))
             print('Flux \t\t'+ str(np.round(self.nPhoton)) + str('\t [photons/m2/s]'))
-            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         
 #    @property
 #    def magnitude(self):
@@ -212,11 +244,13 @@ class Source:
                             print('          '+str(a[0])+': '+str(np.shape(a[1])))   
             
     def print_properties(self):
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOURCE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%') 
-        print('{: ^18s}'.format('Source') +'{: ^18s}'.format('Wavelength')+ '{: ^18s}'.format('Zenith [arcsec]')+ '{: ^18s}'.format('Azimuth [deg]')+ '{: ^18s}'.format('Altitude [m]')+ '{: ^18s}'.format('Magnitude') + '{: ^18s}'.format('Flux [phot/m2/s]') )
-        print('------------------------------------------------------------------------------------------------------------------------------')        
-        print('{: ^18s}'.format(self.type) +'{: ^18s}'.format(str(self.wavelength))+ '{: ^18s}'.format(str(self.coordinates[0]))+ '{: ^18s}'.format(str(self.coordinates[1]))+'{: ^18s}'.format(str(np.round(self.altitude,2)))+ '{: ^18s}'.format(str(self.magnitude))+'{: ^18s}'.format(str(np.round(self.nPhoton,1))) )
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%') 
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOURCE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        print('{: ^8s}'.format('Source') +'{: ^10s}'.format('Wavelength')+ '{: ^8s}'.format('Zenith')+ '{: ^10s}'.format('Azimuth')+ '{: ^10s}'.format('Altitude')+ '{: ^10s}'.format('Magnitude') + '{: ^10s}'.format('Flux') )
+        print('{: ^8s}'.format('') +'{: ^10s}'.format('[m]')+ '{: ^8s}'.format('[arcsec]')+ '{: ^10s}'.format('[deg]')+ '{: ^10s}'.format('[m]')+ '{: ^10s}'.format('') + '{: ^10s}'.format('[phot/m2/s]') )
+
+        print('-------------------------------------------------------------------')        
+        print('{: ^8s}'.format(self.type) +'{: ^10s}'.format(str(self.wavelength))+ '{: ^8s}'.format(str(self.coordinates[0]))+ '{: ^10s}'.format(str(self.coordinates[1]))+'{: ^10s}'.format(str(np.round(self.altitude,2)))+ '{: ^10s}'.format(str(self.magnitude))+'{: ^10s}'.format(str(np.round(self.nPhoton,1))) )
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
     def __repr__(self):
         self.print_properties()
         return ' '
