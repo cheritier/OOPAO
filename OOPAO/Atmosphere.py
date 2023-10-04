@@ -16,41 +16,61 @@ from numpy.random import RandomState
 import matplotlib.gridspec as gridspec
 
 from .phaseStats import ft_phase_screen, ft_sh_phase_screen, makeCovarianceMatrix
-from .tools.displayTools import getColorOrder
+from .tools.displayTools import getColorOrder,makeSquareAxes
 from .tools.interpolateGeometricalTransformation import interpolate_cube
 from .tools.tools import createFolder, emptyClass, globalTransformation, pol2cart, translationImageMatrix
 
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 class Atmosphere:
-    def __init__(self,telescope,r0,L0,windSpeed,fractionalR0,windDirection,altitude,mode=2, param = None, asterism = None):
-        """
-        An Atmosphere object is made of one or several layer of turbulence that follow the Van Karmann statistics. Each layer is considered to be independant to the other ones and has its own properties (direction, speed, etc.)
-        
-        The Atmosphere object can be defined for a single Source object (default) or multi Source Object. The Source coordinates allow to span different areas in the field (defined as well by the tel.fov).
-        
-        If the source type is an LGS the cone effect is considered using an interpolation. NGS and LGS can be combined together in the asterism object. 
-        
+    def __init__(self,telescope,r0:float,L0:float,windSpeed:list,fractionalR0:list,windDirection:list,altitude:list,mode:float=2, param = None, asterism = None):
+        """ ATMOSPHERE.
+        An Atmosphere is made of one or several layer of turbulence that follow the Van Karmann statistics. 
+        Each layer is considered to be independant to the other ones and has its own properties (direction, speed, etc.)
+        The Atmosphere object can be defined for a single Source object (default) or multi Source Object. 
+        The Source coordinates allow to span different areas in the field (defined as well by the tel.fov).
+        If the source type is an LGS the cone effect is considered using an interpolation. 
+        NGS and LGS can be combined together in the Asterism object. 
         The convention chosen is that all the wavelength-dependant atmosphere parameters are expressed at 500 nm. 
 
-        
-        ************************** REQUIRED PARAMETERS **************************
-        It requires the following parameters: 
-            
-        _ telescope             : the telescope object to which the Atmosphere is associated. This object carries the phase, flux, pupil information and sampling time as well as the type of source (NGS/LGS, source/asterism)
-        _ r0                    : the Fried parameter in m 
-        _ L0                    : Outer scale parameter
-        _ windSpeed             : List of wind-speed for each layer in [m/s]
-        _ fractionalR0          : Cn2 profile of the turbulence. This should be a list of values for each layer
-        _ windDirection         : List of wind-direction for each layer in [deg]
-        _ altitude              : List of altitude for each layer in [m]
-        
-        ************************** OPTIONAL PARAMETERS **************************
-        
-        _ mode                  : Different ways to generate the spectrum of the atmosphere
-        _ param                 : parameter file of the system. Once computed, the covariance matrices are saved in the calibration data folder and loaded instead of re-computed evry time.
-        _ asterism              : if the system contains multiple source, an astrism should be input to the atmosphere object
-        
+        Parameters
+        ----------
+        telescope : Telescope
+            The telescope object to which the Atmosphere is associated. 
+            This object carries the phase, flux, pupil information and sampling time as well as the type of source (NGS/LGS, source/asterism).
+        r0 : float
+            the Fried Parameter in m, at 500 nm.
+        L0 : float
+            Outer scale parameter.
+        windSpeed : list
+            List of wind-speed for each layer in [m/s].
+        fractionalR0 : list
+            Cn2 profile of the turbulence. This should be a list of values for each layer.
+        windDirection : list
+            List of wind-direction for each layer in [deg].
+        altitude : list
+            List of altitude for each layer in [m].
+        mode : float, optional
+            Method to compute the atmospheric spectrum from which are computed the atmospheric phase screens. 
+            1 : using aotools dependency
+            2 : using OOPAO dependancy
+            The default is 2.
+        param : Parameter File Object, optional
+            Parameter file of the system. Once computed, the covariance matrices are saved in the calibration data folder and loaded instead of re-computed evry time.
+            The default is None.
+        asterism : Asterism, optional
+            If the system contains multiple source, an astrism should be input to the atmosphere object.
+            The default is None.
+
+        Raises
+        ------
+        AttributeError
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
         ************************** COUPLING A TELESCOPE AND AN ATMOSPHERE OBJECT **************************
         A Telescope object "tel" can be coupled to an Atmosphere object "atm" using: 
             _ tel + atm
@@ -90,7 +110,7 @@ class Atmosphere:
         
         """        
         self.hasNotBeenInitialized  = True
-        self.r0_def                 = 0.15                # Fried Parameter in m 
+        self.r0_def                 = 0.15              # Fried Parameter in m 
         self.r0                     = r0                # Fried Parameter in m 
         self.fractionalR0           = fractionalR0      # Cn2 square profile
         self.L0                     = L0                # Outer Scale in m
@@ -540,20 +560,21 @@ class Atmosphere:
              
        
     def print_properties(self):
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        print('{: ^18s}'.format('Layer') + '{: ^18s}'.format('Direction [deg]')+ '{: ^18s}'.format('Speed [m/s]')+ '{: ^18s}'.format('Altitude [m]')+ '{: ^18s}'.format('Cn2 [m-2/3]') )
-        print('------------------------------------------------------------------------------------------')
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        print('{: ^12s}'.format('Layer') + '{: ^12s}'.format('Direction')+ '{: ^12s}'.format('Speed')+ '{: ^12s}'.format('Altitude')+ '{: ^12s}'.format('Cn2') )
+        print('{: ^12s}'.format('') + '{: ^12s}'.format('[deg]')+ '{: ^12s}'.format('[m/s]')+ '{: ^12s}'.format('[m]')+ '{: ^12s}'.format('[m-2/3]') )
+
+        print('----------------------------------------------------------------------')
         
         for i_layer in range(self.nLayer):
-            print('{: ^18s}'.format(str(i_layer+1)) + '{: ^18s}'.format(str(self.windDirection[i_layer]))+ '{: ^18s}'.format(str(self.windSpeed[i_layer]))+ '{: ^18s}'.format(str(self.altitude[i_layer]))+ '{: ^18s}'.format(str(self.fractionalR0[i_layer]) ))
-            print('------------------------------------------------------------------------------------------')
-        print('******************************************************************************************')
+            print('{: ^12s}'.format(str(i_layer+1)) + '{: ^12s}'.format(str(self.windDirection[i_layer]))+ '{: ^12s}'.format(str(self.windSpeed[i_layer]))+ '{: ^12s}'.format(str(self.altitude[i_layer]))+ '{: ^12s}'.format(str(self.fractionalR0[i_layer]) ))
+            print('------------------------------------------------------------------')
 
-        print('{: ^18s}'.format('r0') + '{: ^18s}'.format(str(self.r0)+' [m]' ))
+        print('{: ^18s}'.format('r0 @500 nm') + '{: ^18s}'.format(str(self.r0)+' [m]' ))
         print('{: ^18s}'.format('L0') + '{: ^18s}'.format(str(self.L0)+' [m]' ))
-        print('{: ^18s}'.format('Seeing (V)') + '{: ^18s}'.format(str(np.round(self.seeingArcsec,2))+' ["]'))
+        print('{: ^18s}'.format('Seeing @500nm') + '{: ^18s}'.format(str(np.round(self.seeingArcsec,2))+' ["]'))
         print('{: ^18s}'.format('Frequency') + '{: ^18s}'.format(str(np.round(1/self.telescope.samplingTime,2))+' [Hz]' ))
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         
     def __mul__(self,obj):
         if obj.tag == 'telescope':
@@ -598,20 +619,27 @@ class Atmosphere:
         
         f = plt.figure(fig_index,figsize = [n_sp*4,3*(1+display_cn2)], edgecolor = None)
         if display_cn2:
-            gs = gridspec.GridSpec(2,n_sp, height_ratios=[1,0.5], width_ratios=np.ones(n_sp), hspace=0.25, wspace=0.25)
+            gs = gridspec.GridSpec(1,n_sp+1, height_ratios=[1], width_ratios=np.ones(n_sp+1), hspace=0.5, wspace=0.5)
         else:
             gs = gridspec.GridSpec(1,n_sp, height_ratios=np.ones(1), width_ratios=np.ones(n_sp), hspace=0.25, wspace=0.25)
             
         axis_list = []
         for i in range(len(layer_index)):
-            axis_list.append(plt.subplot(gs[0,i]))                
+            axis_list.append(plt.subplot(gs[0,i]))  
+                      
         if display_cn2:
-            plt.subplot(gs[1,:])         
-            plt.plot(self.altitude,self.fractionalR0,'-o')
-            plt.ylim([0,1])
-            plt.xlabel('Altitude [m]')
-            plt.ylabel('Cn2 Profile [m]')
-
+            # axCn2 = f.add_subplot(gs[1, :])
+            ax = plt.subplot(gs[0,-1])         
+            plt.imshow(np.tile(np.asarray(self.fractionalR0)[:,None],self.nLayer),origin='lower',interpolation='gaussian',extent=[0,1,self.altitude[0],self.altitude[-1]+5000],cmap='jet'),plt.clim([0,np.max(self.fractionalR0)])
+            
+                
+            for i_layer in range(self.nLayer):
+                plt.text(0.5,self.altitude[i_layer],str(self.fractionalR0[i_layer]*100)+'%',color = 'w',fontweight='bold')
+            plt.ylabel('Altitude [m]')
+            plt.title('Cn2 Profile')
+            ax.set_xticks([])
+            makeSquareAxes(plt.gca())
+            
         for i_l,ax in enumerate(axis_list):
             
             tmpLayer = getattr(self, 'layer_'+str(layer_index[i_l]+1))
@@ -663,7 +691,8 @@ class Atmosphere:
             ax.set_ylabel('[m]')
             ax.set_title('Altitude '+str(tmpLayer.altitude)+' m')
             ax.plot(x_tel+center,y_tel+center,'--',color = 'k')
-            
+            makeSquareAxes(plt.gca())
+
             ax.arrow(center, center, center+normalized_speed[i_l]*(tmpLayer.D_fov/2)*np.cos(np.deg2rad(tmpLayer.direction)),center+normalized_speed[i_l]*(tmpLayer.D_fov/2)*np.sin(np.deg2rad(tmpLayer.direction)),length_includes_head=True,width=0.25, facecolor = [0,0,0])
             ax.text(center+tmpLayer.D_fov/8*np.cos(np.deg2rad(tmpLayer.direction)), center+tmpLayer.D_fov/8*np.sin(np.deg2rad(tmpLayer.direction)),str(self.windSpeed[i_l])+' m/s', fontweight=100,color=[1,1,1],fontsize = 18)
  # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATM PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
