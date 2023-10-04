@@ -9,7 +9,9 @@ import matplotlib as mpl
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.offsetbox import AnnotationBbox, OffsetImage
+from matplotlib.offsetbox import AnnotationBbox, OffsetImage, TextArea
+
+
 
 from .tools import emptyClass
 
@@ -278,13 +280,13 @@ def interactive_plot_text(x,y,text_array, event_name ='button_press_event'):
     plt.show()
     
 
-def compute_gif(cube, name, vect = None, vlim = None, fps = 2):
+def compute_gif(cube, name, vect = None, vect2 = None, vlim = None, fps = 2):
     from matplotlib import animation, rc
     rc('animation', html='html5')    
     data = cube.copy()
     
     plt.close('all')
-    fig, ax = plt.subplots(figsize = [5,5])
+    fig, ax = plt.subplots(figsize = [9,3])
     line = ax.imshow(np.fliplr(np.flip(data[0,:,:].T)))
     # fig.set_facecolor((0.94,0.85,0.05))
     # line.set_clim([-4,1])
@@ -297,13 +299,17 @@ def compute_gif(cube, name, vect = None, vlim = None, fps = 2):
             labelbottom=False,
             labelleft=False)
     plt.tight_layout()
-    SR =ax.text(50, 200,'SR: '+str(np.round(vect[0],1))+'%',color=(1,1,1),fontsize = 14,weight = 'bold')
+    # SR =ax.text(10, 10,str(np.round(vect[0],1))+' %',color=(1,1,1),fontsize = 18,weight = 'bold')
+    # FWHM =ax.text(10, 70,str(np.round(vect2[0],1))+' mas',color=(1,1,1),fontsize = 18,weight = 'bold')
 
+    # plt.scatter(x=163.5,y=163.5,s=400,facecolors='none',edgecolors='r')
     def init():
         tmp = np.copy(data[0,:,:])
         tmp[np.where(tmp==0)] = np.inf
         line.set_data(np.fliplr(np.flip(tmp.T)))
-        SR.set_text('SR: '+str(100*np.round(vect[0],2))+'%')
+        # SR.set_text(str(np.round(vect[0],1))+' %')
+        # FWHM.set_text(str(np.round(vect2[0],1))+' mas')
+
         if vlim is None:
             line.set_clim(vmin = np.min(data[0,:,:]), vmax = np.max(data[0,:,:]))
         else:
@@ -317,7 +323,12 @@ def compute_gif(cube, name, vect = None, vlim = None, fps = 2):
         tmp = np.copy(data[i,:,:])
         tmp[np.where(tmp==0)] = np.inf
         line.set_data(np.fliplr(np.flip(tmp.T)))
-        SR.set_text('SR: '+str(100*np.round(vect[i],2))+'%')
+        # SR.set_text(str(np.round(vect[i],1))+' %')
+        # FWHM.set_text(str(np.round(vect2[i],1))+' mas')
+
+        # if i>400:
+        #     plt.scatter(x=163.5,y=163.5,s=400,facecolors='none',edgecolors='c')
+
         if vlim is None:
             line.set_clim(vmin = np.min(data[i,:,:]), vmax = np.max(data[i,:,:]))
         else:
@@ -387,7 +398,7 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = 
                     if type_fig[count] == 'imshow':
                         data_tmp = list_fig[count]
                         if len(data_tmp)==3:
-                            setattr(plt_obj,'im_'+str(count),sp_tmp.imshow(data_tmp[2],extent = [data_tmp[0][0],data_tmp[0][1],data_tmp[1][0],data_tmp[1][1]]))        
+                            setattr(plt_obj,'im_'+str(count),sp_tmp.imshow(data_tmp[2],extent = [data_tmp[0][0],data_tmp[0][1],data_tmp[1][0],data_tmp[1][1]],cmap='hot'))        
                         else:
                             setattr(plt_obj,'im_'+str(count),sp_tmp.imshow(data_tmp))                                    
                         im_tmp =getattr(plt_obj,'im_'+str(count))
@@ -490,4 +501,3 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = 
                 count+=1
     plt.draw()
 
-    

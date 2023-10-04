@@ -21,6 +21,26 @@ import matplotlib.pyplot as plt
 
 
 def crop(imageArray, size, axis, maximum = 0):
+    """
+    
+
+    Parameters
+    ----------
+    imageArray : TYPE
+        DESCRIPTION.
+    size : TYPE
+        DESCRIPTION.
+    axis : TYPE
+        DESCRIPTION.
+    maximum : TYPE, optional
+        DESCRIPTION. The default is 0.
+
+    Returns
+    -------
+    TYPE
+        DESCRIPTION.
+
+    """
     # returns an subimage centered on CENTER (assumed to be the center of image), 
     # of size SIZE (integer), 
     # considering any datacube IMAGEARRAY (np array) of size NxMxL
@@ -46,7 +66,48 @@ def crop(imageArray, size, axis, maximum = 0):
             center = np.array((sizeImage//2, sizeImage//2))
             return imageArray[center[0]-size//2:center[0]+size//2,center[1]-size//2:center[1]+size//2, :]
 
+def zero_pad_array(array,padding:int):
+    """
+    
 
+    Parameters
+    ----------
+    array : TYPE
+        DESCRIPTION.
+    padding : int
+        DESCRIPTION.
+
+    Raises
+    ------
+    ValueError
+        DESCRIPTION.
+
+    Returns
+    -------
+    support : TYPE
+        DESCRIPTION.
+
+    """
+    if np.ndim(array)!=2:
+        raise ValueError('Input array should be of shape 2D')
+    else:
+        support = np.zeros([int(2*padding + array.shape[0]),int(2*padding + array.shape[1])],dtype =array.dtype )
+        center_x = support.shape[0]//2
+        center_y = support.shape[1]//2
+        support[center_x-array.shape[0]//2:center_x+array.shape[0]//2,center_y-array.shape[1]//2:center_y+array.shape[1]//2] = array.copy()
+        return support
+    # else:
+    #     if axis is None or len(axis)!=0:
+    #         raise ValueError('The axis on which the padding should be applied is not specified or not properly set, specify 2 axis aver which apply the padding. For instance, axis = [0,1] to pad the 2 first dimensions')
+    #     else: 
+    #         if axis == [0,1]:
+    #             np.tile(array[])
+    #         elif
+            
+                
+                
+    
+    
 
 
 def strehlMeter(PSF, tel, zeroPaddingFactor = 2, display = True, title = ''):
