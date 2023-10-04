@@ -37,49 +37,74 @@ from .tools.tools import emptyClass, pol2cart, print_
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
 class DeformableMirror:
-    def __init__(self,telescope,nSubap,mechCoupling = 0.35, coordinates=0, pitch=None, modes=0, misReg=0, M4_param = [], nJobs = 30, nThreads = 20,print_dm_properties = True,floating_precision = 64, altitude = None ):
-        """
-        ************************** REQUIRED PARAMETERS **************************
-        
-        A Deformable Mirror object consists in defining the 2D maps of influence functions of the actuators. By default, the actuator grid 
-        is cartesian in a Fried Geometry with respect to the nSubap parameter. The Deformable Mirror is considered to to be in a pupil plane.
+    def __init__(self,telescope,nSubap:float,mechCoupling:float = 0.35, coordinates:np.ndarray = None, pitch:float = None, modes:np.ndarray = None, misReg = None, M4_param = None, nJobs:int = 30, nThreads:int = 20,print_dm_properties:bool = True,floating_precision:int = 64, altitude:float = None ):
+        """DEFORMABLE MIRROR
+        A Deformable Mirror object consists in defining the 2D maps of influence functions of the actuators. 
+        By default, the actuator grid is cartesian in a Fried Geometry with respect to the nSubap parameter. 
+        The Deformable Mirror is considered to to be in a pupil plane.
         By default, the influence functions are 2D Gaussian functions normalized to 1 [m]. 
-        IMPORTANT: The deformable mirror is considered to be transmissive instead of reflective. This is to prevent any confusion with an eventual 
-                   factor 2 in OPD due to the reflection. 
-        
-        _ telescope             : the telescope object associated. In case no coordinates are provided, the selection of the valid actuator is based
-                                  on radius of the telescope (assumed to be circular) and the central obstruction value (assumed to be circular). 
-                                  The telescope spiders are not considered in the selection of the valid actuators. For more complex selection of 
-                                  actuators, specify the coordinates of the actuators using the optional parameter "coordinates" (see below).
-                                  
-        _ nSubap               : This parameter is used when no user-defined coordinates / modes are specified. This is used to compute
-                                 the DM actuator influence functions in a fried geometry with respect to nSubap subapertures along the telescope 
-                                 diameter. If the optional parameter "pitch" is not specified, the Deformable Mirror pitch property is computed as the ratio
-                                 of the Telescope Diameter with the number of subaperture nSubap. This impacts how the DM influence functions 
-                                 mechanical coupling is computed. 
+        IMPORTANT: The deformable mirror is considered to be transmissive instead of reflective. 
+        This is to prevent any confusion with an eventual factor 2 in OPD due to the reflection.
 
-        _ mechCoupling        : This parameter defines the mechanical coupling between the influence functions. The default value is 0.35 which means that
-                                if an actuator is pushed to an arbitrary value 1, the mechanical deformation at a circular distance of "pitch" from this actuator 
-                                is equal to 0.35. By default, "pitch" is the inter-actuator distance when the Fried Geometry is considered.   
-                                If the parameter "modes" is used, this parameter is ignored. 
-                                 
-                
-        ************************** OPTIONAL PARAMETERS **************************
-        
-        _ pitch                 : pitch considered to compute the Gaussian Influence Functions, associated to the mechanical coupling. If no pitch
-                                  is specified, the pitch is computed to match a Fried geometry according to the nSubap parameter.  
-                                  
-        _ coordinates           : User defined coordinates for the DM actuators. Be careful to specify the pitch parameter associated, otherwise the
-                                  pitch is computed using its default value (see pitch parameter). If this parameter is specified, all the actuators 
-                                  computed are considered as valid (no selection based on the telescope pupil).
-                                  
-        _ modes                 : user defined influence functions or modes (modal DM) can be input to the Deformable Mirror. They must match the telescope resolution and
-                                  be input as a 2D matrix, where the 2D maps are reshaped as a 1D vector of size n_pix*n_pix : size = [n_pix**2,n_modes] 
-        
-        _misReg                 : A Mis-Registration object (See the Mis-Registration class) can be input to apply some geometrical transformations to the Deformable Mirror.
-                                  When using user-defined influence functions, this parameter is ignored. 
-                                  Consider to use the function applyMisRegistration in OOPAO/mis_registration_identification_algorithm/ to perform interpolations.
-        
+        Parameters
+        ----------
+        telescope : Telescope
+            the telescope object associated. 
+            In case no coordinates are provided, the selection of the valid actuator is based on the radius
+            of the telescope (assumed to be circular) and the central obstruction value (assumed to be circular).
+            The telescope spiders are not considered in the selection of the valid actuators. 
+            For more complex selection of actuators, specify the coordinates of the actuators using
+            the optional parameter "coordinates" (see below).
+        nSubap : float
+            This parameter is used when no user-defined coordinates / modes are specified. This is used to compute
+            the DM actuator influence functions in a fried geometry with respect to nSubap subapertures along the telescope 
+            diameter. 
+            If the optional parameter "pitch" is not specified, the Deformable Mirror pitch property is computed 
+            as the ratio of the Telescope Diameter with the number of subaperture nSubap. 
+            This impacts how the DM influence functions mechanical coupling is computed. .
+        mechCoupling : float, optional
+            This parameter defines the mechanical coupling between the influence functions. 
+            A value of 0.35 which means that if an actuator is pushed to an arbitrary value 1, 
+            the mechanical deformation at a circular distance of "pitch" from this actuator is equal to 0.35. 
+            By default, "pitch" is the inter-actuator distance when the Fried Geometry is considered.   
+            If the parameter "modes" is used, this parameter is ignored. The default is 0.35.
+        coordinates : np.ndarray, optional
+            User defined coordinates for the DM actuators. Be careful to specify the pitch parameter associated, 
+            otherwise the pitch is computed using its default value (see pitch parameter). 
+            If this parameter is specified, all the actuators are considered to be valid 
+            (no selection based on the telescope pupil).
+            The default is None.
+        pitch : float, optional
+            pitch considered to compute the Gaussian Influence Functions, associated to the mechanical coupling. 
+            If no pitch is specified, the pitch is computed to match a Fried geometry according to the nSubap parameter.  
+            The default is None.
+        modes : np.ndarray, optional
+            User defined influence functions or modes (modal DM) can be input to the Deformable Mirror. 
+            They must match the telescope resolution and be input as a 2D matrix, where the 2D maps are 
+            reshaped as a 1D vector of size n_pix*n_pix : size = [n_pix**2,n_modes].
+            The default is None.
+        misReg : TYPE, optional
+            A Mis-Registration object (See the Mis-Registration class) can be input to apply some geometrical transformations
+            to the Deformable Mirror. When using user-defined influence functions, this parameter is ignored.
+            Consider to use the function applyMisRegistration in OOPAO/mis_registration_identification_algorithm/ to perform interpolations.
+            The default is None.
+        M4_param : Parameter File, optional
+            Parameter File for M4 computation. The default is None.
+        nJobs : int, optional
+            Number of jobs for the joblib multi-threading. The default is 30.
+        nThreads : int, optional
+            Number of threads for the joblib multi-threading. The default is 20.
+        print_dm_properties : bool, optional
+            Boolean to print the dm properties. The default is True.
+        floating_precision : int, optional
+            If set to 32, uses float32 precision to save memory. The default is 64.
+        altitude : float, optional
+            Altitude to which the DM is conjugated. The default is None and corresponds to a DM conjugated to the ground.
+
+        Returns
+        -------
+        None.
+
         ************************** MAIN PROPERTIES **************************
         
         The main properties of a Deformable Mirror object are listed here: 
@@ -128,7 +153,6 @@ class DeformableMirror:
             dm.coefs[given_index] = value
         It requires to re-assign dm.coefs to itself so the change can be detected using:
             dm.coefs = dm.coefs
-            
         
                  
         ************************** EXEMPLE **************************
@@ -152,12 +176,11 @@ class DeformableMirror:
         
         tel.OPD contains a cube of 2D maps for each actuator
 
-                
         """
         self.print_dm_properties = print_dm_properties
         self.floating_precision = floating_precision
         self.M4_param = M4_param
-        if M4_param:
+        if M4_param is not None:
             if M4_param['isM4']:
                 print_('Building the set of influence functions of M4...',print_dm_properties)
                 # generate the M4 influence functions            
@@ -211,6 +234,8 @@ class DeformableMirror:
             self.isM4 = False
         self.telescope             = telescope
         self.altitude = altitude
+        if mechCoupling <=0:
+            raise ValueError('The value of mechanical coupling should be positive.')
         if altitude is None:
             self.resolution            = telescope.resolution      # Resolution of the DM influence Functions 
             self.mechCoupling          = mechCoupling
@@ -226,8 +251,6 @@ class DeformableMirror:
             self.mechCoupling          = mechCoupling
             self.tag                   = 'deformableMirror'
             self.D                     = self.altitude_layer.D
-
-
         
         # case with no pitch specified (Cartesian geometry)
         if pitch is None:
@@ -235,7 +258,7 @@ class DeformableMirror:
         else:
             self.pitch = pitch
         
-        if misReg==0:
+        if misReg is None:
             # create a MisReg object to store the different mis-registration
             self.misReg = MisRegistration()
         else:
@@ -246,7 +269,7 @@ class DeformableMirror:
 
 # If no coordinates are given, the DM is in a Cartesian Geometry
         
-        if np.ndim(coordinates)==0:  
+        if coordinates is None:  
             print_('No coordinates loaded.. taking the cartesian geometry as a default',print_dm_properties)
             self.nAct                               = nSubap+1                            # In that case corresponds to the number of actuator along the diameter            
             self.nActAlongDiameter                  = self.nAct-1
@@ -326,6 +349,7 @@ class DeformableMirror:
             else:
                 print_('Loading the 2D zonal modes...',print_dm_properties)
                 self.modes = modes
+                self.nValidAct = self.modes.shape[1]
                 print_('Done!',print_dm_properties)
 
         else:
