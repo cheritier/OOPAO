@@ -11,7 +11,7 @@ from astropy.io import fits as pfits
 import OOPAO.calibration.ao_cockpit_psim as aou
 from ..tools.tools import createFolder
 
-def compute_KL_basis(tel,atm,dm):
+def compute_KL_basis(tel,atm,dm,lim = 1e-3,remove_piston = True):
     
     M2C_KL = compute_M2C(telescope            = tel,\
                         atmosphere         = atm,\
@@ -19,22 +19,22 @@ def compute_KL_basis(tel,atm,dm):
                         param              = None,\
                         nameFolder         = None,\
                         nameFile           = None,\
-                        remove_piston      = True,\
+                        remove_piston      = remove_piston,\
                         HHtName            = None,\
                         baseName           = None ,\
                         mem_available      = None,\
                         minimF             = False,\
                         nmo                = None,\
                         ortho_spm          = True,\
-                        SZ                 = np.int(2*tel.OPD.shape[0]),\
+                        SZ                 = int(2*tel.OPD.shape[0]),\
                         nZer               = 3,\
                         NDIVL              = 1,\
                         recompute_cov=True,\
-                        save_output= False)
+                        save_output= False, lim_inversion=lim,display=False)
         
     return M2C_KL
 
-def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolder = None, nameFile = None,remove_piston = False,HHtName = None, baseName = None, SpM_2D = None, nZer = 3, SZ=None, mem_available = None, NDIVL = None, computeSpM = True, ortho_spm = True, computeSB = True, computeKL = True, minimF = False, P2F = None, alpha = None, beta = None, nmo = None, IF_2D = None, IFma = None, returnSB = False, returnHHt = False, recompute_cov = False,extra_name = '', save_output = True):
+def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolder = None, nameFile = None,remove_piston = False,HHtName = None, baseName = None, SpM_2D = None, nZer = 3, SZ=None, mem_available = None, NDIVL = None, computeSpM = True, ortho_spm = True, computeSB = True, computeKL = True, minimF = False, P2F = None, alpha = None, beta = None, nmo = None, IF_2D = None, IFma = None, returnSB = False, returnHHt = False, recompute_cov = False,extra_name = '', save_output = True,lim_inversion=1e-3,display=True):
 
     """
     - HHtName       = None      extension for the HHt Covariance file
@@ -93,18 +93,19 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
     
     if IF_2D is None:
         deformableMirror.coefs = np.eye(deformableMirror.nValidAct) # assign dm coefs to get the cube of IF in OPD
-        print('COMPUTING TEL*DM...')
-        print(' ')
+        if display:
+            print('COMPUTING TEL*DM...')
+            print(' ')
         telescope*deformableMirror    # propagate to get the OPD of the IFS after reflection
-
-        print('PREPARING IF_2D...')
-        print(' ')
+        if display:
+            print('PREPARING IF_2D...')
+            print(' ')
         IF_2D = np.moveaxis(telescope.OPD,-1,0)
     
     nact = IF_2D.shape[0]
-    
-    print('Computing Specific Modes ...')
-    print(' ')
+    if display:
+        print('Computing Specific Modes ...')
+        print(' ')
     GEO = aou.mkp(telescope.resolution/telescope.resolution*diameter,telescope.resolution,diameter,0.)
     
     if nZer is not None and SpM_2D is None:
@@ -115,9 +116,9 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
     
     if SZ is None:
         SZ = int(2*telescope.resolution) ## SZ=1110 for dxo=0.06944 and SZ=1542 for dxo=0.05
-
-    print('COMPUTING VON KARMAN 2D PSD...')
-    print(' ')
+    if display:
+        print('COMPUTING VON KARMAN 2D PSD...')
+        print(' ')
     PSD_atm , df, pterm = aou.VK_DSP_up(diameter,r0,L0,SZ,telescope.resolution,1,pupil)
 
 #%% ---------- EVALUATE SPLIT OF WORK UPON MEMORY AVAILABLE ----------
@@ -130,14 +131,16 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
         try:
             #HHt, PSD_atm, df = aou.load(nameFolder+'HHt_PSD_df_'+HHtName+'_r'+str(r0)+'_SZ'+str(SZ)+'.pkl')
             HHt, PSD_atm, df = aou.load(nameFolder+'HHt_PSD_df_'+HHtName+'.pkl')
-            print('LOADED COV MAT HHt...')
-            print(' ')
+            if display:
+                print('LOADED COV MAT HHt...')
+                print(' ')
         except:
             recompute_cov = True
     
     if recompute_cov is True:
-        print('COMPUTING COV MAT HHt...')
-        print(' ')
+        if display:
+            print('COMPUTING COV MAT HHt...')
+            print(' ')
         #pdb.set_trace()
         if mem_available is None:
             mem_available=100.e9   
@@ -164,18 +167,21 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
 
     ## Matrix of serialized IFs
         if IFma is None:
-            print('SERIALIZING IFs...')
-            print(' ')
+            if display:
+                print('SERIALIZING IFs...')
+                print(' ')
             IFma=np.matrix(aou.vectorifyb(IF_2D,idxpup))
 
     ## Matrix of serialized Special modes
-        print('SERIALIZING Specific Modes...')
-        print(' ')
+        if display:
+            print('SERIALIZING Specific Modes...')
+            print(' ')
         Tspm=np.matrix(aou.vectorify(SpM_2D,idxpup))
 
     ## CROSS-PRODUCT OF IFs
-        print('COMPUTING IFs CROSS PRODUCT...')
-        print(' ')
+        if display:
+            print('COMPUTING IFs CROSS PRODUCT...')
+            print(' ')
         DELTA=IFma.T @ IFma
     
 #%% ----------COMPUTE SPECIFIC MODES BASIS    ----------  
@@ -205,31 +211,34 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
             beta=1.e-6
     
     if computeSpM == True and minimF == True:
-        print('BUILDING FORCE-OPTIMIZED SPECIFIC MODES...')
-        print(' ')
+        if display:
+            print('BUILDING FORCE-OPTIMIZED SPECIFIC MODES...')
+            print(' ')
         check=1
         amp_check=1.e-6
             
         SpM = aou.build_SpecificBasis_F(Tspm,IFma,DELTA,K,alpha,ortho_spm,check,amp_check)
 #        SpM_opd = IFma @ SpM
-
-        print('CHECKING ORTHONORMALITY OF SPECIFIC MODES...')
-        print(' ')
+        if display:
+            print('CHECKING ORTHONORMALITY OF SPECIFIC MODES...')
+            print(' ')
         
         DELTA_SpM_opd = SpM.T @ DELTA @ SpM
-        print('Orthonormality error for SpM = ', np.max(np.abs(DELTA_SpM_opd/tpup-np.eye(nspm))))
+        if display:
+            print('Orthonormality error for SpM = ', np.max(np.abs(DELTA_SpM_opd/tpup-np.eye(nspm))))
 
 
     if computeSpM == True and minimF == False:
         check=1
         amp_check=1.e-6
-        lim=1.e-3
+        lim=lim_inversion
         SpM = aou.build_SpecificBasis_C(Tspm,IFma,DELTA,lim,ortho_spm,check,amp_check)                                   
-
-        print('CHECKING ORTHONORMALITY OF SPECIFIC MODES...')
-        print(' ')
+        if display:
+            print('CHECKING ORTHONORMALITY OF SPECIFIC MODES...')
+            print(' ')
         DELTA_SpM_opd = SpM.T @ DELTA @ SpM
-        print('Orthonormality error for SpM = ', np.max(np.abs(DELTA_SpM_opd/tpup-np.eye(nspm))))
+        if display:
+            print('Orthonormality error for SpM = ', np.max(np.abs(DELTA_SpM_opd/tpup-np.eye(nspm))))
 
         
 #%% ----------COMPUTE SEED BASIS    ----------
@@ -239,24 +248,28 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
     if computeSB == True:
         #pdb.set_trace()    
         if minimF == False:
-            print('BUILDING SEED BASIS ...')
-            print(' ')
-            lim=1.e-3
+            if display:
+                print('BUILDING SEED BASIS ...')
+                print(' ')
+            lim = lim_inversion
             SB = aou.build_SeedBasis_C(IFma, SpM,DELTA,lim)
             nSB=SB.shape[1]
             DELTA_SB = SB.T @ DELTA @ SB
-            print('Orthonormality error for '+str(nSB)+' modes of the Seed Basis = ',np.max(np.abs(DELTA_SB[0:nSB,0:nSB]/tpup-np.eye(nSB))))
+            if display:
+                print('Orthonormality error for '+str(nSB)+' modes of the Seed Basis = ',np.max(np.abs(DELTA_SB[0:nSB,0:nSB]/tpup-np.eye(nSB))))
             
         if minimF == True:
-            print('BUILDING FORCE OPTIMIZED SEED BASIS ...')
-            print(' ')
+            if display:
+                print('BUILDING FORCE OPTIMIZED SEED BASIS ...')
+                print(' ')
             SB = aou.build_SeedBasis_F(IFma, SpM, K, beta)
             nSB=SB.shape[1]
             DELTA_SB = SB.T @ DELTA @ SB
             if nmo>SB.shape[1]:
                 print('WARNING: Number of modes requested too high, taking the maximum value possible!')
                 nmo = SB.shape[1]
-            print('Orthonormality error for '+str(nmo)+' modes of the Seed Basis = ',np.max(np.abs(DELTA_SB[0:nmo,0:nmo]/tpup-np.eye(nmo))))
+            if display:
+                print('Orthonormality error for '+str(nmo)+' modes of the Seed Basis = ',np.max(np.abs(DELTA_SB[0:nmo,0:nmo]/tpup-np.eye(nmo))))
 
     if computeKL == False:
         BASIS=np.asmatrix(np.zeros([nact,nspm+nSB],dtype=np.float64))
@@ -278,7 +291,8 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
         KL=aou.build_KLBasis(HHt,SB,DELTA,nmoKL,check)
         #pdb.set_trace()
         DELTA_KL = KL.T @ DELTA @ KL
-        print('Orthonormality error for '+str(nmoKL)+' modes of the KL Basis = ',np.max(np.abs(DELTA_KL[0:nmoKL,0:nmoKL]/tpup-np.eye(nmoKL))))
+        if display:
+            print('Orthonormality error for '+str(nmoKL)+' modes of the KL Basis = ',np.max(np.abs(DELTA_KL[0:nmoKL,0:nmoKL]/tpup-np.eye(nmoKL))))
         
 
         BASIS=np.asmatrix(np.zeros([nact,nspm+nmoKL],dtype=np.float64))
@@ -286,7 +300,8 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
         BASIS[:,nspm:] = KL
         if remove_piston == True:
             BASIS = np.asarray(BASIS[:,1:])
-            print('Piston removed from the modal basis!' )
+            if display:
+                print('Piston removed from the modal basis!' )
 # save output in fits file
         if save_output:
 
