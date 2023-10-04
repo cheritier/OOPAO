@@ -16,27 +16,48 @@ from OOPAO.tools import *
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 class Telescope:
     
-    def __init__(self,resolution, diameter,samplingTime=0.001,centralObstruction = 0,fov = 0,pupil=None,pupilReflectivity=1,display_optical_path= False):
-        """
-        ************************** REQUIRED PARAMETERS **************************
-        
-        A Telescope object consists in defining the 2D mask of the entrance pupil. It is mainly characterised by two parameters 
-        _ resolution            : the resolution of the pupil mask
-        _ diameter              : The physical diameter of the telescope in [m]
-        
-        If no pupil mask is input, the default pupil geometry is circular.
-        
-        ************************** OPTIONAL PARAMETERS **************************
-        
-        _ samplingTime          : Defines the frequency of the AO loop. It is used in the Atmosphere object to update the turbulence phase screens according to the wind speed. 
-        _ centralObstruction    : Adds a central obstruction in percentage of diameter. 
-        _ fov                   : Defines the Field of View of the Telescope object. This will be useful for off-axis targets but it hasn't been properly implemented yet.
-        _ pupil                 : A user-defined pupil mask can be input to the Telescope object. It should consist of a binary array. 
-        _ pupilReflectivcty     : Defines the reflectivity of the Telescope object. If not set to 1, it can be input as a 2D map of uneven reflectivy correspondong to the pupil mask. 
-                                  This property can be set after the initialization of the Telescope object.
-        The main properties of the object can be displayed using :
-            tel.print_properties()      
-                                  
+    def __init__(self,resolution:float, diameter:float,samplingTime:float=0.001,centralObstruction:float = 0,fov:float = 0,\
+                 pupil:bool=None,pupilReflectivity:float=1,display_optical_path:bool = False):
+        """TELESCOPE
+        A Telescope object consists in defining the 2D mask of the entrance pupil.
+        The Telescope is a central object in OOPAO:
+            A source object is associated to the Telescope that carries the flux and wavelength information. 
+            An Atmosphere object can be paired to the Telescope to propagate the light through turbulent phase screens.
+            The Telescope is required to initialize many of the OOPAO classes as it carries the pupil definition and pixel size. 
+
+        Parameters
+        ----------
+        resolution : float
+            The resolution of the pupil mask.
+        diameter : float
+            The physical diameter of the telescope in [m].
+        samplingTime : float, optional
+            Defines the frequency of the AO loop. It is used in the Atmosphere object 
+            to update the turbulence phase screens according to the wind speed.
+            The default is 0.001.
+        centralObstruction : float, optional
+            Adds a central obstruction in percentage of diameter.
+            The default is 0.
+        fov : float, optional
+            Defines the Field of View of the Telescope object. 
+            This is useful for off-axis targets but it hasn't been properly implemented yet.
+            The default is 0.
+        pupil : bool, optional
+            A user-defined pupil mask can be input to the Telescope object. It should consist of a binary array. 
+            The default is None.
+        pupilReflectivity : float, optional
+            Defines the reflectivity of the Telescope object. 
+            If not set to 1, it can be input as a 2D map of uneven reflectivy correspondong to the pupil mask.
+            The default is 1.
+        display_optical_path : bool, optional
+            If desired, the optical path can be printed at each time the light is propagated to a WFS object 
+            setting the display_optical_path property to True.
+            The default is False.
+
+        Returns
+        -------
+        None.
+   
         ************************** ADDING SPIDERS *******************************
         It is possible to add spiders to the telescope pupil using the following property: 
             
@@ -109,23 +130,9 @@ class Telescope:
         self.isPetalFree                 = False                     # Flag to remove the petalling effect with ane ELT system. 
         self.index_pixel_petals          = None                      # indexes of the pixels corresponfong to the M1 petals. They need to be set externally
         self.optical_path                = None                      # indexes of the pixels corresponfong to the M1 petals. They need to be set externally
-
-#        Case where the pupil is not input: circular pupil with central obstruction    
-        if pupil is None:
-            D           = self.resolution+1
-            x           = np.linspace(-self.resolution/2,self.resolution/2,self.resolution)
-            xx,yy       = np.meshgrid(x,x)
-            circle      = xx**2+yy**2
-            obs         = circle>=(self.centralObstruction*D/2)**2
-            self.pupil  = circle<(D/2)**2 
-            self.pupil  = self.pupil*obs
-        else:
-            print('User-defined pupil, the central obstruction will not be taken into account...')
-            self.pupil  = pupil        
-            
-        self.pupilReflectivity           = self.pupil.astype(float)*pupilReflectivity                   # A non uniform reflectivity can be input by the user
-        self.pixelArea                   = np.sum(self.pupil)                                           # Total number of pixels in the pupil area
-        self.pupilLogical                = np.where(np.reshape(self.pupil,resolution*resolution)>0)     # index of valid pixels in the pupil
+        self.user_defined_pupil          = pupil
+        self.pupilReflectivity           = pupilReflectivity
+        self.set_pupil()
         self.src                         = None                                               # temporary source object associated to the telescope object
         self.OPD                         = self.pupil.astype(float)                                     # set the initial OPD
         self.OPD_no_pupil                = 1+self.pupil.astype(float)*0                                     # set the initial OPD
@@ -139,7 +146,23 @@ class Telescope:
         self.isInitialized= True
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF COMPUTATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
-
+    def set_pupil(self):
+    #        Case where the pupil is not input: circular pupil with central obstruction    
+        if self.user_defined_pupil is None:
+            D           = self.resolution+1
+            x           = np.linspace(-self.resolution/2,self.resolution/2,self.resolution)
+            xx,yy       = np.meshgrid(x,x)
+            circle      = xx**2+yy**2
+            obs         = circle>=(self.centralObstruction*D/2)**2
+            self.pupil  = circle<(D/2)**2 
+            self.pupil  = self.pupil*obs
+        else:
+            print('User-defined pupil, the central obstruction will not be taken into account...')
+            self.pupil  = self.user_defined_pupil.copy()        
+            
+        self.pupilReflectivity           = self.pupil.astype(float)*self.pupilReflectivity                   # A non uniform reflectivity can be input by the user
+        self.pixelArea                   = np.sum(self.pupil)                                           # Total number of pixels in the pupil area
+        self.pupilLogical                = np.where(np.reshape(self.pupil,self.resolution*self.resolution)>0)     # index of valid pixels in the pupil
     def computeCoronoPSF(self,zeroPaddingFactor=2, display = False, coronagraphDiameter = 4.5):
 
         # coronagraphDiameter is the FPM diameter in L/D of imaging wavelength
@@ -488,36 +511,45 @@ class Telescope:
             print('No light propagated through the telescope')      
                 
     def apply_spiders(self,angle,thickness_spider,offset_X = None, offset_Y=None):
-        pup = np.copy(self.pupil)
-        max_offset = self.centralObstruction*self.D/2 - thickness_spider/2
-        if offset_X is None:
-            offset_X = np.zeros(len(angle))
-            
-        if offset_Y is None:
-            offset_Y = np.zeros(len(angle))
-                    
-        if np.max(np.abs(offset_X))>=max_offset or np.max(np.abs(offset_Y))>max_offset:
-            print('WARNING ! The spider offsets are too large! Weird things could happen!')
-        for i in range(len(angle)):
-            angle_val = (angle[i]+90)%360
-            x = np.linspace(-self.D/2,self.D/2,self.resolution)
-            [X,Y] = np.meshgrid(x,x)
-            X+=offset_X[i]
-            Y+=offset_Y[i]
-
-            map_dist = np.abs(X*np.cos(np.deg2rad(angle_val)) + Y*np.sin(np.deg2rad(-angle_val)))
+        self.isInitialized = False
+        if thickness_spider >0:
+            self.set_pupil()
+            pup = np.copy(self.pupil)
+            max_offset = self.centralObstruction*self.D/2 - thickness_spider/2
+            if offset_X is None:
+                offset_X = np.zeros(len(angle))
+                
+            if offset_Y is None:
+                offset_Y = np.zeros(len(angle))
+                        
+            if np.max(np.abs(offset_X))>=max_offset or np.max(np.abs(offset_Y))>max_offset:
+                print('WARNING ! The spider offsets are too large! Weird things could happen!')
+            for i in range(len(angle)):
+                angle_val = (angle[i]+90)%360
+                x = np.linspace(-self.D/2,self.D/2,self.resolution)
+                [X,Y] = np.meshgrid(x,x)
+                X+=offset_X[i]
+                Y+=offset_Y[i]
     
-            if 0<=angle_val<90:
-                map_dist[:self.resolution//2,:] = thickness_spider
-            if 90<=angle_val<180:
-                map_dist[:,:self.resolution//2] = thickness_spider
-            if 180<=angle_val<270:
-                map_dist[self.resolution//2:,:] = thickness_spider
-            if 270<=angle_val<360:
-                map_dist[:,self.resolution//2:] = thickness_spider                
-            pup*= map_dist>thickness_spider/2
+                map_dist = np.abs(X*np.cos(np.deg2rad(angle_val)) + Y*np.sin(np.deg2rad(-angle_val)))
+        
+                if 0<=angle_val<90:
+                    map_dist[:self.resolution//2,:] = thickness_spider
+                if 90<=angle_val<180:
+                    map_dist[:,:self.resolution//2] = thickness_spider
+                if 180<=angle_val<270:
+                    map_dist[self.resolution//2:,:] = thickness_spider
+                if 270<=angle_val<360:
+                    map_dist[:,self.resolution//2:] = thickness_spider                
+                pup*= map_dist>thickness_spider/2
+            self.isInitialized = True
+
+            self.pupil = pup.copy()
             
-        self.pupil = pup
+        else:
+            print('Thickness is <=0, returning default pupil')
+            self.set_pupil()
+
         return 
     
     def removePetalling(self,image = None):
