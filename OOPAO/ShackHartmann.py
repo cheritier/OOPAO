@@ -35,29 +35,57 @@ except:
 
 
 class ShackHartmann:
-    def __init__(self,nSubap,telescope,lightRatio,threshold_cog = 0.01,is_geometric = False, binning_factor = 1,padding_extension_factor = 1, threshold_convolution = 0.05,shannon_sampling = False):
-        """
-        ************************** REQUIRED PARAMETERS **************************
-        
-        A Shack Hartmann object consists in defining a 2D grd of lenslet arrays located at the pupil plane of the telescope to estimate the local tip/tilt seen by each lenslet. 
+    def __init__(self,nSubap:float,telescope,lightRatio:float,threshold_cog:float = 0.01,\
+                 is_geometric:bool = False, binning_factor:int = 1,padding_extension_factor:int = 1,\
+                     threshold_convolution:float = 0.05,shannon_sampling:bool = False):
+        """SHACK-HARTMANN
+        A Shack Hartmann object consists in defining a 2D grd of lenslet arrays located in the pupil plane of the telescope to estimate the local tip/tilt seen by each lenslet. 
         By default the Shack Hartmann detector is considered to be noise-free (for calibration purposes). These properties can be switched on and off on the fly (see properties)
         It requires the following parameters: 
-        _ nSubap                : the number of subapertures (ie the diameter of the Pyramid Pupils in pixels)
-        _ telescope             : the telescope object to which the Shack Hartmann is associated. This object carries the phase, flux and pupil information
-        _ lightRatio            : criterion to select the valid subaperture based on flux considerations
 
-        
-        ************************** OPTIONAL PARAMETERS **************************
-        
-        _ threshold_cog             : threshold (with respect to the maximum value of the image) to apply to compute the center of gravity of the spots
-        _ is_geometric              : if True, enables the geometric Shack Hartmann (direct measurement of gradient) if False, the diffractive computation is considered (default)
-        _ binning_factor            : binning factor of the detector -- default Value is 1
-        _ shannon_sampling          : If True, the lenslet array spots are sampled at the same sampling as the FFT (2 pix per FWHM). If False, the sampling is 1 pix per FWHM (default).
-            
-        # LGS related properties
-        _ padding_extension_factor  : zero-padding factor oon the spots intensity images. This is a fast way to provide a larger field of view before the convolution with LGS spots is achieved and allow to prevent wrapping effects
-        _threshold_convolution      : threshold considered to force the gaussian spots (elungated spots) to go to zero on the edges
-        
+        Parameters
+        ----------
+        nSubap : float
+            The number of subapertures (micro-lenses) along the diameter defined by the telescope.pupil.
+        telescope : TYPE
+            The telescope object to which the Shack Hartmann is associated. 
+            This object carries the phase, flux and pupil information.
+        lightRatio : float
+            Criterion to select the valid subaperture based on flux considerations.
+        threshold_cog : float, optional
+            Threshold (with respect to the maximum value of the image) 
+            to apply to compute the center of gravity of the spots.
+            The default is 0.01.
+        is_geometric : bool, optional
+            Flag to enable the geometric WFS. 
+            If True, enables the geometric Shack Hartmann (direct measurement of gradient).
+            If False, the diffractive computation is considered.
+            The default is False.
+        binning_factor : int, optional
+            Binning factor of the detector.
+            The default is 1.
+        padding_extension_factor : int, optional
+            Zero-padding factor on the spots intensity images. 
+            This is a fast way to provide a larger field of view before the convolution 
+            with LGS spots is achieved and allow to prevent wrapping effects.
+            The default is 1.
+        threshold_convolution : float, optional
+            Threshold considered to force the gaussian spots (elungated spots) to go to zero on the edges.
+            The default is 0.05.
+        shannon_sampling : bool, optional
+            If True, the lenslet array spots are sampled at the same sampling as the FFT (2 pix per FWHM).
+            If False, the sampling is 1 pix per FWHM (default).
+            The default is False.
+
+        Raises
+        ------
+        AttributeError
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
         ************************** PROPAGATING THE LIGHT TO THE SH OBJECT **************************
         The light can be propagated from a telescope object tel through the Shack Hartmann object wfs using the * operator:        
         _ tel*wfs
