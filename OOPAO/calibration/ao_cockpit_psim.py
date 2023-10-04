@@ -547,9 +547,13 @@ def build_SpecificBasis_C(Tspm,IFma,DELTA,lim,ortho, check,amp_check):
     nact = IFma.shape[1]
     if lim == 0:
         iDELTA = DELTA.I
+        ud,sd,vdh=np.linalg.svd(DELTA)
+
+        nmax = nact
+        
     if lim !=0:
         ud,sd,vdh=np.linalg.svd(DELTA)
-    if lim <=1.:
+    if lim <=1. and lim !=0:
         nmax=np.max(np.where(sd/np.max(sd) > lim))
     if lim > 1:
         nmax=lim
@@ -571,6 +575,7 @@ def build_SpecificBasis_C(Tspm,IFma,DELTA,lim,ortho, check,amp_check):
         CMD_TIK_opd = IFma @ CMD_TIK 
         Q,R = np.linalg.qr(CMD_TIK_opd)
         CMD_FINAL = CMD_TIK @ R.I * np.sqrt(tpup)
+        
     return CMD_FINAL
 
 
@@ -632,7 +637,6 @@ def build_SeedBasis_C(IFma, SpM, DELTA,lim):
         nmax=np.max(np.where( D2/np.max(D2) > lim))
     if lim == 0.:
         nmax=nact-nspm
-
     M = Mp[:,0:nmax] @ np.diag(np.sqrt(1./D2[0:nmax]))*np.sqrt(tpup)
     SB = G @ M
     
