@@ -172,9 +172,10 @@ class Atmosphere:
 
                 # wavelenfth scaling
                 tmpLayer.phase *= self.wavelength/2/np.pi
-        self.generateNewPhaseScreen(seed=0)
-                
+        self.generateNewPhaseScreen(seed=0)             
         self.hasNotBeenInitialized  = False        
+        # move of one time step to create the atm variables 
+        self.update()   
         # save the resulting phase screen in OPD  
         self.set_OPD(phase_support)
         self.print_properties()
