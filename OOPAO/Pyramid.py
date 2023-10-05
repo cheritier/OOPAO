@@ -270,7 +270,9 @@ class Pyramid:
         self.center                     = self.nRes//2                                                       # Center of the zero-Padded array
         self.supportPadded              = self.convert_for_gpu(np.pad(self.telescope.pupil.astype(complex),((self.zeroPadding,self.zeroPadding),(self.zeroPadding,self.zeroPadding)),'constant'))
         self.spatialFilter              = None                                                               # case where a spatial filter is considered
-        self.fov                        = 206265*self.telescope.resolution*(self.telescope.src.wavelength/self.telescope.D) # fov in arcsec 
+        self.fov                        = 206265*self.nRes/self.zeroPaddingFactor*(self.telescope.src.wavelength/self.telescope.D) # fov in arcsec 
+        self.fov_l_d                    = self.nRes/self.zeroPaddingFactor # fov in arcsec 
+
         n_cpu = multiprocessing.cpu_count()
         # joblib settings for parallization
         if self.gpu_available is False:
@@ -750,11 +752,17 @@ class Pyramid:
             return fullFrameMaps,fullFrame
         
     def get_modulation_frame(self, radius = 6, norma = True):
+        
         self.modulation_camera_frame = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)
        
         N_trunc = int(self.nRes/2 - radius*self.modulation*self.zeroPaddingFactor )
-        
-        modulation_camera_frame_zoom = self.modulation_camera_frame[N_trunc:-N_trunc,N_trunc:-N_trunc]
+        print(N_trunc)
+        if N_trunc<=0:
+            print('radius Value is too high as the field of view is limited to '+str(self.fov_l_d/2) +' lambda/D -- ignoring')
+            modulation_camera_frame_zoom = self.modulation_camera_frame.copy()
+
+        else:
+            modulation_camera_frame_zoom = self.modulation_camera_frame[N_trunc:-N_trunc,N_trunc:-N_trunc]
         
         if norma:
             modulation_camera_frame_zoom/= modulation_camera_frame_zoom.max()
