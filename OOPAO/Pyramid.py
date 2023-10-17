@@ -698,12 +698,12 @@ class Pyramid:
             I4              = self.grabQuadrant(4,cameraFrame=None)*self.validI4Q
             # global normalisation
             I4Q        = I1+I2+I3+I4
-            norma      = np.mean(I4Q[self.validI4Q])
+            self.norma      = np.mean(I4Q[self.validI4Q])
             # slopesMaps computation cropped to the valid pixels
             Sx         = (I1-I2+I4-I3)            
             Sy         = (I1-I4+I2-I3)         
             # 2D slopes maps      
-            slopesMaps = (np.concatenate((Sx,Sy)/norma) - self.referenceSignal_2D) *self.slopesUnits
+            slopesMaps = (np.concatenate((Sx,Sy)/self.norma) - self.referenceSignal_2D) *self.slopesUnits
             # slopes vector
             slopes     = slopesMaps[np.where(self.validSignal==1)]
             return slopesMaps,slopes
@@ -718,14 +718,14 @@ class Pyramid:
             # global normalisation
             I4Q         = I1+I2+I3+I4
             subArea     = (self.telescope.D / self.nSubap)**2
-            norma       = np.float64(self.telescope.src.nPhoton*self.telescope.samplingTime*subArea)
+            self.norma       = np.float64(self.telescope.src.nPhoton*self.telescope.samplingTime*subArea)
 
             # slopesMaps computation cropped to the valid pixels
             Sx         = (I1-I2+I4-I3)            
             Sy         = (I1-I4+I2-I3)   
             
             # 2D slopes maps      
-            slopesMaps = (np.concatenate((Sx,Sy)/norma) - self.referenceSignal_2D) *self.slopesUnits
+            slopesMaps = (np.concatenate((Sx,Sy)/self.norma) - self.referenceSignal_2D) *self.slopesUnits
             
             # slopes vector
             slopes     = slopesMaps[np.where(self.validSignal==1)]
@@ -734,18 +734,18 @@ class Pyramid:
         if self.postProcessing == 'fullFrame_incidence_flux':
             # global normalization
             subArea     = (self.telescope.D / self.nSubap)**2
-            norma       = np.float64(self.telescope.src.nPhoton*self.telescope.samplingTime*subArea)/4
+            self.norma       = np.float64(self.telescope.src.nPhoton*self.telescope.samplingTime*subArea)/4
             # 2D full-frame
-            fullFrameMaps  = (cameraFrame / norma )  - self.referenceSignal_2D
+            fullFrameMaps  = (cameraFrame / self.norma )  - self.referenceSignal_2D
             # full-frame vector
             fullFrame  = fullFrameMaps[np.where(self.validSignal==1)]
             
             return fullFrameMaps,fullFrame
         if self.postProcessing == 'fullFrame':
             # global normalization
-            norma = np.sum(cameraFrame[self.validSignal])
+            self.norma = np.sum(cameraFrame[self.validSignal])
             # 2D full-frame
-            fullFrameMaps  = (cameraFrame / norma )  - self.referenceSignal_2D
+            fullFrameMaps  = (cameraFrame / self.norma )  - self.referenceSignal_2D
             # full-frame vector
             fullFrame  = fullFrameMaps[np.where(self.validSignal==1)]
             
