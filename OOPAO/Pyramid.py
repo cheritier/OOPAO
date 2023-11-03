@@ -187,7 +187,7 @@ class Pyramid:
             
         # initialize the Pyramid Object 
         self.telescope                  = telescope                                         # telescope attached to the wfs
-        if self.telescope.resolution/nSubap <4 or (self.telescope.resolution/nSubap)%2 !=0:
+        if (self.telescope.resolution/nSubap)%2 !=0:
             raise ValueError('The resolution should be an even number and be a multiple of 2**i where i>=2')
         if self.telescope.src is None:
             raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
@@ -258,6 +258,7 @@ class Pyramid:
 
         self.tag                        = 'pyramid'                                                          # Tag of the object 
         self.cam                        = Detector(round(nSubap*self.zeroPaddingFactor))                     # WFS detector object
+        self.focal_plane_camera         = Detector(self.nRes)                     # WFS detector object
         self.lightRatio                 = lightRatio + 0.001                                                 # Light ratio for the valid pixels selection 23/09/2022 cth: 0.001 added for backward compatibility
         if calibModulation>= self.telescope.resolution/2:
             self.calibModulation            = self.telescope.resolution/2 -1
@@ -752,13 +753,19 @@ class Pyramid:
             return fullFrameMaps,fullFrame
         
     def get_modulation_frame(self, radius = 6, norma = True):
+        if radius<=0:
+            Warning('radius for the field of view must be a strictly positive number. Ignoring the input value.')
+            radius =  self.telescope.resolution//2
+            
+        self*self.focal_plane_camera
+        self.modulation_camera_frame = self.focal_plane_camera.frame.astype(float)
         
-        self.modulation_camera_frame = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)
+        # self.modulation_camera_frame = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)
        
-        N_trunc = int(self.nRes/2 - radius*self.modulation*self.zeroPaddingFactor )
-        print(N_trunc)
+        
+        N_trunc = int(self.nRes/2 - radius*self.zeroPaddingFactor )
         if N_trunc<=0:
-            print('radius Value is too high as the field of view is limited to '+str(self.fov_l_d/2) +' lambda/D -- ignoring')
+            print('radius Value is too high as the field of view is limited to '+str(int(self.fov_l_d/2)) +' lambda/D -- ignoring')
             modulation_camera_frame_zoom = self.modulation_camera_frame.copy()
 
         else:
@@ -977,8 +984,12 @@ class Pyramid:
     
     def __mul__(self,obj): 
         if obj.tag=='detector':
-            I = self.pyramidFrame
-            obj.frame = (obj.rebin(I,(obj.resolution,obj.resolution)))
+            
+            if obj.resolution == self.nRes:
+                    obj.frame = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)                
+            else:
+                    I = self.pyramidFrame
+                    obj.frame = (obj.rebin(I,(obj.resolution,obj.resolution)))
             if self.binning != 1:
                 try:
                     obj.frame = (obj.rebin(obj.frame,(obj.resolution//self.binning,obj.resolution//self.binning)))    
