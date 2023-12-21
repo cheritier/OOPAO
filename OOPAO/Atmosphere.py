@@ -748,7 +748,7 @@ class Atmosphere:
             if len(val)!= self.nLayer:
                 print('Error! Wrong value for the wind-speed! Make sure that you inpute a wind-speed for each layer')
             else:
-                print('Updating the wing speed...')
+                print('Updating the wins speed...')
                 for i_layer in range(self.nLayer):
                     tmpLayer = getattr(self,'layer_'+str(i_layer+1))
                     tmpLayer.windSpeed = val[i_layer]
