@@ -122,6 +122,7 @@ class Atmosphere:
         self.nExtra                 = 2                 # number of extra pixel to generate the phase screens
         self.wavelength             = 500*1e-9          # Wavelengt used to define the properties of the atmosphere
         self.telescope              = telescope         # associated telescope object
+
         if self.telescope.src is None:
             raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
         self.mode                   = mode              # DEBUG -> first phase screen generation mode
@@ -137,6 +138,8 @@ class Atmosphere:
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATM INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def initializeAtmosphere(self,telescope):
         phase_support = self.initialize_phase_support()
+        self.fov      = telescope.fov
+        self.fov_rad  = telescope.fov_rad
         if self.hasNotBeenInitialized:
             self.initial_r0 = self.r0
             for i_layer in range(self.nLayer):       
@@ -201,10 +204,10 @@ class Atmosphere:
         layer.vX            = layer.windSpeed*np.sin(np.deg2rad(layer.direction))      
         
         # Diameter and resolution of the layer including the Field Of View and the number of extra pixels
-        layer.D             = self.telescope.D+2*np.tan(self.telescope.fov/2)*layer.altitude*self.oversampling_factor
+        layer.D             = self.telescope.D+2*np.tan(self.fov_rad/2)*layer.altitude*self.oversampling_factor
         layer.resolution    = int(np.ceil((self.telescope.resolution/self.telescope.D)*layer.D))
         
-        layer.D_fov             = self.telescope.D+2*np.tan(self.telescope.fov/2)*layer.altitude
+        layer.D_fov             = self.telescope.D+2*np.tan(self.fov_rad/2)*layer.altitude
         layer.resolution_fov    = int(np.ceil((self.telescope.resolution/self.telescope.D)*layer.D))
         
         layer.center = layer.resolution//2
@@ -438,7 +441,7 @@ class Atmosphere:
         # Compute the covariance matrices
         compute_covariance_matrices = True
 
-        if self.telescope.fov == 0: 
+        if self.fov_rad == 0: 
             try:
                 c=time.time()        
                 self.ZZt_r0 = self.ZZt_r0
@@ -562,14 +565,18 @@ class Atmosphere:
        
     def print_properties(self):
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        print('{: ^12s}'.format('Layer') + '{: ^12s}'.format('Direction')+ '{: ^12s}'.format('Speed')+ '{: ^12s}'.format('Altitude')+ '{: ^12s}'.format('Cn2') )
-        print('{: ^12s}'.format('') + '{: ^12s}'.format('[deg]')+ '{: ^12s}'.format('[m/s]')+ '{: ^12s}'.format('[m]')+ '{: ^12s}'.format('[m-2/3]') )
+        print('{: ^12s}'.format('Layer') + '{: ^12s}'.format('Direction')+ '{: ^12s}'.format('Speed')+ '{: ^12s}'.format('Altitude')+ '{: ^12s}'.format('Cn2')+ '{: ^12s}'.format('Diameter') )
+        print('{: ^12s}'.format('') + '{: ^12s}'.format('[deg]')+ '{: ^12s}'.format('[m/s]')+ '{: ^12s}'.format('[m]')+ '{: ^12s}'.format('[m-2/3]') + '{: ^12s}'.format('[m]'))
 
-        print('----------------------------------------------------------------------')
+        print('======================================================================')
         
         for i_layer in range(self.nLayer):
-            print('{: ^12s}'.format(str(i_layer+1)) + '{: ^12s}'.format(str(self.windDirection[i_layer]))+ '{: ^12s}'.format(str(self.windSpeed[i_layer]))+ '{: ^12s}'.format(str(self.altitude[i_layer]))+ '{: ^12s}'.format(str(self.fractionalR0[i_layer]) ))
-            print('------------------------------------------------------------------')
+            print('{: ^12s}'.format(str(i_layer+1)) + '{: ^12s}'.format(str(self.windDirection[i_layer]))+ '{: ^12s}'.format(str(self.windSpeed[i_layer]))+ '{: ^12s}'.format(str(self.altitude[i_layer]))+ '{: ^12s}'.format(str(self.fractionalR0[i_layer]) ) + '{: ^12s}'.format(str(getattr(self,'layer_'+str(i_layer+1)).D )))
+            if i_layer<self.nLayer-1:
+                print('----------------------------------------------------------------------')
+
+        print('======================================================================')
+
 
         print('{: ^18s}'.format('r0 @500 nm') + '{: ^18s}'.format(str(self.r0)+' [m]' ))
         print('{: ^18s}'.format('L0') + '{: ^18s}'.format(str(self.L0)+' [m]' ))
@@ -578,8 +585,22 @@ class Atmosphere:
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         
     def __mul__(self,obj):
-        if obj.tag == 'telescope':
-            self.telescope = obj
+        if obj.tag == 'telescope' or obj.tag == 'source':
+            if obj.tag == 'telescope':
+                if self.fov == obj.fov:   
+                    self.telescope = obj
+                else:          
+                    print('Re-initializing the atmosphere to match the new telescope fov')
+                    self.hasNotBeenInitialized = True
+                    self.initializeAtmosphere(obj)
+
+            else:
+                if obj.coordinates[0] <= self.fov/2:
+                    self.telescope.src = obj
+                    obj = self.telescope
+                else:
+                    raise ValueError('The source object zenith ('+str(obj.coordinates[0])+'") is outside of the telescope fov ('+str(self.fov//2)+'")! You can:\n - Reduce the zenith of the source \n - Re-initialize the atmosphere object using a telescope with a larger fov')
+            
             self.set_pupil_footprint()     
             phase_support = self.initialize_phase_support()
             for i_layer in range(self.nLayer):
@@ -599,7 +620,7 @@ class Atmosphere:
             obj.isPaired     = True
             return obj
         else:
-            raise AttributeError('The atmosphere can be multiplied only with a Telescope object! ')
+            raise AttributeError('The atmosphere can be multiplied only with a Telescope or a Source object!')
     
     
     def display_atm_layers(self,layer_index= None,fig_index = None):

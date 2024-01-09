@@ -125,7 +125,8 @@ class Telescope:
         self.D                           = diameter                  # Diameter in m
         self.pixelSize                   = self.D/self.resolution    # size of the pixels in m
         self.centralObstruction          = centralObstruction        # central obstruction
-        self.fov                         = fov                       # Field of View 
+        self.fov                         = fov      # Field of View in arcsec converted in radian
+        self.fov_rad                     = fov/206265      # Field of View in arcsec converted in radian
         self.samplingTime                = samplingTime              # AO loop speed
         self.isPetalFree                 = False                     # Flag to remove the petalling effect with ane ELT system. 
         self.index_pixel_petals          = None                      # indexes of the pixels corresponfong to the M1 petals. They need to be set externally
@@ -684,8 +685,13 @@ class Telescope:
         print('{: ^18s}'.format('Surface')                      + '{: ^18s}'.format(str(np.round(self.pixelArea*self.pixelSize**2)))    +'{: ^18s}'.format('[m2]'  ))
         print('{: ^18s}'.format('Central Obstruction')          + '{: ^18s}'.format(str(100*self.centralObstruction))                   +'{: ^18s}'.format('[% of diameter]' ))
         print('{: ^18s}'.format('Pixels in the pupil')          + '{: ^18s}'.format(str(self.pixelArea))                                +'{: ^18s}'.format('[pixels]' ))
+        print('{: ^18s}'.format('Field of View')                + '{: ^18s}'.format(str(self.fov))                                      +'{: ^18s}'.format('[arcsec]' ))
         if self.src:
-            print('{: ^18s}'.format('Source '+self.src.type)            + '{: ^18s}'.format(str(np.round(1e9*self.src.wavelength,2)))            +'{: ^18s}'.format('[nm]' ))
+            if self.src.type == 'asterism':
+                for i_src in range(len(self.src.src)):
+                    print('{: ^18s}'.format('Source '+self.src.src[i_src].type)            + '{: ^18s}'.format(str(np.round(1e9*self.src.src[i_src].wavelength,2)))            +'{: ^18s}'.format('[nm]' ))
+            else:
+                print('{: ^18s}'.format('Source '+self.src.type)            + '{: ^18s}'.format(str(np.round(1e9*self.src.wavelength,2)))            +'{: ^18s}'.format('[nm]' ))
         else:
             print('{: ^18s}'.format('Source')            + '{: ^18s}'.format('None')                                             +'{: ^18s}'.format('' ))
 
