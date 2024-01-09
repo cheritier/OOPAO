@@ -259,7 +259,7 @@ class Pyramid:
         self.tag                        = 'pyramid'                                                          # Tag of the object 
         self.cam                        = Detector(round(nSubap*self.zeroPaddingFactor))                     # WFS detector object
         self.focal_plane_camera         = Detector(self.nRes)                     # WFS detector object
-        self.lightRatio                 = lightRatio + 0.001                                                 # Light ratio for the valid pixels selection 23/09/2022 cth: 0.001 added for backward compatibility
+        self.lightRatio                 = lightRatio + 0.001                      # Light ratio for the valid pixels selection 23/09/2022 cth: 0.001 added for backward compatibility
         if calibModulation>= self.telescope.resolution/2:
             self.calibModulation            = self.telescope.resolution/2 -1
         else:                                             
@@ -971,42 +971,24 @@ class Pyramid:
                 self.referenceSignal_2D         = 0
                 self.wfs_calibration(self.telescope)
                 print('Done!')
-
-    @property
-    def backgroundNoise(self):
-        return self._backgroundNoise
-    
-    @backgroundNoise.setter
-    def backgroundNoise(self,val):
-        self._backgroundNoise = val
-        if val == True:
-            self.backgroundNoiseMap = []
     
     def __mul__(self,obj): 
         if obj.tag=='detector':
             
             if obj.resolution == self.nRes:
-                    obj.frame = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)                
+                    frame = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)                
             else:
                     I = self.pyramidFrame
-                    obj.frame = (obj.rebin(I,(obj.resolution,obj.resolution)))
+                    frame = (obj.rebin(I,(obj.resolution,obj.resolution)))
             if self.binning != 1:
                 try:
-                    obj.frame = (obj.rebin(obj.frame,(obj.resolution//self.binning,obj.resolution//self.binning)))    
+                    frame = (obj.rebin(obj.frame,(obj.resolution//self.binning,obj.resolution//self.binning)))    
                 except:
                     print('ERROR: the shape of the detector ('+str(obj.frame.shape)+') is not valid with the binning value requested:'+str(self.binning)+'!')
-            obj.frame = obj.frame *(self.telescope.src.fluxMap.sum())/obj.frame.sum()
+            frame = frame *(self.telescope.src.fluxMap.sum())/frame.sum()
             
-            if obj.photonNoise!=0:
-                obj.frame = self.random_state_photon_noise.poisson(obj.frame)
-                
-            if obj.readoutNoise!=0:
-                obj.frame += np.int64(np.round(self.random_state_readout_noise.randn(obj.resolution,obj.resolution)*obj.readoutNoise))
-#                obj.frame = np.round(obj.frame)
-                
-            if self.backgroundNoise is True:    
-                self.backgroundNoiseAdded = self.random_state_background.poisson(self.backgroundNoiseMap)
-                obj.frame +=self.backgroundNoiseAdded
+            obj.integrate(frame)
+
         else:
             print('Error light propagated to the wrong type of object')
         return -1
