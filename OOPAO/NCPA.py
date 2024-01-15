@@ -49,8 +49,7 @@ class NCPA:
         4) Create an NCPA following an 1/f2 distribution law on modes amplitudes
         ncpa = NCPA(tel,dm,atm,f2=[200e-9,5,25,1])  --> 200 nm RMS NCPA as an 1/f2 law of modes 5 to 25 with a cutoff frequency of 1
         """
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
-        self.isInitialized = False                # Resolution of the telescope
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         self.basis = modal_basis
         self.tel   = tel
         self.atm   = atm
