@@ -531,7 +531,7 @@ class Atmosphere:
                     phase         = ft_phase_screen(self,tmpLayer.resolution,tmpLayer.D/tmpLayer.resolution,seed=seed+i_layer)
             
             tmpLayer.phase = phase
-            tmpLayer.randomState    = RandomState(42+i_layer*1000)
+            tmpLayer.randomState    = RandomState(seed+i_layer*1000)
             
             Z = tmpLayer.phase[tmpLayer.innerMask[1:-1,1:-1]!=0]
             X = np.matmul(tmpLayer.A,Z) + np.matmul(tmpLayer.B,tmpLayer.randomState.normal( size=tmpLayer.B.shape[1]))
