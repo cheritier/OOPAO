@@ -17,7 +17,7 @@ import scipy.ndimage as sp
 from OOPAO.Detector import Detector
 
 try:
-    # error
+    #error
     import cupy as np_cp
 except:
     import numpy as np_cp
@@ -503,13 +503,14 @@ class BioEdge:
             Q = Parallel(n_jobs=self.nJobs_masks,prefer=self.joblib_prefer_masks)(delayed(self.convolution)(i,j) for i,j in zip(self.mask,support_list))
             return Q 
         
-        out  = job_loop_mask()
+        out  = self.convert_for_numpy(np_cp.asarray(job_loop_mask()))
+        
         
         count = 0
         
         for i in range(2):
             for j in range(2):
-                frame[i*self.nRes:(i+1)*self.nRes,j*self.nRes:(j+1)*self.nRes] = out[count]
+                frame[i*self.nRes:(i+1)*self.nRes,j*self.nRes:(j+1)*self.nRes] = out[count,:,:]
                 count+=1    
         return frame    
 
@@ -518,10 +519,6 @@ class BioEdge:
         return B    
         
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PYRAMID PROPAGATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
-    def pyramid_propagation(self,telescope):
-        # backward compatibility with previous version
-        self.wfs_measure(phase_in=telescope.src.phase)
-        return
     
     def wfs_measure(self,phase_in=None):
         if phase_in is not None:

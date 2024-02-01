@@ -552,13 +552,13 @@ class Pyramid:
                     Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.phase_buffer)
                     return Q 
                 # apply the pyramid transform in parallel
-                maps = job_loop_multiple_modes_non_modulated()
+                maps = self.convert_for_numpy(np_cp.asarray(job_loop_multiple_modes_non_modulated()))
                 
                 self.pyramidSignal_2D    = np.zeros([self.validSignal.shape[0],self.validSignal.shape[1],nModes])
                 self.pyramidSignal       = np.zeros([self.nSignal,nModes])
                 
                 for i in range(nModes):
-                    self.pyramidFrame = self.convert_for_numpy(maps[i])
+                    self.pyramidFrame = maps[i,:,:]
                     self*self.cam
                     if self.isInitialized:
                         self.pyramidSignal_2D[:,:,i],self.pyramidSignal[:,i] = self.signalProcessing()             
