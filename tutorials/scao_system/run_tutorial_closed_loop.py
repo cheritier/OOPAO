@@ -19,7 +19,7 @@ import matplotlib.gridspec as gridspec
 # %%
 plt.ion()
 
-n_subaperture = 20
+n_subaperture = 22
 
 
 #%% -----------------------     TELESCOPE   ----------------------------------
