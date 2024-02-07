@@ -648,7 +648,7 @@ class BioEdge:
                                     Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.convert_for_gpu(self.phaseBuffer[i*n_measurement_max*self.nTheta:,:,:]))
                                     return Q 
                                 maps[i*n_measurement_max*self.nTheta:,:,:] = np_cp.asarray(job_loop_multiple_mode_modulated())
-                        self.bufferbioFrames = self.convert_for_numpy(maps)
+                        self.bufferBioFrames = self.convert_for_numpy(maps)
                         del self.phaseBuffer
                         del maps
                         if self.gpu_available:
@@ -662,17 +662,17 @@ class BioEdge:
                             Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.convert_for_gpu(self.phaseBuffer))
                             return Q 
                         
-                        self.bufferbioFrames  = self.convert_for_numpy(np_cp.asarray(job_loop_multiple_mode_modulated()))
+                        self.bufferBioFrames  = self.convert_for_numpy(np_cp.asarray(job_loop_multiple_mode_modulated()))
                         
                     self.bioSignal_2D     = np.zeros([self.validSignal.shape[0],self.validSignal.shape[1],nModes])
                     self.bioSignal        = np.zeros([self.nSignal,nModes])
                     
                     for i in range(nModes):
-                        self.bioFrame = np_cp.sum(self.bufferbioFrames[i*(self.nTheta):(self.nTheta)+i*(self.nTheta)],axis=0)/self.nTheta
+                        self.bioFrame = np_cp.sum(self.bufferBioFrames[i*(self.nTheta):(self.nTheta)+i*(self.nTheta)],axis=0)/self.nTheta
                         self*self.cam
                         if self.isInitialized:
                             self.bioSignal_2D[:,:,i],self.bioSignal[:,i] = self.signalProcessing()                   
-                    del self.bufferbioFrames      
+                    del self.bufferBioFrames      
                 else:
                     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
                     print('Error - Wrong dimension for the input phase. Aborting....')
