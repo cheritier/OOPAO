@@ -401,7 +401,7 @@ class Telescope:
                     self*obj[i_obj]
         else:    
               # interaction with WFS object: Propagation of the phase screen
-            if obj.tag=='pyramid' or obj.tag == 'double_wfs' or obj.tag=='shackHartmann':
+            if obj.tag=='pyramid' or obj.tag == 'double_wfs' or obj.tag=='shackHartmann' or obj.tag == 'bioEdge':
                 self.optical_path.append([obj.tag,id(obj)])
                 if self.display_optical_path is True:
                     self.print_optical_path()

@@ -50,58 +50,58 @@ class BioEdge:
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def __init__(self,nSubap,telescope,modulation,grey_width,lightRatio, postProcessing='slopesMaps',psfCentering=True, n_pix_separation = 2, calibModulation=50, n_pix_edge=None,extraModulationFactor=0,zeroPadding=None,pupilSeparationRatio=None,edgePixel = None,binning =1,nTheta_user_defined=None,userValidSignal=None,old_mask=False,rooftop = None,delta_theta = 0, user_modulation_path = None):
         """
-        A Pyramid object consists in defining a 2D phase mask located at the focal plane of the telescope to perform the Fourier Filtering of the EM-Field. 
-        By default the Pyramid detector is considered to be noise-free (for calibration purposes). These properties can be switched on and off on the fly (see properties)
+        A Bi-O Edge object consists in defining a 2D phase mask located at the focal plane of the telescope to perform the Fourier Filtering of the EM-Field. 
+        By default the Bi-O Edge detector is considered to be noise-free (for calibration purposes). These properties can be switched on and off on the fly (see properties)
         ************************** REQUIRED PARAMETERS **************************
         It requires the following parameters: 
-        _ nSubap                : the number of subapertures (ie the diameter of the Pyramid Pupils in pixels)
-        _ telescope             : the telescope object to which the Pyramid is associated. This object carries the phase, flux and pupil information
+        _ nSubap                : the number of subapertures (ie the diameter of the Bi-O Edge Pupils in pixels)
+        _ telescope             : the telescope object to which the Bi-O Edge is associated. This object carries the phase, flux and pupil information
         _ modulation            : the Tip-Tilt modulation in [lambda/D] where lambda is the NGS wavelength and D the telescope diameter
         _ grey_width            : half width of the central area of the masks in [lambda/D] over which a gradient of transmissivity from 0 to 1 is applied.
         _ lightRatio            : criterion to select the valid subaperture based on flux considerations
-        _ n_pix_separation      : number of pixels separating the Pyramid Pupils in number of pixels of the detector    -- default value is 2 pixels
-        _ n_pix_edge            : number of pixel at the edge of the Pyramid Pupils in number of pixels of the detector -- default value is n_pix_separation's value
+        _ n_pix_separation      : number of pixels separating the Bi-O Edge Pupils in number of pixels of the detector    -- default value is 2 pixels
+        _ n_pix_edge            : number of pixel at the edge of the Bi-O Edge Pupils in number of pixels of the detector -- default value is n_pix_separation's value
         _ postProcessing        : processing of the signals ('fullFrame' or 'slopesMaps')                               -- default value is 'slopesMaps'
         
         DEPRECIATED PARAMETERS:
         _ pupilSeparationRatio  : Separation ratio of the PWFS pupils (Diameter/Distance Center to Center) -- DEPRECIATED -> use n_pix_separation instead)
-        _ edgePixel             : number of pixel at the edge of the Pyramid Pupils
+        _ edgePixel             : number of pixel at the edge of the Bi-O Edge Pupils
         
         ************************** OPTIONAL PARAMETERS **************************
         
         _ calibModulation       : Defines the modulation used to select the valid subapertures  -- default value is 50 lambda/D
         _ extraModulationFactor : Extra Factor to increase/reduce the number of modulation point (extraModulationFactor = 1 means 4 modulation points added, 1 for each quadrant) 
-        _ psfCentering          : If False, the Pyramid mask is centered on 1 pixel, if True, the Pyramid mask is centered on 4 pixels -- default value is True 
+        _ psfCentering          : If False, the Bi-O Edge mask is centered on 1 pixel, if True, the Bi-O Edge mask is centered on 4 pixels -- default value is True 
         _ binning               : binning factor of the PWFS detector signals -- default Value is 1
         _ nTheta_user_defined   : user-defined number of Tip/Tilt modulation points 
-        _ delta_theta           : delta angle for the modulation points, default value is 0 (on the edge between two sides of the Pyramid)
+        _ delta_theta           : delta angle for the modulation points, default value is 0 (on the edge between two sides of the Bi-O Edge)
         _ userValidSignal       : user-defined valid pixel mask for the signals computation
-        _ rooftop               : if different to None, allows to compute a two-sided Pyramid ("V" corresponds to a vertical split, "H" corresponds to an horizontal split)  
+        _ rooftop               : if different to None, allows to compute a two-sided Bi-O Edge ("V" corresponds to a vertical split, "H" corresponds to an horizontal split)  
         _ zeroPadding           : User-defined zero-padding value in pixels that will be added to each side of the arrays. Consider using the n_pix_edge parameter that allows to do the same thing. 
         _ pupilReflectivcty     : Defines the reflectivity of the Telescope object. If not set to 1, it can be input as a 2D map of uneven reflectivy correspondong to the pupil mask. 
         _ user_modulation_path  : user-defined modulation path ( a list of [x,y] coordinates in lambda/D units is expected)
             
-        ************************** PROPAGATING THE LIGHT TO THE PYRAMID OBJECT **************************
-        The light can be propagated from a telescope object tel through the Pyramid object wfs using the * operator:        
+        ************************** PROPAGATING THE LIGHT TO THE Bi-O Edge OBJECT **************************
+        The light can be propagated from a telescope object tel through the Bi-O Edge object wfs using the * operator:        
         _ tel*wfs
         This operation will trigger:
             _ propagation of the tel.src light through the PWFS detector (phase and flux)
-            _ binning of the Pyramid signals
+            _ binning of the Bi-O Edge signals
             _ addition of eventual photon noise and readout noise
-            _ computation of the Pyramid signals
+            _ computation of the Bi-O Edge signals
         
     
         ************************** PROPERTIES **************************
         
         The main properties of a Telescope object are listed here: 
-        _ wfs.nSignal                    : the length of the signal measured by the Pyramid
-        _ wfs.signal                     : signal measured by the Pyramid of length wfs.nSignal
-        _ wfs.signal_2D                  : 2D map of the signal measured by the Pyramid
-        _ wfs.apply_shift_wfs            : apply a tip tilt to each quadrant to move the Pyramid pupils
+        _ wfs.nSignal                    : the length of the signal measured by the Bi-O Edge
+        _ wfs.signal                     : signal measured by the Bi-O Edge of length wfs.nSignal
+        _ wfs.signal_2D                  : 2D map of the signal measured by the Bi-O Edge
+        _ wfs.apply_shift_wfs            : apply a tip tilt to each quadrant to move the Bi-O Edge pupils
         _ wfs.random_state_photon_noise  : a random state cycle can be defined to reproduces random sequences of noise -- default is based on the current clock time 
         _ wfs.random_state_readout_noise : a random state cycle can be defined to reproduces random sequences of noise -- default is based on the current clock time   
         _ wfs.random_state_background    : a random state cycle can be defined to reproduces random sequences of noise -- default is based on the current clock time   
-        _ wfs.fov                        : Field of View of the Pyramid in arcsec
+        _ wfs.fov                        : Field of View of the Bi-O Edge in arcsec
 
         the following properties can be updated on the fly:
             _ wfs.modulation            : update the modulation radius and update the reference signal
@@ -135,13 +135,13 @@ class BioEdge:
             self.convert_for_gpu = no_function
             self.convert_for_numpy = no_function
             
-        # initialize the Pyramid Object 
+        # initialize the Bi-O Edge Object 
         self.telescope                  = telescope                                         # telescope attached to the wfs
         if self.telescope.resolution/nSubap <4 or (self.telescope.resolution/nSubap)%2 !=0:
             raise ValueError('The resolution should be an even number and be a multiple of 2**i where i>=2')
         if self.telescope.src is None:
             raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
-        self.delta_theta                = delta_theta                                       # delta theta in degree to change the position of the modulation point (default is 0 <=> modulation point on the edge of two sides of the pyramid)
+        self.delta_theta                = delta_theta                                       # delta theta in degree to change the position of the modulation point (default is 0 <=> modulation point on the edge of two sides of the Bi-O Edge)
         self.nTheta_user_defined        = nTheta_user_defined                               # user defined number of modulation point
         self.extraModulationFactor      = extraModulationFactor                             # Extra Factor to increase/reduce the number of modulation point (extraModulationFactor = 1 means 4 modulation points added, 1 for each quadrant)
         self.nSubap                     = nSubap                                            # Number of subaperture
@@ -209,7 +209,7 @@ class BioEdge:
             else:
                 raise ValueError('Error: The Separation of the pupils is too large for this value of zeroPadding!')
 
-        self.tag                        = 'pyramid'                                                          # Tag of the object 
+        self.tag                        = 'bioEdge'                                                          # Tag of the object 
         self.cam                        = Detector(2*round(nSubap*self.zeroPaddingFactor))                     # WFS detector object
         self.focal_plane_camera         = Detector(self.nRes)                     # WFS detector object
 
@@ -255,7 +255,7 @@ class BioEdge:
         self.slopesUnits                = 1     
         self.referenceSignal            = 0
         self.referenceSignal_2D         = 0
-        self.referencePyramidFrame      = 0 
+        self.referenceBioFrame          = 0 
         self.modulation                 = modulation                                        # Modulation radius (in lambda/D)
         # Creating the PWFS mask
         self.mask_computation()
@@ -348,7 +348,7 @@ class BioEdge:
                 raise ValueError('Wrong size for sx and/or sy, a list of 4 values is expected.')
         if np.max(np.abs(shift_x))>self.n_pix_edge or np.max(np.abs(shift_y))>self.n_pix_edge:
             print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-            print('WARNING!!!! The Pyramid pupils have been shifted outside of the detector!! Wrapping of the signal is currently occuring!!')
+            print('WARNING!!!! The Bi-O Edge pupils have been shifted outside of the detector!! Wrapping of the signal is currently occuring!!')
             print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
         self.sx = shift_x
@@ -456,12 +456,12 @@ class BioEdge:
         self.referenceSignal_2D,self.referenceSignal = self.signalProcessing()
       
         # 2D reference Frame before binning with detector
-        self.referencePyramidFrame         = np.copy(self.pyramidFrame)
+        self.referenceBioFrame         = np.copy(self.bioFrame)
         if self.isCalibrated is False:
             print('WFS calibrated!')
         self.isCalibrated= True
         telescope.OPD = telescope.pupil.astype(float)
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PYRAMID TRANSFORM %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Bio TRANSFORM %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def convolution(self,mask,em_field_ft):
             # case with mask centered on 4 pixels
             if self.psfCentering:
@@ -518,7 +518,7 @@ class BioEdge:
         B = self.phaseBuffModulationLowres_CPU+phaseIn
         return B    
         
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PYRAMID PROPAGATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Bio PROPAGATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     
     def wfs_measure(self,phase_in=None):
         if phase_in is not None:
@@ -539,10 +539,10 @@ class BioEdge:
 
         if self.modulation==0:
             if np.ndim(phase_in)==2:
-                self.pyramidFrame = self.convert_for_numpy(self.bio_edge_transform(self.convert_for_gpu(self.telescope.src.phase)))              
+                self.bioFrame = self.convert_for_numpy(self.bio_edge_transform(self.convert_for_gpu(self.telescope.src.phase)))              
                 self*self.cam
                 if self.isInitialized and self.isCalibrated:
-                    self.pyramidSignal_2D,self.pyramidSignal=self.signalProcessing()
+                    self.bioSignal_2D,self.bioSignal=self.signalProcessing()
             else:
                 nModes = phase_in.shape[2]
                 # move axis to get the number of modes first
@@ -552,17 +552,17 @@ class BioEdge:
                 def job_loop_multiple_modes_non_modulated():
                     Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.phase_buffer)
                     return Q 
-                # apply the pyramid transform in parallel
+                # apply the bio transform in parallel
                 maps = job_loop_multiple_modes_non_modulated()
                 
-                self.pyramidSignal_2D    = np.zeros([self.validSignal.shape[0],self.validSignal.shape[1],nModes])
-                self.pyramidSignal       = np.zeros([self.nSignal,nModes])
+                self.bioSignal_2D    = np.zeros([self.validSignal.shape[0],self.validSignal.shape[1],nModes])
+                self.bioSignal       = np.zeros([self.nSignal,nModes])
                 
                 for i in range(nModes):
-                    self.pyramidFrame = self.convert_for_numpy(maps[i])
+                    self.bioFrame = self.convert_for_numpy(maps[i])
                     self*self.cam
                     if self.isInitialized:
-                        self.pyramidSignal_2D[:,:,i],self.pyramidSignal[:,i] = self.signalProcessing()             
+                        self.bioSignal_2D[:,:,i],self.bioSignal[:,i] = self.signalProcessing()             
                 del maps
 
         else:
@@ -590,29 +590,29 @@ class BioEdge:
                                 Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.convert_for_gpu(self.phaseBuffModulationLowres[i*n_max_:,:,:]))
                                 return Q 
                             maps+=self.convert_for_numpy(np_cp.sum(np_cp.asarray(job_loop_single_mode_modulated()),axis=0))
-                    self.pyramidFrame=maps/self.nTheta
+                    self.bioFrame=maps/self.nTheta
                     del maps
                 else:
                     #define the parallel jobs
                     def job_loop_single_mode_modulated():
                         Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.phaseBuffModulationLowres)
                         return Q 
-                    # apply the pyramid transform in parallel
+                    # apply the bio transform in parallel
                     self.maps=np_cp.asarray(job_loop_single_mode_modulated())
-                    # compute the sum of the pyramid frames for each modulation points
+                    # compute the sum of the bio frames for each modulation points
                     if self.weight_vector is None:
-                        self.pyramidFrame=self.convert_for_numpy(np_cp.sum((self.maps),axis=0))/self.nTheta
+                        self.bioFrame=self.convert_for_numpy(np_cp.sum((self.maps),axis=0))/self.nTheta
                     else:
                         weighted_map = np.reshape(self.maps,[self.nTheta,self.nRes**2])
                         self.weighted_map = np.diag(self.weight_vector)@weighted_map
-                        self.pyramidFrame= np.reshape(self.convert_for_numpy(np_cp.sum((self.weighted_map),axis=0))/self.nTheta,[self.nRes,self.nRes])
+                        self.bioFrame= np.reshape(self.convert_for_numpy(np_cp.sum((self.weighted_map),axis=0))/self.nTheta,[self.nRes,self.nRes])
                         
 
                 #propagate to the detector
                 self*self.cam
                 
                 if self.isInitialized and self.isCalibrated:
-                    self.pyramidSignal_2D,self.pyramidSignal=self.signalProcessing()
+                    self.bioSignal_2D,self.bioSignal=self.signalProcessing()
             else:
                 if np.ndim(phase_in)==3:
                     nModes = phase_in.shape[2]
@@ -648,7 +648,7 @@ class BioEdge:
                                     Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.convert_for_gpu(self.phaseBuffer[i*n_measurement_max*self.nTheta:,:,:]))
                                     return Q 
                                 maps[i*n_measurement_max*self.nTheta:,:,:] = np_cp.asarray(job_loop_multiple_mode_modulated())
-                        self.bufferPyramidFrames = self.convert_for_numpy(maps)
+                        self.bufferbioFrames = self.convert_for_numpy(maps)
                         del self.phaseBuffer
                         del maps
                         if self.gpu_available:
@@ -662,17 +662,17 @@ class BioEdge:
                             Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.convert_for_gpu(self.phaseBuffer))
                             return Q 
                         
-                        self.bufferPyramidFrames  = self.convert_for_numpy(np_cp.asarray(job_loop_multiple_mode_modulated()))
+                        self.bufferbioFrames  = self.convert_for_numpy(np_cp.asarray(job_loop_multiple_mode_modulated()))
                         
-                    self.pyramidSignal_2D     = np.zeros([self.validSignal.shape[0],self.validSignal.shape[1],nModes])
-                    self.pyramidSignal        = np.zeros([self.nSignal,nModes])
+                    self.bioSignal_2D     = np.zeros([self.validSignal.shape[0],self.validSignal.shape[1],nModes])
+                    self.bioSignal        = np.zeros([self.nSignal,nModes])
                     
                     for i in range(nModes):
-                        self.pyramidFrame = np_cp.sum(self.bufferPyramidFrames[i*(self.nTheta):(self.nTheta)+i*(self.nTheta)],axis=0)/self.nTheta
+                        self.bioFrame = np_cp.sum(self.bufferbioFrames[i*(self.nTheta):(self.nTheta)+i*(self.nTheta)],axis=0)/self.nTheta
                         self*self.cam
                         if self.isInitialized:
-                            self.pyramidSignal_2D[:,:,i],self.pyramidSignal[:,i] = self.signalProcessing()                   
-                    del self.bufferPyramidFrames      
+                            self.bioSignal_2D[:,:,i],self.bioSignal[:,i] = self.signalProcessing()                   
+                    del self.bufferbioFrames      
                 else:
                     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
                     print('Error - Wrong dimension for the input phase. Aborting....')
@@ -786,21 +786,21 @@ class BioEdge:
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     #properties required for backward compatibility (20/10/2020)
     @property
-    def pyramidSignal(self):
-        return self._pyramidSignal
+    def bioSignal(self):
+        return self._bioSignal
     
-    @pyramidSignal.setter
-    def pyramidSignal(self,val):
-        self._pyramidSignal = val
+    @bioSignal.setter
+    def bioSignal(self,val):
+        self._bioSignal = val
         self.signal = val
     
     @property
-    def pyramidSignal_2D(self):
-        return self._pyramidSignal_2D
+    def bioSignal_2D(self):
+        return self._bioSignal_2D
     
-    @pyramidSignal_2D.setter
-    def pyramidSignal_2D(self,val):
-        self._pyramidSignal_2D = val
+    @bioSignal_2D.setter
+    def bioSignal_2D(self,val):
+        self._bioSignal_2D = val
         self.signal_2D = val
         
     @property
@@ -958,7 +958,7 @@ class BioEdge:
             if obj.resolution == self.nRes:
                     frame = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)                
             else:
-                    I = self.pyramidFrame
+                    I = self.bioFrame
                     frame = (obj.rebin(I,(obj.resolution,obj.resolution)))
             if self.binning != 1:
                 try:
