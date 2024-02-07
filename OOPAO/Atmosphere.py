@@ -102,7 +102,8 @@ class Atmosphere:
             _ atm.windDirection 
         ************************** FUNCTIONS **************************
 
-        _ atm.update()                              : update the OPD of the atmosphere for each layer according to the time step defined by tel.samplingTime                    
+        _ atm.update()                              : update the OPD of the atmosphere for each layer according to the time step defined by tel.samplingTime  
+        _ atm.update(OPD)                           : update the OPD of the atmosphere using a user defined OPD                   
         _ atm.generateNewPhaseScreen(seed)          : generate a new phase screen for the atmosphere OPD
         _ atm.print_atm_at_wavelength(wavelength)   : prompt seeing and r0 at specified wavelength
         _ atm.print_atm()                           : prompt the main properties of the atm object
@@ -122,7 +123,7 @@ class Atmosphere:
         self.nExtra                 = 2                 # number of extra pixel to generate the phase screens
         self.wavelength             = 500*1e-9          # Wavelengt used to define the properties of the atmosphere
         self.telescope              = telescope         # associated telescope object
-
+        self.user_defined_opd       = False             # default value to update phase screens at each iteration 
         if self.telescope.src is None:
             raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
         self.mode                   = mode              # DEBUG -> first phase screen generation mode
@@ -379,15 +380,24 @@ class Atmosphere:
             shiftMatrix     = translationImageMatrix(layer.mapShift,[layer.buff[0],layer.buff[1]]) #units are in pixel of the M1            
             layer.phase     = globalTransformation(layer.mapShift,shiftMatrix)[1:-1,1:-1]
 
-    def update(self):
-        phase_support = self.initialize_phase_support()
-        for i_layer in range(self.nLayer):
-            tmpLayer=getattr(self,'layer_'+str(i_layer+1))
-            self.updateLayer(tmpLayer)
-            # tmpLayer.phase *= self.wavelength/2/np.pi
+    def update(self,OPD=None):
+        if OPD is None:
+            self.user_defined_opd = False
 
-            phase_support = self.fill_phase_support(tmpLayer,phase_support,i_layer)
-        self.set_OPD(phase_support)
+            phase_support = self.initialize_phase_support()
+            for i_layer in range(self.nLayer):
+                tmpLayer=getattr(self,'layer_'+str(i_layer+1))
+                self.updateLayer(tmpLayer)
+                # tmpLayer.phase *= self.wavelength/2/np.pi
+    
+                phase_support = self.fill_phase_support(tmpLayer,phase_support,i_layer)
+            self.set_OPD(phase_support)
+        else:
+            self.user_defined_opd = True
+            # case where the OPD is input
+            self.OPD_no_pupil   = OPD
+            self.OPD            = OPD*self.telescope.pupil
+            
         if self.telescope.isPaired:
             self*self.telescope
             
@@ -601,13 +611,14 @@ class Atmosphere:
                 else:
                     raise ValueError('The source object zenith ('+str(obj.coordinates[0])+'") is outside of the telescope fov ('+str(self.fov//2)+'")! You can:\n - Reduce the zenith of the source \n - Re-initialize the atmosphere object using a telescope with a larger fov')
             
-            self.set_pupil_footprint()     
-            phase_support = self.initialize_phase_support()
-            for i_layer in range(self.nLayer):
-                tmpLayer = getattr(self,'layer_'+str(i_layer+1))
-                phase_support = self.fill_phase_support(tmpLayer, phase_support, i_layer)
-                
-            self.set_OPD(phase_support)
+            if self.user_defined_opd is False:
+                self.set_pupil_footprint()     
+                phase_support = self.initialize_phase_support()
+                for i_layer in range(self.nLayer):
+                    tmpLayer = getattr(self,'layer_'+str(i_layer+1))
+                    phase_support = self.fill_phase_support(tmpLayer, phase_support, i_layer)
+                self.set_OPD(phase_support)
+            
             if obj.src.tag == 'source':
                 obj.optical_path =[[obj.src.type + '('+obj.src.optBand+')',id(obj.src)]]
             else:
