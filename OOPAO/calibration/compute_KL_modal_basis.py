@@ -34,7 +34,7 @@ def compute_KL_basis(tel,atm,dm,lim = 1e-3,remove_piston = True):
         
     return M2C_KL
 
-def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolder = None, nameFile = None,remove_piston = False,HHtName = None, baseName = None, SpM_2D = None, nZer = 3, SZ=None, mem_available = None, NDIVL = None, computeSpM = True, ortho_spm = True, computeSB = True, computeKL = True, minimF = False, P2F = None, alpha = None, beta = None, nmo = None, IF_2D = None, IFma = None, returnSB = False, returnHHt = False, recompute_cov = False,extra_name = '', save_output = True,lim_inversion=1e-3,display=True):
+def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolder = None, nameFile = None,remove_piston = False,HHtName = None, baseName = None, SpM_2D = None, nZer = 3, SZ=None, mem_available = None, NDIVL = None, computeSpM = True, ortho_spm = True, computeSB = True, computeKL = True, minimF = False, P2F = None, alpha = None, beta = None, lim_SpM = None, lim_SB = None, nmo = None, IF_2D = None, IFma = None, returnSB = False, returnHHt_PSD_df = False, recompute_cov = False,extra_name = '', save_output = True,lim_inversion=1e-3,display=True):
 
     """
     - HHtName       = None      extension for the HHt Covariance file
@@ -125,8 +125,7 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
     
 
 #%% ----------COMPUTE HHt COVARIANCE MATRIX (OR LOAD EXISTING ONE) ----------    
-    #pdb.set_trace()
-    
+        
     if recompute_cov is False:
         try:
             #HHt, PSD_atm, df = aou.load(nameFolder+'HHt_PSD_df_'+HHtName+'_r'+str(r0)+'_SZ'+str(SZ)+'.pkl')
@@ -141,7 +140,7 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
         if display:
             print('COMPUTING COV MAT HHt...')
             print(' ')
-        #pdb.set_trace()
+        
         if mem_available is None:
             mem_available=100.e9   
         if NDIVL is None:
@@ -206,9 +205,9 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
                         
 
         if alpha is None:
-            alpha = 1.e-18
+            alpha = 1.e-9
         if beta is None:
-            beta=1.e-6
+            beta=1.e-5
     
     if computeSpM == True and minimF == True:
         if display:
@@ -229,9 +228,11 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
 
 
     if computeSpM == True and minimF == False:
+        if lim_SpM is None:
+            lim_SpM = lim_inversion #1.e-3
         check=1
         amp_check=1.e-6
-        lim=lim_inversion
+        lim=lim_SpM #lim_inversion
         SpM = aou.build_SpecificBasis_C(Tspm,IFma,DELTA,lim,ortho_spm,check,amp_check)                                   
         if display:
             print('CHECKING ORTHONORMALITY OF SPECIFIC MODES...')
@@ -246,7 +247,7 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
         computeSB = True
         
     if computeSB == True:
-        #pdb.set_trace()    
+        
         if minimF == False:
             if display:
                 print('BUILDING SEED BASIS ...')
@@ -288,8 +289,8 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
             nmoKL = SB.shape[1]
         else:
             nmoKL = nmo
-        KL=aou.build_KLBasis(HHt,SB,DELTA,nmoKL,check)
-        #pdb.set_trace()
+        KL,Sc=aou.build_KLBasis(HHt,SB,DELTA,nmoKL,check)
+        
         DELTA_KL = KL.T @ DELTA @ KL
         if display:
             print('Orthonormality error for '+str(nmoKL)+' modes of the KL Basis = ',np.max(np.abs(DELTA_KL[0:nmoKL,0:nmoKL]/tpup-np.eye(nmoKL))))
@@ -312,7 +313,10 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
             primary_hdu = pfits.ImageHDU(BASIS)
             hdu = pfits.HDUList([empty_primary, primary_hdu])
             hdu.writeto(nameFolder+nameFile+'.fits',overwrite=True)
-        return np.asarray(BASIS)
+        if returnHHt_PSD_df == True:
+            return np.asarray(BASIS), HHt,PSD_atm, df
+        else:
+            return np.asarray(BASIS)
         
     if returnSB == True:
         if save_output:
@@ -326,6 +330,4 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
             hdu.writeto(nameFolder+nameFile+'.fits',overwrite=True)
      
         return np.asarray(BASIS),SB
-
-
-
+ 
