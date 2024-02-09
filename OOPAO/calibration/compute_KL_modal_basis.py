@@ -4,7 +4,7 @@ Created on Wed Oct 21 10:57:29 2020
 
 @author: cheritie
 """
-
+import pdb
 import numpy as np
 from astropy.io import fits as pfits
 
@@ -34,7 +34,7 @@ def compute_KL_basis(tel,atm,dm,lim = 1e-3,remove_piston = True):
         
     return M2C_KL
 
-def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolder = None, nameFile = None,remove_piston = False,HHtName = None, baseName = None, SpM_2D = None, nZer = 3, SZ=None, mem_available = None, NDIVL = None, computeSpM = True, ortho_spm = True, computeSB = True, computeKL = True, minimF = False, P2F = None, alpha = None, beta = None, nmo = None, IF_2D = None, IFma = None, returnSB = False, returnHHt = False, recompute_cov = False,extra_name = '', save_output = True,lim_inversion=1e-3,display=True):
+def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolder = None, nameFile = None,remove_piston = False,HHtName = None, baseName = None, SpM_2D = None, nZer = 3, SZ=None, mem_available = None, NDIVL = None, computeSpM = True, ortho_spm = True, computeSB = True, computeKL = True, minimF = False, P2F = None, alpha = None, beta = None, lim_SpM = None, lim_SB = None, nmo = None, IF_2D = None, IFma = None, returnSB = False, returnHHt_PSD_df = False, recompute_cov = False,extra_name = '', save_output = True,lim_inversion=1e-3,display=True):
 
     """
     - HHtName       = None      extension for the HHt Covariance file
@@ -206,9 +206,9 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
                         
 
         if alpha is None:
-            alpha = 1.e-18
+            alpha = 1.e-9
         if beta is None:
-            beta=1.e-6
+            beta=1.e-5
     
     if computeSpM == True and minimF == True:
         if display:
@@ -229,9 +229,11 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
 
 
     if computeSpM == True and minimF == False:
+        if lim_SpM is None:
+            lim_SpM = lim_inversion #1.e-3
         check=1
         amp_check=1.e-6
-        lim=lim_inversion
+        lim=lim_SpM #lim_inversion
         SpM = aou.build_SpecificBasis_C(Tspm,IFma,DELTA,lim,ortho_spm,check,amp_check)                                   
         if display:
             print('CHECKING ORTHONORMALITY OF SPECIFIC MODES...')
@@ -288,7 +290,7 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
             nmoKL = SB.shape[1]
         else:
             nmoKL = nmo
-        KL=aou.build_KLBasis(HHt,SB,DELTA,nmoKL,check)
+        KL,Sc=aou.build_KLBasis(HHt,SB,DELTA,nmoKL,check)
         #pdb.set_trace()
         DELTA_KL = KL.T @ DELTA @ KL
         if display:
@@ -312,7 +314,10 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
             primary_hdu = pfits.ImageHDU(BASIS)
             hdu = pfits.HDUList([empty_primary, primary_hdu])
             hdu.writeto(nameFolder+nameFile+'.fits',overwrite=True)
-        return np.asarray(BASIS)
+        if returnHHt_PSD_df == True:
+            return np.asarray(BASIS), HHt,PSD_atm, df
+        else:
+            return np.asarray(BASIS)
         
     if returnSB == True:
         if save_output:
@@ -326,6 +331,4 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
             hdu.writeto(nameFolder+nameFile+'.fits',overwrite=True)
      
         return np.asarray(BASIS),SB
-
-
-
+ 
