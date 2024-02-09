@@ -4,7 +4,7 @@ Created on Wed Oct 21 10:57:29 2020
 
 @author: cheritie
 """
-import pdb
+
 import numpy as np
 from astropy.io import fits as pfits
 
@@ -125,8 +125,7 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
     
 
 #%% ----------COMPUTE HHt COVARIANCE MATRIX (OR LOAD EXISTING ONE) ----------    
-    #pdb.set_trace()
-    
+        
     if recompute_cov is False:
         try:
             #HHt, PSD_atm, df = aou.load(nameFolder+'HHt_PSD_df_'+HHtName+'_r'+str(r0)+'_SZ'+str(SZ)+'.pkl')
@@ -141,7 +140,7 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
         if display:
             print('COMPUTING COV MAT HHt...')
             print(' ')
-        #pdb.set_trace()
+        
         if mem_available is None:
             mem_available=100.e9   
         if NDIVL is None:
@@ -248,7 +247,7 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
         computeSB = True
         
     if computeSB == True:
-        #pdb.set_trace()    
+        
         if minimF == False:
             if display:
                 print('BUILDING SEED BASIS ...')
@@ -291,7 +290,7 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
         else:
             nmoKL = nmo
         KL,Sc=aou.build_KLBasis(HHt,SB,DELTA,nmoKL,check)
-        #pdb.set_trace()
+        
         DELTA_KL = KL.T @ DELTA @ KL
         if display:
             print('Orthonormality error for '+str(nmoKL)+' modes of the KL Basis = ',np.max(np.abs(DELTA_KL[0:nmoKL,0:nmoKL]/tpup-np.eye(nmoKL))))
