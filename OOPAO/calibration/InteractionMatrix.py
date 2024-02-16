@@ -16,8 +16,10 @@ def InteractionMatrix(ngs,atm,tel,dm,wfs,M2C,stroke,phaseOffset=0,nMeasurements=
         print('Pyramid with GPU detected => using single mode measurement to increase speed.')
 #    disabled noise functionality from WFS
     if noise =='off':  
-        wfs.cam.photonNoise  = 0
-        wfs.cam.readoutNoise = 0
+        wfs.cam.photonNoise     = 0
+        wfs.cam.readoutNoise    = 0
+        wfs.cam.backgroundNoise = 0
+
     else:
         print('Warning: Keeping the noise configuration for the WFS')    
     

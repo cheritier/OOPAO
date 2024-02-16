@@ -155,10 +155,11 @@ class Pyramid:
 
         the following properties can be updated on the fly:
             _ wfs.modulation            : update the modulation radius and update the reference signal
+            _ wfs.lightRatio            : reset the valid subaperture selection considering the new value
+        The detector noise can be set. (See Detector class for more details.)
             _ wfs.cam.photonNoise       : Photon noise can be set to True or False
             _ wfs.cam.readoutNoise      : Readout noise can be set to True or False
-            _ wfs.backgroundNoise       : Background noise can be set to True or False
-            _ wfs.lightRatio            : reset the valid subaperture selection considering the new value
+            _ wfs.cam.backgroundNoise   : Background noise can be set to True or False. An Associated wfs.cam.backgroundNoiseMap of the detector frame size must be defined
         
         """        
         try:
@@ -200,12 +201,8 @@ class Pyramid:
         self.postProcessing             = postProcessing                                    # type of processing of the signals (see self.postProcessing)
         self.userValidSignal            = userValidSignal                                   # user defined mask for the valid pixel selection
         self.psfCentering               = psfCentering                                      # tag for the PSF centering on  or 4 pixels
-        self.backgroundNoise            = False                                             # background noise in photon 
         self.binning                    = binning                                           # binning factor for the detector
         self.old_mask                   = old_mask
-        self.random_state_photon_noise  = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
-        self.random_state_readout_noise = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
-        self.random_state_background    = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
         self.user_modulation_path       = user_modulation_path                              # user defined modulation path
         self.pupilSeparationRatio       = pupilSeparationRatio                              # Separation ratio of the PWFS pupils (Diameter/Distance Center to Center) -- DEPRECIATED -> use n_pix_separation instead)
         self.weight_vector = None

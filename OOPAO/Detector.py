@@ -9,7 +9,7 @@ import numpy as np
 import time
 
 class Detector:
-    def __init__(self,nRes:int,readoutNoise:float=0,photonNoise:bool=False,QE:float=1):
+    def __init__(self,nRes:int,readoutNoise:float=0,photonNoise:bool=False,backgroundNoise:bool=False,backgroundNoiseMap:float = None,QE:float=1):
         '''
 
         Parameters
@@ -33,8 +33,8 @@ class Detector:
         self.QE                 = QE
         self.readoutNoise       = readoutNoise
         self.photonNoise        = photonNoise        
-        self.backgroundNoise    = False                                             # background noise in photon 
-
+        self.backgroundNoise    = backgroundNoise   
+            
         self.frame        = np.zeros([nRes,nRes])
         self.tag          = 'detector'        
         # random state to create random values for the noise
@@ -49,19 +49,29 @@ class Detector:
         return out
     
     def integrate(self,frame):
+        
         self.frame = frame
+        
+        # apply photon noise 
         if self.photonNoise!=0:
             self.frame = self.random_state_photon_noise.poisson(self.frame)
-        
-        if self.readoutNoise!=0:
-            self.frame += np.int64(np.round(self.random_state_readout_noise.randn(self.resolution,self.resolution)*self.readoutNoise))                
-        
+
+        # apply background noise
         if self.backgroundNoise is True:    
-            if self.backgroundNoiseMap is None:
-                raise ValueError('The background map is not properly set. A map of shape '+str(self.frame.shape)+' is expected')
+            if hasattr(self,'backgroundNoiseMap') is False or self.backgroundNoiseMap is None:
+                raise ValueError('The background map backgroundNoiseMap is not properly set. A map of shape '+str(self.frame.shape)+' is expected')
             else:
                 self.backgroundNoiseAdded = self.random_state_background.poisson(self.backgroundNoiseMap)
                 self.frame +=self.backgroundNoiseAdded
+
+        # apply quantum efficiency            
+        self.frame *= self.QE
+        
+        # apply readout Noise
+        if self.readoutNoise!=0:
+            self.frame += np.int64(np.round(self.random_state_readout_noise.randn(self.resolution,self.resolution)*self.readoutNoise))                
+        
+
 
     @property
     def backgroundNoise(self):
@@ -71,7 +81,14 @@ class Detector:
     def backgroundNoise(self,val):
         self._backgroundNoise = val
         if val == True:
-            self.backgroundNoiseMap = None
+            if hasattr(self,'backgroundNoiseMap') is False or self.backgroundNoiseMap is None:
+                print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                print('Warning: The background noise is enabled but no property backgroundNoiseMap is set.\nA map of shape '+str(self.frame.shape)+' is expected')
+                print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+            else:
+                print('Background Noise enabled! Using the following backgroundNoiseMap:')
+                print(self.backgroundNoiseMap)
+
             
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% END %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def print_properties(self):
