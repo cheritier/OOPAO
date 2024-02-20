@@ -432,14 +432,14 @@ class BioEdge:
                 self.nSignal        = int(np.sum(self.validSignal))
         else:
             print('You are using a user-defined mask for the selection of the valid pixel')
-            if self.postProcessing == 'slopesMaps':
+            if self.postProcessing == 'slopesMaps' or self.postProcessing == 'slopesMaps_incidence_flux':
                 
                 # select the valid pixels of the detector according to the flux (case full-frame)
                 self.validI4Q       =  self.userValidSignal
                 self.validSignal    = np.concatenate((self.validI4Q,self.validI4Q))
                 self.nSignal        = int(np.sum(self.validSignal))
                 
-            if self.postProcessing == 'fullFrame':            
+            if self.postProcessing == 'fullFrame' or self.postProcessing == 'fullFrame_incidence_flux':            
                 self.validSignal    = self.userValidSignal  
                 self.nSignal        = int(np.sum(self.validSignal))
                     
