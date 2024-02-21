@@ -37,7 +37,7 @@ except:
 class ShackHartmann:
     def __init__(self,nSubap:float,telescope,lightRatio:float,threshold_cog:float = 0.01,\
                  is_geometric:bool = False, binning_factor:int = 1,padding_extension_factor:int = 1,\
-                     threshold_convolution:float = 0.05,shannon_sampling:bool = False,unit_P2V = True):
+                     threshold_convolution:float = 0.05,shannon_sampling:bool = False,unit_P2V = False):
         """SHACK-HARTMANN
         A Shack Hartmann object consists in defining a 2D grd of lenslet arrays located in the pupil plane of the telescope to estimate the local tip/tilt seen by each lenslet. 
         By default the Shack Hartmann detector is considered to be noise-free (for calibration purposes). These properties can be switched on and off on the fly (see properties)
@@ -77,9 +77,9 @@ class ShackHartmann:
             If False, the sampling is 1 pix per FWHM (default).
             The default is False.
         unit_P2V : bool, optional
-                If True, the slopes units are calibrated using a Tip/Tilt normalized to 2 Pi peak-to-valley (Default).
-                If False, the slopes units are calibrated using a Tip/Tilt normalized to 1 in the pupil.
-                The default is True.
+                If True, the slopes units are calibrated using a Tip/Tilt normalized to 2 Pi peak-to-valley.
+                If False, the slopes units are calibrated using a Tip/Tilt normalized to 1 in the pupil (Default). In that case the slopes are expressed in [rad].
+                The default is False.
 
         Raises
         ------
@@ -271,26 +271,29 @@ class ShackHartmann:
         self.isInitialized = True
         print('Done!')
         
-        print('Setting slopes units..')        
-        [Tip,Tilt]                         = np.meshgrid(np.linspace(0,self.telescope.resolution-1,self.telescope.resolution),np.linspace(0,self.telescope.resolution-1,self.telescope.resolution))
-        
-        if self.unit_P2V:            
-            # normalize to 2 pi p2v
-            Tip                                = (((Tip/Tip.max())-0.5)*2*np.pi)
-        else:
+        print('Setting slopes units..')  
+        # normalize to 2 pi p2v
+
+        # [Tip,Tilt]                         = np.meshgrid(np.linspace(-np.pi,np.pi,self.telescope.resolution),np.linspace(-np.pi,np.pi,self.telescope.resolution))
+        [Tip, Tilt] = np.meshgrid(np.linspace(0,np.pi,self.telescope.resolution,endpoint=False),np.linspace(0,np.pi,self.telescope.resolution,endpoint=False))
+
+        if self.unit_P2V is False:            
             # normalize to 1 m RMS in the pupil
             Tip *= 1/np.std(Tip[self.telescope.pupil])
 
         mean_slope = np.zeros(5)
-        amp = 1e-9
+        amp = 10e-9
+        input_std = np.zeros(5)
         for i in range(5):
-            self.telescope.OPD = self.telescope.pupil*Tip*(i-2)*amp
+            self.telescope.OPD          = self.telescope.pupil*Tip*(i-2)*amp
             self.telescope.OPD_no_pupil = Tip*(i-2)*amp
 
             self.wfs_measure()        
             mean_slope[i] = np.mean(self.signal[:self.nValidSubaperture])
+            input_std[i] = np.std(self.telescope.OPD[self.telescope.pupil])*2*np.pi/self.telescope.src.wavelength
+            
         self.p = np.polyfit(np.linspace(-2,2,5)*amp,mean_slope,deg = 1)
-        self.slopes_units = np.abs(self.p[0])
+        self.slopes_units = np.abs(self.p[0])*(self.telescope.src.wavelength/2/np.pi)
         print('Done!')
         self.cam.photonNoise        = readoutNoise
         self.cam.readoutNoise       = photonNoise
