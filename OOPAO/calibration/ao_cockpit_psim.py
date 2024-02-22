@@ -383,8 +383,8 @@ def prop_noll_zernikes(maxz, **kwargs):
                     continue
 
                 for s in range(0, (n-m)//2 + 1):
-                    term_top = int((-1)**s) * int(factorial(n-s))
-                    term_bottom = int(factorial(s)) * int(factorial((n+m)/2-s)) * int(factorial((n-m)/2 - s))
+                    term_top = int((-1)**s) * int(factorial(int(n-s)))
+                    term_bottom = int(factorial(int(s))) * int(factorial(int((n+m)/2-s))) * int(factorial(int((n-m)/2 - s)))
                     term_val = int(term_top / term_bottom)
                     term = str(np.abs(term_val)).strip() + ".0"
                     term_r = int(n - 2*s)
@@ -593,10 +593,9 @@ def build_SpecificBasis_C(Tspm,IFma,DELTA,lim,ortho, check,amp_check):
     
     tpup = IFma.shape[0] # NUMBER OF VALID OPD POINTS IN THE PUPIL
     nact = IFma.shape[1]
-    if lim == 0:
-        iDELTA = DELTA.I
-    if lim !=0:
-        ud,sd,vdh=np.linalg.svd(DELTA)
+
+    ud,sd,vdh=np.linalg.svd(DELTA)
+    
     if lim <=1.:
         nmax=np.max(np.where(sd/np.max(sd) > lim))
     if lim > 1:
