@@ -241,9 +241,9 @@ class Atmosphere:
             print('-> Computing the initial phase screen...')  
             a=time.time()
             if self.mode == 2:
-                layer.phase, PSD        = ft_sh_phase_screen(self,layer.resolution,layer.D/layer.resolution,seed=i_layer)
+                layer.phase        = ft_sh_phase_screen(self,layer.resolution,layer.D/layer.resolution,seed=i_layer)
             else: 
-                    layer.phase,PSD         = ft_phase_screen(self,layer.resolution,layer.D/layer.resolution,seed=i_layer)                    
+                    layer.phase         = ft_phase_screen(self,layer.resolution,layer.D/layer.resolution,seed=i_layer)                    
             layer.initialPhase = layer.phase.copy()
             layer.seed = i_layer
             b=time.time()
