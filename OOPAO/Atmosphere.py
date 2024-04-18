@@ -559,9 +559,9 @@ class Atmosphere:
                 phase         = phaseScreen.scrn
             else:
                 if self.mode == 2:
-                    phase,PSD = ft_sh_phase_screen(self,tmpLayer.resolution,tmpLayer.D/tmpLayer.resolution,seed=seed+i_layer)
+                    phase = ft_sh_phase_screen(self,tmpLayer.resolution,tmpLayer.D/tmpLayer.resolution,seed=seed+i_layer)
                 else: 
-                    phase,PSD         = ft_phase_screen(self,tmpLayer.resolution,tmpLayer.D/tmpLayer.resolution,seed=seed+i_layer)
+                    phase         = ft_phase_screen(self,tmpLayer.resolution,tmpLayer.D/tmpLayer.resolution,seed=seed+i_layer)
             
             tmpLayer.phase = phase
             tmpLayer.randomState    = RandomState(seed+i_layer*1000)
