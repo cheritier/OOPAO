@@ -576,7 +576,6 @@ class Atmosphere:
             setattr(self,'layer_'+str(i_layer+1),tmpLayer )
             phase_support = self.fill_phase_support(tmpLayer,phase_support,i_layer)
         self.set_OPD(phase_support)
-        self.PSD = PSD
         if self.telescope.isPaired:
             self*self.telescope
 
