@@ -308,8 +308,6 @@ class Atmosphere:
                 [x_z,y_z] = pol2cart(layer.altitude*np.tan(self.telescope.src.coordinates[0]/206265) * layer.resolution / layer.D,np.deg2rad(self.telescope.src.coordinates[1]))
                 layer.extra_sx = x_z-int(x_z)
                 layer.extra_sy = y_z-int(y_z)
-                print(layer.extra_sx)
-                print(layer.extra_sy)
                 
                 center_x = int(y_z)+layer.resolution//2
                 center_y = int(x_z)+layer.resolution//2
@@ -351,7 +349,6 @@ class Atmosphere:
                 ratio = layer.ratio
             else:
                  ratio = shift    # shift in pixels
-            print(ratio)
             tmpRatio = np.abs(ratio)
             tmpRatio[np.isinf(tmpRatio)]=0
             nScreens = (tmpRatio)
