@@ -12,7 +12,7 @@ import numpy as np
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
 class Source:    
-    def __init__(self,optBand:str,magnitude:float,coordinates:list = [0,0],altitude:float = np.inf, laser_coordinates:list = [0,0] ,Na_profile:float = None,FWHM_spot_up:float = None,display_properties:bool=True):
+    def __init__(self,optBand:str,magnitude:float,coordinates:list = [0,0],altitude:float = np.inf, laser_coordinates:list = [0,0] ,Na_profile:float = None,FWHM_spot_up:float = None,display_properties:bool=True,chromatic_shift:list = None):
         """SOURCE
         A source object can be defined as a point source at infinite distance (NGS) or as a extended object
 
@@ -36,6 +36,8 @@ class Source:
             DESCRIPTION. The default is None.
         display_properties : bool, optional
             DESCRIPTION. The default is True.
+        chromatic_shift : list, optional
+            DESCRIPTION. The default is None.
 
         Returns
         -------
@@ -65,6 +67,7 @@ class Source:
         _ src.nPhoton   : number of photons per m2 per s. if this property is changed after the initialization, the magnitude is automatically updated to the right value. 
         _ src.fluxMap   : 2D map of the number of photons per pixel per frame (depends on the loop frequency defined by tel.samplingTime)  
         _ src.display_properties : display the properties of the src object
+        _ src.chromatic_shift : list of shift in arcesc to be applied to the pupil footprint at each layer of the atmosphere object. 
         
         The main properties of the object can be displayed using :
             src.print_properties()
@@ -99,7 +102,7 @@ class Source:
         self.altitude = altitude                                # altitude of the source object in m    
         self.coordinates = coordinates                          # polar coordinates [r,theta] 
         self.laser_coordinates = laser_coordinates              # Laser Launch Telescope coordinates in [m] 
-
+        self.chromatic_shift = chromatic_shift                             # shift in arcsec to be applied to the atmospheric phase screens (one value for each layer) to simulate a chromatic effect
         if Na_profile is not None and FWHM_spot_up is not None:
             self.Na_profile = Na_profile
             self.FWHM_spot_up = FWHM_spot_up
@@ -174,6 +177,7 @@ class Source:
         phot.I9     = [ 0.850e-6 , 0.300e-6 , 7.36e12 ]
         phot.I10    = [ 0.900e-6 , 0.300e-6 , 2.7e12 ]
         phot.J      = [ 1.215e-6 , 0.260e-6 , 1.9e12 ]
+        phot.J2     = [ 1.550e-6 , 0.260e-6 , 1.9e12 ]
         phot.H      = [ 1.654e-6 , 0.290e-6 , 1.1e12 ]
         phot.Kp     = [ 2.1245e-6 , 0.351e-6 , 6e11 ]
         phot.Ks     = [ 2.157e-6 , 0.320e-6 , 5.5e11 ]

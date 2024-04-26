@@ -305,9 +305,17 @@ class Atmosphere:
         for i_layer in range(self.nLayer):
             layer = getattr(self,'layer_'+str(i_layer+1)) 
             if self.asterism is None:
-                [x_z,y_z] = pol2cart(layer.altitude*np.tan(self.telescope.src.coordinates[0]/206265) * layer.resolution / layer.D,np.deg2rad(self.telescope.src.coordinates[1]))
-                layer.extra_sx = x_z-int(x_z)
-                layer.extra_sy = y_z-int(y_z)
+                if self.telescope.src.chromatic_shift is not None:                    
+                    if len(self.telescope.src.chromatic_shift) == self.nLayer:
+                        chromatic_shift = self.telescope.src.chromatic_shift[i_layer]
+                    else:
+                        raise ValueError('The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')    
+                    
+                else:
+                    chromatic_shift = 0
+                [x_z,y_z] = pol2cart(layer.altitude*np.tan((self.telescope.src.coordinates[0]+chromatic_shift)/206265) * layer.resolution / layer.D,np.deg2rad(self.telescope.src.coordinates[1]))
+                layer.extra_sx = int(x_z)-x_z
+                layer.extra_sy = int(y_z)-y_z
                 
                 center_x = int(y_z)+layer.resolution//2
                 center_y = int(x_z)+layer.resolution//2
@@ -718,8 +726,15 @@ class Atmosphere:
                     else:
                         r = h*np.tan(alpha_cone)
                     [x_cone,y_cone] = pol2cart(r, np.linspace(0,2*np.pi,100,endpoint=True))
+                    if list_src[i_source].chromatic_shift is not None:
+                        if len(list_src[i_source].chromatic_shift) == self.nLayer:
+                            chromatic_shift = list_src[i_source].chromatic_shift[i_l]
+                        else:
+                            raise ValueError('The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')                            
+                    else:
+                        chromatic_shift = 0
                     
-                    [x_z,y_z] = pol2cart(tmpLayer.altitude*np.tan(list_src[i_source].coordinates[0]/206265) ,np.deg2rad(list_src[i_source].coordinates[1]))
+                    [x_z,y_z] = pol2cart(tmpLayer.altitude*np.tan((list_src[i_source].coordinates[0]+chromatic_shift)/206265) ,np.deg2rad(list_src[i_source].coordinates[1]))
                     center = 0
                     [x_c,y_c] = pol2cart(tmpLayer.D_fov/2, np.linspace(0,2*np.pi,100,endpoint=True))  
                     nm = (list_src[i_source].type) +'@'+str(list_src[i_source].coordinates[0])+'"'
@@ -737,7 +752,16 @@ class Atmosphere:
                     r = h*np.tan(alpha_cone)
                 [x_cone,y_cone] = pol2cart(r, np.linspace(0,2*np.pi,100,endpoint=True))
                 
-                [x_z,y_z] = pol2cart(self.telescope.src.coordinates[0]*np.tan(self.telescope.src.coordinates[0]/206265) * tmpLayer.resolution / tmpLayer.D,np.deg2rad(self.telescope.src.coordinates[1]))
+                if self.telescope.src.chromatic_shift is not None:
+                    if len(self.telescope.src.chromatic_shift) == self.nLayer:
+                        chromatic_shift = self.telescope.src.chromatic_shift[i_l]
+                    else:
+                        raise ValueError('The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')        
+                else:
+                    chromatic_shift = 0
+                    
+                    
+                [x_z,y_z] = pol2cart((self.telescope.src.coordinates[0]+chromatic_shift)*np.tan((self.telescope.src.coordinates[0]+chromatic_shift)/206265) * tmpLayer.resolution / tmpLayer.D,np.deg2rad(self.telescope.src.coordinates[1]))
             
                 center = 0
                 [x_c,y_c] = pol2cart(tmpLayer.D_fov/2, np.linspace(0,2*np.pi,100,endpoint=True))  
