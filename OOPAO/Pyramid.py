@@ -48,11 +48,27 @@ except:
 #             mkl_set_num_threads = None
 class Pyramid:
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
-    def __init__(self,nSubap:float,telescope,modulation:float,lightRatio:float, postProcessing:str='slopesMaps',\
-                 psfCentering:bool = True, n_pix_separation:float = 2, calibModulation:float = 50, n_pix_edge:float = None,\
-                 extraModulationFactor:int = 0,zeroPadding:int = None, binning:int = 1,nTheta_user_defined:int = None,\
-                 userValidSignal:bool=None,old_mask:bool=False,rooftop:str = None,delta_theta:float = 0, user_modulation_path:list = None,\
-                 pupilSeparationRatio:float = None, edgePixel:int = None):
+    def __init__(self,
+                 nSubap:float,
+                 telescope,
+                 modulation:float,
+                 lightRatio:float,
+                 postProcessing:str='slopesMaps',
+                 psfCentering:bool = True,
+                 n_pix_separation:float = 2,
+                 calibModulation:float = 50,
+                 n_pix_edge:float = None,
+                 extraModulationFactor:int = 0,
+                 binning:int = 1,
+                 nTheta_user_defined:int = None,
+                 userValidSignal:bool=None,
+                 old_mask:bool=False,
+                 rooftop:str = None,
+                 delta_theta:float = 0,
+                 user_modulation_path:list = None,
+                 pupilSeparationRatio:float = None,
+                 edgePixel:int = None,
+                 zeroPadding:int = None):
         """ PYRAMID
         A Pyramid object consists in defining a 2D phase mask located at the focal plane of the telescope to perform the Fourier Filtering of the EM-Field. 
         By default the Pyramid detector is considered to be noise-free (for calibration purposes). These properties can be switched on and off on the fly (see properties)
@@ -85,10 +101,6 @@ class Pyramid:
         extraModulationFactor : int, optional
             Extra Factor to increase/reduce the number of modulation point (extraModulationFactor = 1 means 4 modulation points added, 1 for each quadrant).
             The default is 0.
-        zeroPadding : int, optional
-            User-defined zero-padding value in pixels that will be added to each side of the arrays. 
-            Consider using the n_pix_edge parameter that allows to do the same thing.
-            The default is None.
         binning : int, optional
             binning factor of the PWFS detector signals.
             The default is 1.
@@ -115,6 +127,10 @@ class Pyramid:
             The default is None.
         edgePixel : int, optional
             DEPRECIATED -- number of pixel at the edge of the Pyramid Pupils.
+            The default is None.
+        zeroPadding : int, optional
+            DEPRECIATED -- User-defined zero-padding value in pixels that will be added to each side of the arrays. 
+            Consider using the n_pix_edge parameter that allows to do the same thing.
             The default is None.
 
         Raises
@@ -207,24 +223,11 @@ class Pyramid:
         self.pupilSeparationRatio       = pupilSeparationRatio                              # Separation ratio of the PWFS pupils (Diameter/Distance Center to Center) -- DEPRECIATED -> use n_pix_separation instead)
         self.weight_vector = None
         if edgePixel is not None:
-            print('WARNING: The use of the edgePixel property has been depreciated. Consider using the n_pix_edge instead')
+            raise AttributeError('The use of the edgePixel property has been depreciated. Consider using n_pix_edge instead')
         if pupilSeparationRatio is not None:
-            print('WARNING: The use of the pupilSeparationRatio property has been depreciated. Consider using the n_pix_separation instead')
-            # backward compatibility
-            if np.isscalar(self.pupilSeparationRatio):
-                self.n_pix_separation = (self.pupilSeparationRatio-1)*self.nSubap
-                self.sx               = [0,0,0,0]
-                self.sy               = [0,0,0,0]
-            else:
-                self.n_pix_separation = 0
-                self.sx               = []
-                self.sy               = []
-                for i in range(4):                    
-                    self.sx.append((self.pupilSeparationRatio[i][0]-1)*self.nSubap)
-                    self.sy.append((self.pupilSeparationRatio[i][1]-1)*self.nSubap)
+            raise AttributeError('The use of the pupilSeparationRatio property has been depreciated. Consider using n_pix_separation instead')
         else:
             self.n_pix_separation       = n_pix_separation 
-            self.pupilSeparationRatio   = 1+self.n_pix_separation/self.nSubap
             self.sx                     = [0,0,0,0]
             self.sy                     = [0,0,0,0]
         if n_pix_edge is None:
@@ -239,24 +242,16 @@ class Pyramid:
             self.joblib_setting             = 'threads'
         self.rooftop                    = rooftop      
 
-        if zeroPadding is None:
-            # Case where the zero-padding is not specificed => taking the smallest value ensuring to get edgePixel space from the edge.
-            self.nRes               = int((self.nSubap*2+self.n_pix_separation+self.n_pix_edge*2)*self.telescope.resolution/self.nSubap)
-            self.zeroPaddingFactor  = self.nRes/self.telescope.resolution                                    # zero-Padding Factor
-            self.zeroPadding        = (self.nRes - self.telescope.resolution)//2                             # zero-Padding Factor
-        else:
-            # Case where the zero-padding is specificed => making sure that the value is large enough to display the PWFS pupils
-            self.zeroPadding = zeroPadding
-            if np.max(self.pupilSeparationRatio)<=2*self.zeroPadding/self.telescope.resolution:    
-                self.nRes = int(2*(self.zeroPadding)+self.telescope.resolution)                                 # Resolution of the zero-padded images
-                self.zeroPaddingFactor = self.nRes/self.telescope.resolution                                    # zero-Padding Factor
-            else:
-                raise ValueError('Error: The Separation of the pupils is too large for this value of zeroPadding!')
-
+        if zeroPadding is not None:
+            raise AttributeError('The use of the zeroPadding property has been depreciated')
+        # Case where the zero-padding is not specificed => taking the smallest value ensuring to get edgePixel space from the edge.
+        self.nRes               = int((self.nSubap*2+self.n_pix_separation+self.n_pix_edge*2)*self.telescope.resolution/self.nSubap)
+        self.zeroPaddingFactor  = self.nRes/self.telescope.resolution                                    # zero-Padding Factor
+        self.zeroPadding        = (self.nRes - self.telescope.resolution)//2                             # zero-Padding Factor
         self.tag                        = 'pyramid'                                                          # Tag of the object 
-        self.cam                        = Detector(round(nSubap*self.zeroPaddingFactor))                     # WFS detector object
-        self.focal_plane_camera         = Detector(self.nRes)                     # WFS detector object
-        self.lightRatio                 = lightRatio + 0.001                      # Light ratio for the valid pixels selection 23/09/2022 cth: 0.001 added for backward compatibility
+        self.cam                        = Detector(round(nSubap*self.zeroPaddingFactor))                     # WFS detector object (see Detector class)
+        self.focal_plane_camera         = Detector(self.nRes)                                                # WFS focal plane detector object (see Detector class)
+        self.lightRatio                 = lightRatio
         if calibModulation>= self.telescope.resolution/2:
             self.calibModulation            = self.telescope.resolution/2 -1
         else:                                             
@@ -313,7 +308,6 @@ class Pyramid:
         self.wfs_calibration(self.telescope)
         self.telescope.resetOPD()
         self.wfs_measure(phase_in=self.telescope.src.phase)
-        
         self.print_properties()
         
 ## %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS INITIALIZATION PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
@@ -383,7 +377,6 @@ class Pyramid:
             
             # create a Tip/Tilt combination for each quadrant
             [Tip,Tilt]                   = np.meshgrid(np.linspace(-lim,lim,n_tot//2),np.linspace(-lim,lim,n_tot//2))
-        
             m[:n_tot//2 ,:n_tot//2  ]   =  Tip * (1- sx[0]/(n_subap+n_pix_separation/2))*norma   +  Tilt * (1- sy[0]/(n_subap+n_pix_separation/2))*norma
             m[:n_tot//2 ,-n_tot//2: ]   = -Tip * (1+ sx[1]/(n_subap+n_pix_separation/2))*norma   +  Tilt * (1- sy[1]/(n_subap+n_pix_separation/2))*norma
             m[-n_tot//2 :,-n_tot//2:]   = -Tip * (1+ sx[2]/(n_subap+n_pix_separation/2))*norma   + -Tilt * (1+ sy[2]/(n_subap+n_pix_separation/2))*norma
@@ -400,7 +393,6 @@ class Pyramid:
             [Tip_2,Tilt_2]                   = np.meshgrid(np.linspace(-lim_p,lim_p,n_tot//2 +1),np.linspace(-lim_m,lim_m,n_tot//2 -1))        
             [Tip_3,Tilt_3]                   = np.meshgrid(np.linspace(-lim_m,lim_m,n_tot//2 -1),np.linspace(-lim_m,lim_m,n_tot//2 -1))
             [Tip_4,Tilt_4]                   = np.meshgrid(np.linspace(-lim_m,lim_m,n_tot//2 -1),np.linspace(-lim_p,lim_p,n_tot//2 +1))
-                
             m[:n_tot//2 +1,:n_tot//2+1]     =  Tip_1 * (1- sx[0]/(n_subap+n_pix_separation/2))*norma   +  Tilt_1 * (1- sy[0]/(n_subap+n_pix_separation/2))*norma
             m[:n_tot//2 +1,-n_tot//2+1:]    = -Tip_4 * (1+ sx[1]/(n_subap+n_pix_separation/2))*norma   +  Tilt_4 * (1- sy[1]/(n_subap+n_pix_separation/2))*norma
             m[-n_tot//2 +1:,-n_tot//2 +1:]  = -Tip_3 * (1+ sx[2]/(n_subap+n_pix_separation/2))*norma   + -Tilt_3 * (1+ sy[2]/(n_subap+n_pix_separation/2))*norma
@@ -458,7 +450,7 @@ class Pyramid:
     def wfs_calibration(self,telescope):
         # reference slopes acquisition 
         telescope.OPD = telescope.pupil.astype(float)
-        # compute the refrence slopes
+        # compute the refrence signals
         self.wfs_measure(phase_in=self.telescope.src.phase)
         self.referenceSignal_2D,self.referenceSignal = self.signalProcessing()
       
@@ -500,7 +492,7 @@ class Pyramid:
             I               = np_cp.abs(em_field_pwfs)**2
         del support
         del em_field_pwfs
-        self.modulation_camera_em.append(self.convert_for_numpy(em_field_ft))
+        self.modulation_camera_em.append(self.convert_for_numpy(em_field_ft)/em_field_ft.shape[0])
 
         del em_field_ft
         del phase_in        
@@ -520,7 +512,7 @@ class Pyramid:
         if phase_in is not None:
             self.telescope.src.phase = phase_in
         # mask amplitude for the light propagation
-        self.maskAmplitude = self.convert_for_gpu(self.telescope.pupilReflectivity)
+        self.maskAmplitude = self.convert_for_gpu(np.sqrt(self.telescope.src.fluxMap/self.nTheta)*self.telescope.pupilReflectivity)
         
         if self.spatialFilter is not None:
             if np.ndim(phase_in)==2:
@@ -530,7 +522,7 @@ class Pyramid:
                 self.em_field_spatial_filter       = (np.fft.fft2(support_spatial_filter*self.phasor))
                 self.pupil_plane_spatial_filter    = (np.fft.ifft2(self.em_field_spatial_filter*self.spatialFilter))
 
-        # modulation camera
+        # initialize modulation camera em field buffer
         self.modulation_camera_em=[]
 
         if self.modulation==0:
@@ -587,7 +579,7 @@ class Pyramid:
                                 return Q 
                             maps+=self.convert_for_numpy(np_cp.sum(np_cp.asarray(job_loop_single_mode_modulated()),axis=0))
                     self.maps = maps.copy()
-                    self.pyramidFrame=maps/self.nTheta
+                    self.pyramidFrame=maps
                     del maps
                 else:
                     #define the parallel jobs
@@ -598,14 +590,12 @@ class Pyramid:
                     self.maps=np_cp.asarray(job_loop_single_mode_modulated())
                     # compute the sum of the pyramid frames for each modulation points
                     if self.weight_vector is None:
-                        self.pyramidFrame=self.convert_for_numpy(np_cp.sum((self.maps),axis=0))/self.nTheta
+                        self.pyramidFrame=self.convert_for_numpy(np_cp.sum((self.maps),axis=0))
                     else:
                         weighted_map = np.reshape(self.maps,[self.nTheta,self.nRes**2])
                         self.weighted_map = np.diag(self.weight_vector)@weighted_map
                         self.pyramidFrame= np.reshape(self.convert_for_numpy(np_cp.sum((self.weighted_map),axis=0))/self.nTheta,[self.nRes,self.nRes])
-                        
-
-                #propagate to the detector
+                #propagate to the detector to apply the noise
                 self*self.cam
                 
                 if self.isInitialized and self.isCalibrated:
@@ -619,7 +609,6 @@ class Pyramid:
                     def jobLoop_setPhaseBuffer():
                         Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.setPhaseBuffer)(i) for i in self.phase_buffer)
                         return Q                   
-                    
                     self.phaseBuffer    = (np.reshape(np.asarray(jobLoop_setPhaseBuffer()),[nModes*self.nTheta,self.telescope.resolution,self.telescope.resolution]))
                     n_measurements      = nModes*self.nTheta
                     n_max               = self.n_max
@@ -665,7 +654,7 @@ class Pyramid:
                     self.pyramidSignal        = np.zeros([self.nSignal,nModes])
                     
                     for i in range(nModes):
-                        self.pyramidFrame = np_cp.sum(self.bufferPyramidFrames[i*(self.nTheta):(self.nTheta)+i*(self.nTheta)],axis=0)/self.nTheta
+                        self.pyramidFrame = np_cp.sum(self.bufferPyramidFrames[i*(self.nTheta):(self.nTheta)+i*(self.nTheta)],axis=0)
                         self*self.cam
                         if self.isInitialized:
                             self.pyramidSignal_2D[:,:,i],self.pyramidSignal[:,i] = self.signalProcessing()                   
@@ -775,7 +764,7 @@ class Pyramid:
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% GRAB QUADRANTS FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def grabQuadrant(self,n,cameraFrame=None):
         
-        nExtraPix   = int(np.round((np.max(self.pupilSeparationRatio)-1)*self.telescope.resolution/(self.telescope.resolution/self.nSubap)/2/self.binning))
+        nExtraPix   = int(np.round((self.n_pix_separation/self.nSubap)*self.telescope.resolution/(self.telescope.resolution/self.nSubap)/2/self.binning))
         centerPixel = int(np.round((self.cam.resolution/self.binning)/2))
         n_pixels    = int(np.ceil(self.nSubap/self.binning))
         if cameraFrame is None:
@@ -809,6 +798,23 @@ class Pyramid:
                     I=cameraFrame[(self.edgePixel//2):(self.edgePixel//2 +n_pixels),centerPixel-n_pixels//2:(centerPixel)+n_pixels//2]
                 if n==3:
                     I=cameraFrame[(self.edgePixel//2 +n_pixels+nExtraPix*2):(self.edgePixel//2+nExtraPix*2+2*n_pixels),centerPixel-n_pixels//2:(centerPixel)+n_pixels//2]
+        return I
+    
+    def grabFullQuadrant(self,n,cameraFrame=None):
+    
+        n_tot = self.cam.resolution
+        
+        if cameraFrame is None:
+            cameraFrame=self.cam.frame.copy()
+            
+        if n==3:
+            I=cameraFrame[:n_tot//2 ,:n_tot//2]
+        if n==4:
+            I=cameraFrame[:n_tot//2 ,-n_tot//2:]
+        if n==1:
+            I=cameraFrame[-n_tot//2 :,-n_tot//2:]
+        if n==2:
+            I=cameraFrame[-n_tot//2 :,:n_tot//2 ]
         return I
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -971,19 +977,18 @@ class Pyramid:
     
     def __mul__(self,obj): 
         if obj.tag=='detector':
-            
+            obj._integrated_time+=self.telescope.samplingTime
             if obj.resolution == self.nRes:
-                    frame = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)                
+                frame = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)                
             else:
-                    I = self.pyramidFrame
-                    frame = (obj.rebin(I,(obj.resolution,obj.resolution)))
+                I = self.pyramidFrame
+                frame = (obj.set_binning(I,self.nRes/obj.resolution))
+
             if self.binning != 1:
                 try:
                     frame = (obj.rebin(obj.frame,(obj.resolution//self.binning,obj.resolution//self.binning)))    
                 except:
                     print('ERROR: the shape of the detector ('+str(obj.frame.shape)+') is not valid with the binning value requested:'+str(self.binning)+'!')
-            frame = frame *(self.telescope.src.fluxMap.sum())/frame.sum()
-            
             obj.integrate(frame)
 
         else:
@@ -1007,7 +1012,6 @@ class Pyramid:
                     else:
                         if np.ndim(a[1])>1:
                             print('          '+str(a[0])+': '+str(np.shape(a[1])))    
-
 
     def print_properties(self):
         
