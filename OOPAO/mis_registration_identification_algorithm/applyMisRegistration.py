@@ -26,11 +26,11 @@ def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis
             # case synthetic DM - with user-defined coordinates
             try:
                 if param['dm_coordinates'] is None:
-                    coordinates = 0
+                    coordinates = None
                 else:
                     coordinates = param['dm_coordinates'] 
             except:
-                coordinates = 0
+                coordinates = None
                 
             
                 
