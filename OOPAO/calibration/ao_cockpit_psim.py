@@ -114,7 +114,7 @@ def vectorifyb(array,idxpup,NPRO=100):
     my1 = []
     for k in range(0,nact):
         my1.append(k)
-    result_=Parallel(n_jobs=NPRO,prefer="threads",verbose=10)(delayed(func_vectorifyb_s)(i) for i in my1)
+    result_=Parallel(n_jobs=NPRO,prefer="threads",verbose=0)(delayed(func_vectorifyb_s)(i) for i in my1)
     return array_
 
                   
@@ -1372,7 +1372,7 @@ def PSD_TAYLOR_RV(kls_2d,dxo,R0=None,Vx=None,axe=None,PSD_atmt=None,dft=None,nsp
 
     ## EXECUTION
     st=time.time()
-    result_=Parallel(n_jobs=N_PROCS,prefer="threads",verbose=10)(delayed(TEMPO_TAYLOR_)(i,j,k) for i,j,k in zip(my1,my2,my3) )
+    result_=Parallel(n_jobs=N_PROCS,prefer="threads",verbose=0)(delayed(TEMPO_TAYLOR_)(i,j,k) for i,j,k in zip(my1,my2,my3) )
     et=time.time()-st
     print('ELAPSED TIME FOR TAY LOR PSD COMUTATION:',et)
     #pdb.set_trace()
@@ -1466,7 +1466,7 @@ def PSD_TAYLOR_noRV(kls_2d,dxo,R0=None,Vx=None,axe=None,PSD_atmt=None,dft=None,n
 
    #  ## EXECUTION
     st=time.time()
-    result_a=Parallel(n_jobs=N_PROCS,prefer="threads",verbose=10)(delayed(TEMPO_TAYLOR_)(i,j,k) for i,j,k in zip(my1,my2,my3) )
+    result_a=Parallel(n_jobs=N_PROCS,prefer="threads",verbose=0)(delayed(TEMPO_TAYLOR_)(i,j,k) for i,j,k in zip(my1,my2,my3) )
     et=time.time()-st
     print('ELAPSED TIME FOR TAY LOR PSD COMUTATION:',et)
     #pdb.set_trace()
@@ -2153,7 +2153,7 @@ def PROD_FT_PSD(kls_2d,dxo,PSD_atmt=None,dft=None,nsplit=None,SZt=None,N_PROCS =
     ## EXECUTION
 
     st=time.time()
-    result_=Parallel(n_jobs=N_PROCS,prefer="threads",verbose=10)(delayed(PROD_FT_DSP_)(i,j) for i,j in zip(my1,my2) )
+    result_=Parallel(n_jobs=N_PROCS,prefer="threads",verbose=0)(delayed(PROD_FT_DSP_)(i,j) for i,j in zip(my1,my2) )
     et=time.time()-st
     WGS=np.zeros([SZt,SZt,nmo],dtype=np.float64)
     for k in range(0,nmo):
