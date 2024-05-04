@@ -8,7 +8,14 @@ import numpy as np
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 class NCPA:
     
-    def __init__(self, tel, dm, atm, modal_basis='KL', coefficients = None, f2=None, seed=5):
+    def __init__(self, 
+                 tel,
+                 dm,
+                 atm,
+                 modal_basis='KL',
+                 coefficients = None,
+                 f2=None,
+                 seed=5):
         """
         ************************** REQUIRED PARAMETERS **************************
         

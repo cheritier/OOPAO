@@ -23,7 +23,17 @@ from .tools.tools import createFolder, emptyClass, globalTransformation, pol2car
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 class Atmosphere:
-    def __init__(self,telescope,r0:float,L0:float,windSpeed:list,fractionalR0:list,windDirection:list,altitude:list,mode:float=2, param = None, asterism = None):
+    def __init__(self,
+                 telescope,
+                 r0:float,
+                 L0:float,
+                 windSpeed:list,
+                 fractionalR0:list,
+                 windDirection:list,
+                 altitude:list,
+                 mode:float=2,
+                 param = None,
+                 asterism = None):
         """ ATMOSPHERE.
         An Atmosphere is made of one or several layer of turbulence that follow the Van Karmann statistics. 
         Each layer is considered to be independant to the other ones and has its own properties (direction, speed, etc.)

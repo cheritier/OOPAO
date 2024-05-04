@@ -12,7 +12,16 @@ import numpy as np
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
 class Source:    
-    def __init__(self,optBand:str,magnitude:float,coordinates:list = [0,0],altitude:float = np.inf, laser_coordinates:list = [0,0] ,Na_profile:float = None,FWHM_spot_up:float = None,display_properties:bool=True,chromatic_shift:list = None):
+    def __init__(self,
+                 optBand:str,
+                 magnitude:float,
+                 coordinates:list = [0,0],
+                 altitude:float = np.inf, 
+                 laser_coordinates:list = [0,0],
+                 Na_profile:float = None,
+                 FWHM_spot_up:float = None,
+                 display_properties:bool=True,
+                 chromatic_shift:list = None):
         """SOURCE
         A source object can be defined as a point source at infinite distance (NGS) or as a extended object
 

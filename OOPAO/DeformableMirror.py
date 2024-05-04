@@ -37,7 +37,20 @@ from .tools.tools import emptyClass, pol2cart, print_
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
 class DeformableMirror:
-    def __init__(self,telescope,nSubap:float,mechCoupling:float = 0.35, coordinates:np.ndarray = None, pitch:float = None, modes:np.ndarray = None, misReg = None, M4_param = None, nJobs:int = 30, nThreads:int = 20,print_dm_properties:bool = True,floating_precision:int = 64, altitude:float = None ):
+    def __init__(self,
+                 telescope,
+                 nSubap:float,
+                 mechCoupling:float = 0.35,
+                 coordinates:np.ndarray = None,
+                 pitch:float = None,
+                 modes:np.ndarray = None,
+                 misReg = None,
+                 M4_param = None,
+                 nJobs:int = 30,
+                 nThreads:int = 20,
+                 print_dm_properties:bool = True,
+                 floating_precision:int = 64,
+                 altitude:float = None):
         """DEFORMABLE MIRROR
         A Deformable Mirror object consists in defining the 2D maps of influence functions of the actuators. 
         By default, the actuator grid is cartesian in a Fried Geometry with respect to the nSubap parameter. 
