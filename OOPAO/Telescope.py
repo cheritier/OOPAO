@@ -16,8 +16,14 @@ from OOPAO.tools import *
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 class Telescope:
     
-    def __init__(self,resolution:float, diameter:float,samplingTime:float=0.001,centralObstruction:float = 0,fov:float = 0,\
-                 pupil:bool=None,pupilReflectivity:float=1,display_optical_path:bool = False):
+    def __init__(self,resolution:float,
+                 diameter:float,
+                 samplingTime:float=0.001,
+                 centralObstruction:float = 0,
+                 fov:float = 0,
+                 pupil:bool=None,
+                 pupilReflectivity:float=1,
+                 display_optical_path:bool = False):
         """TELESCOPE
         A Telescope object consists in defining the 2D mask of the entrance pupil.
         The Telescope is a central object in OOPAO:
@@ -244,30 +250,41 @@ class Telescope:
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF COMPUTATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
 
-    def computePSF(self,zeroPaddingFactor=2, N_crop = None):
+    def computePSF(self,zeroPaddingFactor=2, N_crop = None,detector = None):
         if self.src is None:
-            raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')            # number of pixel considered 
-        N       = int(zeroPaddingFactor * self.resolution)        
-        center  = N//2           
+            raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')   
+        
+        # if self.spatialFilter is not None:
+        #     self.spatialFilter.set_spatial_filter(zeroPaddingFactor = zeroPaddingFactor)
+        #     mask = np.fft.fftshift(self.spatialFilter.mask)
+        #     amp_mask = self.amplitude_filtered
+        #     phase = self.phase_filtered
+        # else:
+        mask     = 1
+        amp_mask = 1
+        phase    = self.src.phase
+        em_field = amp_mask*self.pupil*self.pupilReflectivity*np.sqrt(self.src.fluxMap)*np.exp(1j*phase)   
+        
+        
+        # zeroPadded em_field for the FFT
+
+        if detector is None:
+            sx, sy = em_field.shape
+            pad_x = int(np.round((sx * (zeroPaddingFactor-1)) / 2))
+            pad_y = int(np.round((sy * (zeroPaddingFactor-1)) / 2))
+            em_field_padded = np.pad(em_field, (pad_x,pad_y))
+            
+        else:
+            em_field_padded = detector.set_sampling(array = em_field)
+                        
+            
+        # number of pixel considered 
+        N       = em_field_padded.shape[0]        
         norma   = N
         
-        if self.spatialFilter is not None:
-            self.spatialFilter.set_spatial_filter(zeroPaddingFactor = zeroPaddingFactor)
-            mask = self.spatialFilter.mask
-            amp_mask = self.amplitude_filtered
-            phase = self.phase_filtered
-        else:
-            mask = 1
-            amp_mask = 1
-            phase = self.src.phase
-            
-        # zeroPadded support for the FFT
-        supportPadded = np.zeros([N,N],dtype='complex')
-        supportPadded [center-self.resolution//2:center+self.resolution//2,center-self.resolution//2:center+self.resolution//2] = amp_mask*self.pupil*self.pupilReflectivity*np.sqrt(self.src.fluxMap)*np.exp(1j*phase)
+        # define phasor to center PSF on 4 pixels
         [xx,yy]                         = np.meshgrid(np.linspace(0,N-1,N),np.linspace(0,N-1,N))
         self.phasor                     = np.exp(-(1j*np.pi*(N+1)/N)*(xx+yy))
-
-
 
         # axis in arcsec
         self.xPSF_arcsec       = [-206265*(self.src.wavelength/self.D) * (self.resolution/2), 206265*(self.src.wavelength/self.D) * (self.resolution/2)]
@@ -279,9 +296,9 @@ class Telescope:
         
         # PSF computation
         if self.spatialFilter is not None:
-            self.PSF        = np.fft.fftshift(np.abs(np.fft.fft2(supportPadded)*mask/norma)**2)            
+            self.PSF        = np.fft.fftshift(np.abs(np.fft.fft2(em_field_padded)*mask/norma)**2)            
         else:
-            self.PSF        = (np.abs(np.fft.fft2(supportPadded*self.phasor)*mask/norma)**2)            
+            self.PSF        = (np.abs(np.fft.fft2(em_field_padded*self.phasor)*mask/norma)**2)            
         self.PSF_norma  = self.PSF/self.PSF.max()   
         if N_crop is None:
             N_crop = int(np.floor(2*N/6))
@@ -406,20 +423,24 @@ class Telescope:
                 if self.display_optical_path is True:
                     self.print_optical_path()
                 self.optical_path = self.optical_path[:-1]
-
-
                 if type(self.OPD) is list:
                     raise ValueError('Error! There is a mis-match between the number of Sources ('+str(len(self.OPD))+') and the number of WFS (1)')
                 else:
                     obj.telescope=self              # assign the telescope object to the pyramid-telescope object
                     obj.wfs_measure(phase_in = self.src.phase)               # propagation of the telescope-source phase screen to the pyramid-detector
-            # interaction with detector: computation of the PSF
+
             if obj.tag=='detector':
                 if self.optical_path[-1] != obj.tag: 
                     self.optical_path.append([obj.tag,id(obj)])
 
-                self.computePSF()
-                obj.frame = obj.rebin(self.PSF,(obj.resolution,obj.resolution))
+                self.computePSF(detector = obj)
+                if obj.integrationTime is not None:
+                    if obj.integrationTime < self.samplingTime:
+                        raise ValueError('The Detector integration time is smaller than the AO loop sampling Time. ')
+                obj._integrated_time += self.samplingTime 
+                obj.integrate(self.PSF)
+                
+                self.PSF = obj.frame
          
             if obj.tag=='OPD_map':
                 self.optical_path.append([obj.tag,id(obj)])
