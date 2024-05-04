@@ -35,9 +35,17 @@ except:
 
 
 class ShackHartmann:
-    def __init__(self,nSubap:float,telescope,lightRatio:float,threshold_cog:float = 0.01,\
-                 is_geometric:bool = False, binning_factor:int = 1,padding_extension_factor:int = 1,\
-                     threshold_convolution:float = 0.05,shannon_sampling:bool = False,unit_P2V = False):
+    def __init__(self,nSubap:float,
+                 telescope,
+                 lightRatio:float,
+                 threshold_cog:float = 0.01,
+                 is_geometric:bool = False, 
+                 binning_factor:int = 1,
+                 padding_extension_factor:int = 1,
+                 threshold_convolution:float = 0.05,
+                 shannon_sampling:bool = False,
+                 unit_P2V = False):
+        
         """SHACK-HARTMANN
         A Shack Hartmann object consists in defining a 2D grd of lenslet arrays located in the pupil plane of the telescope to estimate the local tip/tilt seen by each lenslet. 
         By default the Shack Hartmann detector is considered to be noise-free (for calibration purposes). These properties can be switched on and off on the fly (see properties)
@@ -210,21 +218,14 @@ class ShackHartmann:
             for j in range(self.nSubap):
                 self.index_x.append(i)
                 self.index_y.append(j)
-
         self.current_nPhoton = self.telescope.src.nPhoton
         self.index_x = np.asarray(self.index_x)
-        self.index_y = np.asarray(self.index_y)
-        
+        self.index_y = np.asarray(self.index_y)        
         print('Selecting valid subapertures based on flux considerations..')
-
         self.photon_per_subaperture_2D = np.reshape(self.photon_per_subaperture,[self.nSubap,self.nSubap])
-                
         self.valid_subapertures = np.reshape(self.photon_per_subaperture >= self.lightRatio*np.max(self.photon_per_subaperture), [self.nSubap,self.nSubap])
-        
         self.valid_subapertures_1D = np.reshape(self.valid_subapertures,[self.nSubap**2])
-
         [self.validLenslets_x , self.validLenslets_y] = np.where(self.photon_per_subaperture_2D >= self.lightRatio*np.max(self.photon_per_subaperture))
-        
         # index of valid slopes X and Y
         self.valid_slopes_maps = np.concatenate((self.valid_subapertures,self.valid_subapertures))
         
@@ -342,6 +343,15 @@ class ShackHartmann:
         else:
             self.camera_frame[index_frame,ind_x*self.n_pix_subap//self.binning_factor:(ind_x+1)*self.n_pix_subap//self.binning_factor,ind_y*self.n_pix_subap//self.binning_factor:(ind_y+1)*self.n_pix_subap//self.binning_factor] = I
 
+    def split_camera_frame(self):
+        camera_frame_h_split = np.vsplit((self.cam.frame),self.nSubap)
+        self.maps_intensity = np.zeros([self.nSubap**2,self.n_pix_subap,self.n_pix_subap],dtype=float)
+        center = self.n_pix_subap//2
+        for i in range(self.nSubap):
+            camera_frame_v_split = np.hsplit(camera_frame_h_split[i],self.nSubap)
+            self.maps_intensity[i*self.nSubap:(i+1)*self.nSubap,center - self.n_pix_subap//self.binning_factor//2:center+self.n_pix_subap//self.binning_factor//2,center - self.n_pix_subap//self.binning_factor//2:center+self.n_pix_subap//self.binning_factor//2] = np.asarray(camera_frame_v_split)
+        self.maps_intensity = self.maps_intensity[self.valid_subapertures_1D,:,:]
+ 
     def compute_camera_frame_multi(self,maps_intensity):   
         self.ind_frame =np.zeros(maps_intensity.shape[0],dtype=(int))
         self.maps_intensity = maps_intensity
@@ -516,11 +526,8 @@ class ShackHartmann:
 
                 else:
                     phase = self.telescope.phase_filtered   
-                    self.initialize_flux(self.telescope.amplitude_filtered.T*self.telescope.src.fluxMap.T)
-                    
-                        
+                    self.initialize_flux(self.telescope.amplitude_filtered.T*self.telescope.src.fluxMap.T)                    
                 I = (np.abs(np.fft.fft2(np.asarray(self.get_lenslet_em_field(phase)),axes=[1,2])/norma)**2)
-                
                 # reduce to valid subaperture
                 I = I[self.valid_subapertures_1D,:,:]
                 
@@ -542,27 +549,33 @@ class ShackHartmann:
                 # Crop to get the spot at shannon sampling
                 if self.shannon_sampling:
                     self.maps_intensity =  I[:,self.n_pix_subap//2:-self.n_pix_subap//2,self.n_pix_subap//2:-self.n_pix_subap//2]
-                    if self.binning_factor>1:
-                        self.maps_intensity =  bin_ndarray(self.maps_intensity,[self.maps_intensity.shape[0], self.n_pix_subap//self.binning_factor,self.n_pix_subap//self.binning_factor], operation='sum')
+               
+                if self.binning_factor>1:
+                    self.maps_intensity =  bin_ndarray(self.maps_intensity,[self.maps_intensity.shape[0], self.n_pix_subap//self.binning_factor,self.n_pix_subap//self.binning_factor], operation='sum')
                 else:
                     self.maps_intensity =  bin_ndarray(I,[I.shape[0], self.n_pix_subap//self.binning_factor,self.n_pix_subap//self.binning_factor], operation='sum')
-
                 # bin the 2D spots intensity to get the desired number of pixel per subaperture
                 if self.binning_factor>1:
                     self.maps_intensity =  bin_ndarray(self.maps_intensity,[self.maps_intensity.shape[0], self.n_pix_subap//self.binning_factor,self.n_pix_subap//self.binning_factor], operation='sum')
-            
-                # add photon/readout noise to 2D spots
-                if self.cam.photonNoise!=0:
-                    self.maps_intensity  = self.random_state_photon_noise.poisson(self.maps_intensity)
-                        
-                if self.cam.readoutNoise!=0:
-                    self.maps_intensity += np.int64(np.round(self.random_state_readout_noise.randn(self.maps_intensity.shape[0],self.maps_intensity.shape[1],self.maps_intensity.shape[2])*self.cam.readoutNoise))
-                
+               
                 # fill camera frame with computed intensity (only valid subapertures)
                 def joblib_fill_camera_frame():
                     Q=Parallel(n_jobs=1,prefer='processes')(delayed(self.fill_camera_frame)(i,j,k) for i,j,k in zip(self.index_x[self.valid_subapertures_1D],self.index_y[self.valid_subapertures_1D],self.maps_intensity))
                     return Q
                 joblib_fill_camera_frame()
+                # propagate to detector to add noise and detector effects
+                self*self.cam
+                self.split_camera_frame()
+                
+                # # add photon/readout noise to 2D spots
+                # if self.cam.photonNoise!=0:
+                #     self.maps_intensity  = self.random_state_photon_noise.poisson(self.maps_intensity)
+                        
+                # if self.cam.readoutNoise!=0:
+                #     self.maps_intensity += np.int64(np.round(self.random_state_readout_noise.randn(self.maps_intensity.shape[0],self.maps_intensity.shape[1],self.maps_intensity.shape[2])*self.cam.readoutNoise))
+
+                # self.maps_intensity 
+       
 
                 # compute the centroid on valid subaperture
                 self.centroid_lenslets = self.centroid(self.maps_intensity,self.threshold_cog)
@@ -713,7 +726,6 @@ class ShackHartmann:
             if self.isInitialized:
                 print('Re-initializing WFS...')
                 self.initialize_wfs()
-            
     @property
     def C(self):
         return self._C
@@ -757,7 +769,9 @@ class ShackHartmann:
 
     def __mul__(self,obj): 
         if obj.tag=='detector':
-            obj.frame = self.camera_frame
+            obj._integrated_time+=self.telescope.samplingTime
+            obj.integrate(self.camera_frame)
+            self.camera_frame = obj.frame
         else:
             print('Error light propagated to the wrong type of object')
         return -1
