@@ -445,10 +445,7 @@ class Atmosphere:
                 pixel_size_in   = 1
                 pixel_size_out  = 1
                 resolution_out  = _im.shape[0]
-                
-
                 _im = np.squeeze(interpolate_image(_im, pixel_size_in, pixel_size_out, resolution_out,shift_x =tmpLayer.extra_sx, shift_y= tmpLayer.extra_sy  ))
-
                     
             phase_support+= np.reshape(_im[np.where(tmpLayer.pupil_footprint==1)],[self.telescope.resolution,self.telescope.resolution])* np.sqrt(self.fractionalR0[i_layer])
         else:
@@ -654,7 +651,7 @@ class Atmosphere:
                 phase_support = self.initialize_phase_support()
                 for i_layer in range(self.nLayer):
                     tmpLayer = getattr(self,'layer_'+str(i_layer+1))
-                    self.updateLayer(tmpLayer,shift = [tmpLayer.extra_sx,tmpLayer.extra_sy])
+                    # self.updateLayer(tmpLayer,shift = [tmpLayer.extra_sx,tmpLayer.extra_sy])
                     phase_support = self.fill_phase_support(tmpLayer, phase_support, i_layer)
                 self.set_OPD(phase_support)
             
@@ -685,14 +682,10 @@ class Atmosphere:
             raise TypeError(' layer_index should be a list') 
         normalized_speed = np.asarray(self.windSpeed)/max(self.windSpeed)
 
-        if fig_index is None:
-            fig_index = time.time_ns()
-        
         if self.telescope.src.tag =='asterism':
             list_src = self.telescope.src.src
         
-        
-        f = plt.figure(fig_index,figsize = [n_sp*4,3*(1+display_cn2)], edgecolor = None)
+        plt.figure(fig_index,figsize = [n_sp*4,3*(1+display_cn2)], edgecolor = None)
         if display_cn2:
             gs = gridspec.GridSpec(1,n_sp+1, height_ratios=[1], width_ratios=np.ones(n_sp+1), hspace=0.5, wspace=0.5)
         else:
@@ -841,7 +834,7 @@ class Atmosphere:
             if len(val)!= self.nLayer:
                 print('Error! Wrong value for the wind-speed! Make sure that you inpute a wind-speed for each layer')
             else:
-                print('Updating the wins speed...')
+                print('Updating the wind speed...')
                 for i_layer in range(self.nLayer):
                     tmpLayer = getattr(self,'layer_'+str(i_layer+1))
                     tmpLayer.windSpeed = val[i_layer]

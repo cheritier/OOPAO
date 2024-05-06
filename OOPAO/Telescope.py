@@ -434,6 +434,8 @@ class Telescope:
                     self.optical_path.append([obj.tag,id(obj)])
 
                 self.computePSF(detector = obj)
+                obj.fov_arcsec = self.xPSF_arcsec[1] -self.xPSF_arcsec[0] 
+                obj.fov_rad = self.xPSF_rad[1] - self.xPSF_rad[0]
                 if obj.integrationTime is not None:
                     if obj.integrationTime < self.samplingTime:
                         raise ValueError('The Detector integration time is smaller than the AO loop sampling Time. ')

@@ -10,7 +10,7 @@ import time
 
 class Detector:
     def __init__(self,
-                 nRes:int,
+                 nRes:int=10,
                  integrationTime:float=None,
                  bits:int=None,
                  FWC:int=None,
@@ -31,7 +31,8 @@ class Detector:
         Parameters
         ----------
         nRes : int
-            DESCRIPTION.
+            Resolution in pixel of the detector. This value is ignored for the computation of PSFs using the Telescope class (see Telescope class for further documentation). 
+            In that case, the sampling of the detector is driven by the psf_sampling property
         integrationTime : float, optional
         Integration time of the detector object in [s]. 
         
@@ -65,7 +66,7 @@ class Detector:
         binning : int, optional
             Binning factor of the Detector. The default is 1.
         psf_sampling : float, optional
-            ZeroPadding factor of the FFT to compute PSFs from a Telescope.
+            ZeroPadding factor of the FFT to compute PSFs from a Telescope (see Telescope class for further documentation).
             The default is 2 (Shannon-sampled PSFs).
         darkCurrent : float, optional
             Dark current of the Detector in [e-/pixel/s]. The default is 0.
@@ -112,6 +113,10 @@ class Detector:
         self.tag                = 'detector'   
         self.buffer_frame       = []
         self._integrated_time   = 0
+        self.fov_arcsec         = None
+        self.pixel_size_rad     = None
+        self.pixel_size_arcsec  = None
+        
 
         
         
@@ -120,7 +125,8 @@ class Detector:
         self.random_state_readout_noise     = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
         self.random_state_background_noise  = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
         self.random_state_dark_noise        = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
-    
+        self.print_properties()
+
     def rebin(self,arr, new_shape):
             shape = (new_shape[0], arr.shape[0] // new_shape[0],
                      new_shape[1], arr.shape[1] // new_shape[1])        
@@ -235,11 +241,14 @@ class Detector:
             # Save the integrated frame and buffer
             self.frame  = frame.copy()
             self.buffer = self.buffer_frame.copy()
+            self.resolution       = self.frame.shape[0]
+            if self.fov_arcsec is not None:
+                self.pixel_size_rad     = self.fov_rad/self.resolution 
+                self.pixel_size_arcsec  = self.fov_arcsec/self.resolution
             
             # reset the buffer and _integrated_time property
             self.buffer_frame     = []
             self._integrated_time = 0
-            self.resolution       = self.frame.shape[0]
             return 
     
     def integrate(self,frame):
