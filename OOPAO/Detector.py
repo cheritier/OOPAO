@@ -52,7 +52,7 @@ class Detector:
             precision of the Detector. If set to None the effect is ignored
             The default is None.
         FWC : int, optional
-            Full Well Capacity of the pixels in [counts] to simulate the 
+            Full Well Capacity of the pixels in [e-] to simulate the 
             saturation of the pixels. If set to None the effect is ignored.
             The default is None.
         gain : int, optional
@@ -117,41 +117,47 @@ class Detector:
         self.pixel_size_rad     = None
         self.pixel_size_arcsec  = None
         
-
-        
+        # noise initialisation
+        self.quantification_noise = 0
+        self.photon_noise         = 0
+        self.dark_shot_noise      = 0
         
         # random state to create random values for the noise
         self.random_state_photon_noise      = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
         self.random_state_readout_noise     = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
         self.random_state_background_noise  = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
-        self.random_state_dark_noise        = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
+        self.random_state_dark_shot_noise   = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
         self.print_properties()
+
 
     def rebin(self,arr, new_shape):
             shape = (new_shape[0], arr.shape[0] // new_shape[0],
                      new_shape[1], arr.shape[1] // new_shape[1])        
             out = (arr.reshape(shape).mean(-1).mean(1)) * (arr.shape[0] // new_shape[0]) * (arr.shape[1] // new_shape[1])        
             return out
-    def set_binning(self, M, binning_factor,mode='sum'):
-        if M.shape[0]%binning_factor == 0:
-            if M.ndim == 2:
-                new_shape = [int(M.shape[0]//binning_factor), int(M.shape[1]//binning_factor)]
-                shape = (new_shape[0], M.shape[0] // new_shape[0], 
-                         new_shape[1], M.shape[1] // new_shape[1])
+        
+        
+    def set_binning(self, array, binning_factor,mode='sum'):
+        if array.shape[0]%binning_factor == 0:
+            if array.ndim == 2:
+                new_shape = [int(np.round(array.shape[0]/binning_factor)), int(np.round(array.shape[1]/binning_factor))]
+                shape = (new_shape[0], array.shape[0] // new_shape[0], 
+                         new_shape[1], array.shape[1] // new_shape[1])
                 if mode == 'sum':
-                    return M.reshape(shape).sum(-1).sum(1)
+                    return array.reshape(shape).sum(-1).sum(1)
                 else:
-                    return M.reshape(shape).mean(-1).mean(1)
+                    return array.reshape(shape).mean(-1).mean(1)
             else:
-                new_shape = [int(M.shape[0]//binning_factor), int(M.shape[1]//binning_factor), M.shape[2]]
-                shape = (new_shape[0], M.shape[0] // new_shape[0], 
-                         new_shape[1], M.shape[1] // new_shape[1], new_shape[2])
+                new_shape = [int(np.round(array.shape[0]/binning_factor)), int(np.round(array.shape[1]/binning_factor)), array.shape[2]]
+                shape = (new_shape[0], array.shape[0] // new_shape[0], 
+                         new_shape[1], array.shape[1] // new_shape[1], new_shape[2])
                 if mode == 'sum':
-                    return M.reshape(shape).sum(-2).sum(1)
+                    return array.reshape(shape).sum(-2).sum(1)
                 else:
-                    return M.reshape(shape).mean(-2).mean(1)
+                    return array.reshape(shape).mean(-2).mean(1)
         else:
             raise ValueError('Binning factor %d not compatible with detector size'%(binning_factor))
+
 
     def set_sampling(self,array):
         sx, sy = array.shape
@@ -160,11 +166,12 @@ class Detector:
         array_padded = np.pad(array, (pad_x,pad_y))
         return array_padded
     
+    
     def conv_photon_electron(self,frame):
         frame = (frame * self.QE)
         return frame
         
-        
+    
     def set_saturation(self,frame):
         self.saturation = (100*frame.max()/self.FWC)
         if frame.max() > self.FWC:
@@ -206,7 +213,11 @@ class Detector:
     
     def set_dark_shot_noise(self,frame):
         self.dark_shot_noise = np.sqrt(self.darkCurrent * self.integrationTime) 
+        dark_current_map = np.ones(frame.shape) * (self.darkCurrent * self.integrationTime)
+        dark_shot_noise_map = self.random_state_dark_shot_noise.poisson(dark_current_map)
+        frame += dark_shot_noise_map
         return frame 
+    
     
     def readout(self):
             frame = np.sum(self.buffer_frame,axis=0)   
@@ -276,7 +287,6 @@ class Detector:
                 self.readout()
 
 
-
     def computeSNR(self):
         if self.FWC is not None:
             self.SNR_max = self.FWC / np.sqrt(self.FWC)
@@ -287,8 +297,7 @@ class Detector:
         print()
         print('Theoretical maximum SNR: %.2f'%self.SNR_max)
         print('Current SNR: %.2f'%self.SNR)
-        
-        # self.SNR = I*self.QE*self.tInt / np.sqrt(I*self.QE*self.tInt + self.darkCurrent*self.tInt + self.readoutNoise**2)
+    
     
     def displayNoiseError(self):
         print()
@@ -301,8 +310,10 @@ class Detector:
             print('{:^25s}|{:^9.4f}'.format('Dark shot noise [e-]',self.dark_shot_noise))
         if self.readoutNoise!=0:
             print('{:^25s}|{:^9.1f}'.format('Readout noise [e-]',self.readoutNoise))
-        print('----------------------------------')
+        print('-------------------------------------')
         pass
+    
+    
     @property
     def backgroundNoise(self):
         return self._backgroundNoise
@@ -328,7 +339,7 @@ class Detector:
         self._integrated_time = 0
         self.buffer_frame = []
         
-                
+             
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% END %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def print_properties(self):
         print()
