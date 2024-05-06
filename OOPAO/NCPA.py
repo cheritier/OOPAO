@@ -84,7 +84,7 @@ class NCPA:
             self.NCPA_f2_law(f2)
         
         self.tag = 'NCPA'
-        self.NCPA_properties()
+        self.print_properties()
             
     def NCPA_f2_law(self,f2):
         if type(f2) is list and len(f2)==4:
@@ -115,9 +115,13 @@ class NCPA:
         B = self.Z.modesFullRes
         return B
     
-    def NCPA_properties(self):
+    def print_properties(self):
         print()
         print('------------ NCPA ------------')
         print('{:^20s}|{:^9s}'.format('Modal basis',self.basis))
         print('{:^20s}|{:^9.2f}'.format('Amplitude [nm RMS]',np.std(self.OPD[np.where(self.tel.pupil>0)])*1e9))
         print('------------------------------')
+        
+    def __repr__(self):
+        self.print_properties()
+        return ' '
