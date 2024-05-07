@@ -10,7 +10,27 @@ import tqdm
 from .CalibrationVault import CalibrationVault
 
 
-def InteractionMatrix(ngs,atm,tel,dm,wfs,M2C,stroke,phaseOffset=0,nMeasurements=50,noise='off',invert=True,print_time=False):
+def InteractionMatrix(ngs,
+                      atm,
+                      tel,
+                      dm,
+                      wfs,
+                      M2C,
+                      stroke,
+                      phaseOffset=0,
+                      nMeasurements=50,
+                      noise='off',
+                      invert=True,
+                      print_time=False,
+                      display = False,
+                      single_pass = True):
+    
+    if display is False:
+        def iterate(x):
+            return x
+    else:
+        def iterate(x):
+            return tqdm.tqdm(x) 
     if wfs.tag=='pyramid' and wfs.gpu_available:
         nMeasurements = 1
         print('Pyramid with GPU detected => using single mode measurement to increase speed.')
@@ -44,9 +64,9 @@ def InteractionMatrix(ngs,atm,tel,dm,wfs,M2C,stroke,phaseOffset=0,nMeasurements=
     else:
         phaseBuffer = phaseOffset
 
-    print('Interaction Matrix Computation:' )
+        # for i in tqdm.tqdm(range(nCycle)):  
+    for i in iterate(range(nCycle)):  
         
-    for i in tqdm.tqdm(range(nCycle)):  
         if nModes>1:
             if i==nCycle-1:
                 if nExtra != 0:
@@ -72,11 +92,16 @@ def InteractionMatrix(ngs,atm,tel,dm,wfs,M2C,stroke,phaseOffset=0,nMeasurements=
             
 
 #       pull
-        dm.coefs=-intMatCommands*stroke
-        tel*dm
-        tel.src.phase+=phaseBuffer
-        tel*wfs
-        sm = wfs.signal
+        if single_pass:
+            sm = 0*wfs.signal
+            factor = 2
+        else:
+            dm.coefs=-intMatCommands*stroke
+            tel*dm
+            tel.src.phase+=phaseBuffer
+            tel*wfs
+            sm = wfs.signal
+            factor = 1
         if i==nCycle-1:
             if nExtra !=0:
                 if nMeasurements==1:
@@ -105,7 +130,7 @@ def InteractionMatrix(ngs,atm,tel,dm,wfs,M2C,stroke,phaseOffset=0,nMeasurements=
             b=time.time()
             print('Time elapsed: '+str(b-a)+' s' )
     
-    out=CalibrationVault(intMat,invert=invert)
+    out=CalibrationVault(factor*intMat,invert=invert)
        
     return out
 
