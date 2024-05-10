@@ -298,6 +298,7 @@ class Telescope:
         if self.spatialFilter is not None:
             self.PSF        = np.fft.fftshift(np.abs(np.fft.fft2(em_field_padded)*mask/norma)**2)            
         else:
+            self.focal_plane_EMF = np.fft.fft2(em_field_padded*self.phasor)*mask/norma
             self.PSF        = (np.abs(np.fft.fft2(em_field_padded*self.phasor)*mask/norma)**2)            
         self.PSF_norma  = self.PSF/self.PSF.max()   
         if N_crop is None:
