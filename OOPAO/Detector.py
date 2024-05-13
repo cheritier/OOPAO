@@ -216,51 +216,96 @@ class Detector:
         dark_current_map = np.ones(frame.shape) * (self.darkCurrent * self.integrationTime)
         dark_shot_noise_map = self.random_state_dark_shot_noise.poisson(dark_current_map)
         frame += dark_shot_noise_map
-        return frame 
-    
-    
-    def readout(self):
-            frame = np.sum(self.buffer_frame,axis=0)   
-                        
-            if self.darkCurrent!=0:
-                frame = self.set_dark_shot_noise(frame)
-            
-            # Simulate the saturation of the detector (without blooming and smearing)
-            if self.FWC is not None:
-                frame = self.set_saturation(frame)    
-            
-            # If the sensor is EMCCD the applyed gain is before the analog-to-digital conversion
-            if self.sensor == 'EMCCD': 
-                frame = self.set_photon_noise(frame) * self.gain
-    
-            # Simulate hardware binning of the detector
-            if self.binning != 1:
-                frame = self.set_binning(frame,self.binning)
-           
-            # Apply readout noise
-            if self.readoutNoise!=0:    
-                frame = self.set_readout_noise(frame)    
+        return frame
 
-            # Apply the CCD/CMOS gain
-            if self.sensor == 'CCD' or self.sensor == 'CMOS':
-                frame *= self.gain
-                
-            # Apply the digital quantification of the detector
-            if self.bits is not None:
-                frame = self.digitalization(frame)
-            
-            # Save the integrated frame and buffer
-            self.frame  = frame.copy()
-            self.buffer = self.buffer_frame.copy()
-            self.resolution       = self.frame.shape[0]
-            if self.fov_arcsec is not None:
-                self.pixel_size_rad     = self.fov_rad/self.resolution 
-                self.pixel_size_arcsec  = self.fov_arcsec/self.resolution
-            
-            # reset the buffer and _integrated_time property
-            self.buffer_frame     = []
-            self._integrated_time = 0
-            return 
+    def add_noise_to_frame(self,frame):
+
+        self.perfect_frame = frame.copy()
+        self.flux_max_px = self.perfect_frame.max()
+        self.signal = self.QE * self.flux_max_px
+
+        # Apply photon noise
+        if self.photonNoise != 0:
+            frame = self.set_photon_noise(frame)
+
+        # Apply background noise
+        if self.backgroundNoise is True:
+            frame = self.set_background_noise(frame)
+
+        # Simulate the quantum efficiency of the detector (photons to electrons)
+        frame = self.conv_photon_electron(frame)
+
+        if self.darkCurrent != 0:
+            frame = self.set_dark_shot_noise(frame)
+
+        # Simulate the saturation of the detector (without blooming and smearing)
+        if self.FWC is not None:
+            frame = self.set_saturation(frame)
+
+        # If the sensor is EMCCD the applyed gain is before the analog-to-digital conversion
+        if self.sensor == 'EMCCD':
+            frame = self.set_photon_noise(frame) * self.gain
+
+        # Simulate hardware binning of the detector
+        if self.binning != 1:
+            frame = self.set_binning(frame, self.binning)
+
+        # Apply readout noise
+        if self.readoutNoise != 0:
+            frame = self.set_readout_noise(frame)
+
+        # Apply the CCD/CMOS gain
+        if self.sensor == 'CCD' or self.sensor == 'CMOS':
+            frame *= self.gain
+
+        # Apply the digital quantification of the detector
+        if self.bits is not None:
+            frame = self.digitalization(frame)
+
+        return frame
+
+    def readout(self):
+        frame = np.sum(self.buffer_frame,axis=0)
+
+        if self.darkCurrent!=0:
+            frame = self.set_dark_shot_noise(frame)
+
+        # Simulate the saturation of the detector (without blooming and smearing)
+        if self.FWC is not None:
+            frame = self.set_saturation(frame)
+
+        # If the sensor is EMCCD the applyed gain is before the analog-to-digital conversion
+        if self.sensor == 'EMCCD':
+            frame = self.set_photon_noise(frame) * self.gain
+
+        # Simulate hardware binning of the detector
+        if self.binning != 1:
+            frame = self.set_binning(frame,self.binning)
+
+        # Apply readout noise
+        if self.readoutNoise!=0:
+            frame = self.set_readout_noise(frame)
+
+        # Apply the CCD/CMOS gain
+        if self.sensor == 'CCD' or self.sensor == 'CMOS':
+            frame *= self.gain
+
+        # Apply the digital quantification of the detector
+        if self.bits is not None:
+            frame = self.digitalization(frame)
+
+        # Save the integrated frame and buffer
+        self.frame  = frame.copy()
+        self.buffer = self.buffer_frame.copy()
+        self.resolution       = self.frame.shape[0]
+        if self.fov_arcsec is not None:
+            self.pixel_size_rad     = self.fov_rad/self.resolution
+            self.pixel_size_arcsec  = self.fov_arcsec/self.resolution
+
+        # reset the buffer and _integrated_time property
+        self.buffer_frame     = []
+        self._integrated_time = 0
+        return
     
     def integrate(self,frame):
         self.perfect_frame = frame.copy()
