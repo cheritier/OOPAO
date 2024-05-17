@@ -14,7 +14,7 @@ from OOPAO.Telescope import Telescope
 from OOPAO.Zernike import Zernike
 from OOPAO.tools.displayTools import displayMap, makeSquareAxes
 # %% -----------------------     read parameter file   ----------------------------------
-from parameter_files.parameterFile_VLT_I_Band import initializeParameterFile
+from parameter_files.parameterFile_VLT_I_Band_PWFS import initializeParameterFile
 
 param = initializeParameterFile()
 

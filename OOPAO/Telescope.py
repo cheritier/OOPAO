@@ -9,9 +9,17 @@ import inspect
 
 import matplotlib.pyplot as plt
 import numpy as np
+try:
+    import cupy as cp
+    from cupyx.scipy import signal as csg
 
-from .Source import Source
-from OOPAO.tools import *
+    global_gpu_flag = True
+
+except ImportError or ModuleNotFoundError:
+    print('CuPy is not found, using NumPy backend...')
+    cp = np
+
+from OOPAO.tools.tools import set_binning
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 class Telescope:
@@ -244,67 +252,101 @@ class Telescope:
             axarr[0].imshow(self.apodizer)
             axarr[1].imshow(self.focalMask)
             axarr[2].imshow(self.lyotStop)
-
             
-    
+
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF COMPUTATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
 
-    def computePSF(self,zeroPaddingFactor=2, N_crop = None,detector = None):
+    def computePSF(self,zeroPaddingFactor=2,detector = None,img_resolution=None):
+        # kept for backward compatibility
+        conversion_constant = (180/np.pi)*3600*1000
+        if detector is not None:
+            zeroPaddingFactor = detector.psf_sampling
         if self.src is None:
             raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')   
-        
-        # if self.spatialFilter is not None:
-        #     self.spatialFilter.set_spatial_filter(zeroPaddingFactor = zeroPaddingFactor)
-        #     mask = np.fft.fftshift(self.spatialFilter.mask)
-        #     amp_mask = self.amplitude_filtered
-        #     phase = self.phase_filtered
-        # else:
-        mask     = 1
+            
         amp_mask = 1
         phase    = self.src.phase
-        em_field = amp_mask*self.pupil*self.pupilReflectivity*np.sqrt(self.src.fluxMap)*np.exp(1j*phase)   
-        
-        
-        # zeroPadded em_field for the FFT
-
-        if detector is None:
-            sx, sy = em_field.shape
-            pad_x = int(np.round((sx * (zeroPaddingFactor-1)) / 2))
-            pad_y = int(np.round((sy * (zeroPaddingFactor-1)) / 2))
-            em_field_padded = np.pad(em_field, (pad_x,pad_y))
-            
-        else:
-            em_field_padded = detector.set_sampling(array = em_field)
-                        
-            
-        # number of pixel considered 
-        N       = em_field_padded.shape[0]        
-        norma   = N
-        
-        # define phasor to center PSF on 4 pixels
-        [xx,yy]                         = np.meshgrid(np.linspace(0,N-1,N),np.linspace(0,N-1,N))
-        self.phasor                     = np.exp(-(1j*np.pi*(N+1)/N)*(xx+yy))
+        amp      = amp_mask*self.pupil*self.pupilReflectivity*np.sqrt(self.src.fluxMap)*np.exp(1j*phase) 
+        # function to compute the em-field and PSF        
+        self.PropagateField(amplitude = amp , phase = phase, zeroPaddingFactor = zeroPaddingFactor,img_resolution=img_resolution)
 
         # axis in arcsec
-        self.xPSF_arcsec       = [-206265*(self.src.wavelength/self.D) * (self.resolution/2), 206265*(self.src.wavelength/self.D) * (self.resolution/2)]
-        self.yPSF_arcsec       = [-206265*(self.src.wavelength/self.D) * (self.resolution/2), 206265*(self.src.wavelength/self.D) * (self.resolution/2)]
+        self.xPSF_arcsec       = [-conversion_constant*(self.src.wavelength/self.D) * (self.resolution/2), conversion_constant*(self.src.wavelength/self.D) * (self.resolution/2)]
+        self.yPSF_arcsec       = [-conversion_constant*(self.src.wavelength/self.D) * (self.resolution/2), conversion_constant*(self.src.wavelength/self.D) * (self.resolution/2)]
         
         # axis in radians
         self.xPSF_rad   = [-(self.src.wavelength/self.D) * (self.resolution/2),(self.src.wavelength/self.D) * (self.resolution/2)]
         self.yPSF_rad   = [-(self.src.wavelength/self.D) * (self.resolution/2),(self.src.wavelength/self.D) * (self.resolution/2)]
         
-        # PSF computation
-        if self.spatialFilter is not None:
-            self.PSF        = np.fft.fftshift(np.abs(np.fft.fft2(em_field_padded)*mask/norma)**2)            
+        # normalized PSF           
+        self.PSF_norma  = self.PSF/self.PSF.max()  
+ 
+    
+    def PropagateField(self, amplitude, phase, zeroPaddingFactor, img_resolution = None):
+        xp                  = np
+        oversampling        = 1
+        resolution          = self.pupil.shape[0]
+        
+        
+        
+        if oversampling is not None: oversampling = oversampling
+
+        if img_resolution is not None:
+            if img_resolution > zeroPaddingFactor * resolution:
+                print('Error: image has too many pixels for this pupil sampling. Try using a pupil mask with more pixels')
+                return None
         else:
-            self.PSF        = (np.abs(np.fft.fft2(em_field_padded*self.phasor)*mask/norma)**2)            
-        self.PSF_norma  = self.PSF/self.PSF.max()   
-        if N_crop is None:
-            N_crop = int(np.floor(2*N/6))
+                img_resolution = zeroPaddingFactor * resolution
+
+        # If PSF is undersampled apply the integer oversampling
+        if zeroPaddingFactor * oversampling < 2:
+            oversampling = (np.ceil(2.0 / zeroPaddingFactor)).astype('int')
+
+        # This is to ensure that PSF will be binned properly if number of pixels is odd
+        if img_resolution is not None:
+            if oversampling % 2 != img_resolution % 2:
+                oversampling += 1
+
+        img_size = np.ceil(img_resolution * oversampling).astype('int')
+        N = np.fix(zeroPaddingFactor * oversampling * resolution).astype('int')
+        pad_width = np.ceil((N - resolution) / 2).astype('int')
+
+        supportPadded = xp.pad(amplitude * xp.exp(1j * phase),
+                               pad_width=((pad_width, pad_width), (pad_width, pad_width)), constant_values=0)
+        N = supportPadded.shape[0]  # make sure the number of pxels is correct after the padding
     
-        self.PSF_norma_zoom  = self.PSF_norma[N_crop:-N_crop,N_crop:-N_crop]
+        # PSF computation
+        [xx, yy] = xp.meshgrid(xp.linspace(0, N - 1, N), xp.linspace(0, N - 1, N), copy=False)
+        phasor = xp.exp(-1j * xp.pi / N * (xx + yy) * (1 - img_resolution % 2)).astype(xp.complex64)
+        #                                                        ^--- this is to account odd/even number of pixels
+        # Propagate with Fourier shifting
+        EMF = xp.fft.fftshift(1 / N * xp.fft.fft2(xp.fft.ifftshift(supportPadded * phasor)))
     
+        # Again, this is to properly crop a PSF with the odd/even number of pixels
+        if N % 2 == img_size % 2:
+            shift_pix = 0
+        else:
+            if N % 2 == 0:
+                shift_pix = 1
+            else:
+                shift_pix = -1
+        self.em_field_padded = EMF
+        # Support only rectangular PSFs
+        ids = xp.array(
+            [np.ceil(N / 2) - img_size // 2 + (1 - N % 2) - 1, np.ceil(N / 2) + img_size // 2 + shift_pix]).astype(
+            xp.int32)
+        EMF = EMF[ids[0]:ids[1], ids[0]:ids[1]]
+    
+        if oversampling !=1:
+            # self.PSF = set_binning(xp.abs(EMF) ** 2, oversampling)
+            self.PSF = xp.abs(EMF) ** 2
+
+        else:
+            self.PSF = xp.abs(EMF) ** 2
+                        
+        return oversampling
+                       
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF DISPLAY %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def showPSF(self,zoom = 1, GEO = False):
         # display the full PSF or zoom on the core of the PSF
@@ -325,6 +367,7 @@ class Telescope:
             plt.imshow(self.PSF,extent = [self.xPSF[0],self.xPSF[1],self.xPSF[0],self.xPSF[1]])
             plt.xlabel('[arcsec]')
             plt.ylabel('[arcsec]')
+
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TELESCOPE PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 

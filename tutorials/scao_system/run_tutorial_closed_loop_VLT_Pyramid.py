@@ -33,8 +33,8 @@ plt.ion()
 # create the Telescope object
 tel = Telescope(resolution          = param['resolution'],\
                 diameter            = param['diameter'],\
-                samplingTime        = param['samplingTime'],\
-                centralObstruction  = param['centralObstruction'])
+                samplingTime        = param['samplingTime']/10,\
+                centralObstruction  = param['centralObstruction']*0)
 
 #%% -----------------------     NGS   ----------------------------------
 # create the Source object
@@ -123,18 +123,40 @@ tel*dm
 #%% -----------------------     PYRAMID WFS   ----------------------------------
 
 # make sure tel and atm are separated to initialize the PWFS
-tel-atm
+# tel-atm
 
 
 wfs = Pyramid(nSubap                = param['nSubaperture'],\
               telescope             = tel,\
               modulation            = 3,\
-              lightRatio            = param['lightThreshold'],\
-              n_pix_separation      = param['n_pix_separation'],\
+              lightRatio            = 0.5,\
+              n_pix_separation      = 2,\
               psfCentering          = True,\
-              postProcessing        = 'slopesMaps_incidence_flux')    
+              postProcessing        = 'fullFrame')    
     
+plt.imshow(wfs.cam.frame)
 
+ngs*tel*wfs
+wfs*wfs.focal_plane_camera
+
+tel.computePSF()
+print(tel.PSF.sum())
+print(wfs.cam.frame.sum())
+print(wfs.focal_plane_camera.frame.sum())
+
+print(wfs.pyramidFrame.sum())
+print(wfs.telescope.src.fluxMap.sum())
+plt.figure()
+plt.imshow(wfs.focal_plane_camera.frame)
+
+#%%
+
+
+
+
+
+
+#%%
 
 
 
@@ -155,7 +177,7 @@ Z.computeZernike(tel)
 M2C_zernike = np.linalg.pinv(np.squeeze(dm.modes[tel.pupilLogical,:]))@Z.modes
 
 # show the first 10 zernikes
-dm.coefs = M2C_zernike[:,:10]
+dm.coefs = M2C_KL[:,:10]
 tel*dm
 displayMap(tel.OPD)
 
@@ -176,7 +198,7 @@ calib_zonal = InteractionMatrix(  ngs            = ngs,\
                             M2C            = M2C_zonal,\
                             stroke         = stroke,\
                             nMeasurements  = 1,\
-                            noise          = 'off')
+                            noise          = 'off',display=True)
 
 plt.figure()
 plt.plot(np.std(calib_zonal.D,axis=0))
@@ -189,7 +211,7 @@ plt.ylabel('WFS slopes STD')
 #%%
 
 # Modal interaction matrix
-calib_zernike = CalibrationVault(calib_zonal.D@M2C_zernike)
+calib_zernike = CalibrationVault(calib_zonal.D@M2C_KL[:,:300])
 
 plt.figure()
 plt.plot(np.sqrt(np.diag(calib_zernike.D.T@calib_zernike.D))/calib_zernike.D.shape[0]/ngs.fluxMap.sum())
@@ -197,11 +219,18 @@ plt.xlabel('Mode Number')
 plt.ylabel('WFS slopes STD')
 
 #%%
-
+tel-atm
 tel.resetOPD()
 # initialize DM commands
 dm.coefs=0
+wfs.cam.photonNoise     = False
+
 ngs*tel*dm*wfs
+wfs.cam.integrationTime = tel.samplingTime
+wfs.modulation = wfs.modulation
+plt.figure()
+plt.imshow(wfs.signal_2D)
+
 tel+atm
 
 # dm.coefs[100] = -1
@@ -211,7 +240,7 @@ plt.close('all')
     
 # These are the calibration data used to close the loop
 calib_CL    = calib_zernike
-M2C_CL      = M2C_zernike
+M2C_CL      = M2C_KL[:,:300]
 
 
 # combine telescope with atmosphere
@@ -234,7 +263,7 @@ SE_PSF = []
 LE_PSF = np.log10(tel.PSF_norma_zoom)
 SE_PSF_K = []
 
-plot_obj = cl_plot(list_fig          = [atm.OPD,tel.mean_removed_OPD,wfs.cam.frame,np.log10(wfs.get_modulation_frame(radius = 10)),[[0,0],[0,0]],[dm.coordinates[:,0],np.flip(dm.coordinates[:,1]),dm.coefs],np.log10(tel.PSF_norma_zoom),np.log10(tel.PSF_norma_zoom)],\
+plot_obj = cl_plot(list_fig          = [atm.OPD,tel.mean_removed_OPD,wfs.cam.frame,np.log10(wfs.get_modulation_frame(radius =105)),[[0,0],[0,0]],[dm.coordinates[:,0],np.flip(dm.coordinates[:,1]),dm.coefs],np.log10(tel.PSF_norma_zoom),np.log10(tel.PSF_norma_zoom)],\
                    type_fig          = ['imshow','imshow','imshow','imshow','plot','scatter','imshow','imshow'],\
                    list_title        = ['Turbulence OPD [m]','Residual OPD [m]','WFS Detector Plane','WFS Focal Plane',None,None,None,None],\
                    list_lim          = [None,None,None,[-3,0],None,None,[-4,0],[-5,0]],\
@@ -243,8 +272,8 @@ plot_obj = cl_plot(list_fig          = [atm.OPD,tel.mean_removed_OPD,wfs.cam.fra
                    list_display_axis = [None,None,None,None,True,None,None,None],\
                    list_ratio        = [[0.95,0.95,0.1],[1,1,1,1]], s=20)
 # loop parameters
-gainCL                  = 0.6
-wfs.cam.photonNoise     = True
+gainCL                  = 0.8
+wfs.cam.photonNoise     = False
 display                 = True
 
 reconstructor = M2C_CL@calib_CL.M
@@ -277,7 +306,7 @@ for i in range(param['nLoop']):
 
             LE_PSF = np.mean(SE_PSF_K, axis=0)
         
-        cl_plot(list_fig   = [atm.OPD,tel.mean_removed_OPD,wfs.cam.frame,np.log10(wfs.get_modulation_frame(radius=10)),[np.arange(i+1),residual[:i+1]],dm.coefs,(SE_PSF[-1]), LE_PSF],
+        cl_plot(list_fig   = [atm.OPD,tel.mean_removed_OPD,wfs.cam.frame,np.log10(wfs.get_modulation_frame(radius=1000)),[np.arange(i+1),residual[:i+1]],dm.coefs,(SE_PSF[-1]), LE_PSF],
                                plt_obj = plot_obj)
         plt.pause(0.1)
         if plot_obj.keep_going is False:

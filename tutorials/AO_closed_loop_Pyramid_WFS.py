@@ -334,7 +334,7 @@ src_cam = Detector(tel.resolution)
 src_cam.psf_sampling = 2
 src_cam.integrationTime = tel.samplingTime*100
 # put the scientific target off-axis to simulate anisoplanetism (set to  [0,0] to remove anisoplanetism)
-src.coordinates = [1,0]
+src.coordinates = [5,0]
 
 # WFS path
 ngs_cam = Detector(tel.resolution)
@@ -380,8 +380,8 @@ plot_obj = cl_plot(list_fig          = [atm.OPD,
                                         [[0,0],[0,0],[0,0]],
                                         wfs.cam.frame,
                                         wfs.get_modulation_frame(radius=20),
-                                        np.log10(tel.PSF_norma_zoom),
-                                        np.log10(tel.PSF_norma_zoom)],
+                                        np.log10(tel.PSF),
+                                        np.log10(tel.PSF)],
                    type_fig          = ['imshow',
                                         'imshow',
                                         'imshow',
@@ -406,7 +406,7 @@ plot_obj = cl_plot(list_fig          = [atm.OPD,
 
 # loop parameters
 gainCL                  = 0.4
-wfs.cam.photonNoise     = False
+wfs.cam.photonNoise     = True
 display                 = True
 frame_delay             = 2
 reconstructor = M2C_CL@calib_CL.M
@@ -460,7 +460,7 @@ for i in range(nLoop):
                                 None,
                                 None]
 
-        cl_plot(list_fig   = [1e9*atm.OPD,1e9*OPD_NGS,1e9*OPD_SRC,[np.arange(i+1),residual_SRC[:i+1],residual_NGS[:i+1]],wfs.cam.frame,wfs.get_modulation_frame(radius = 20),NGS_PSF, SRC_PSF],
+        cl_plot(list_fig   = [1e9*atm.OPD,1e9*OPD_NGS,1e9*OPD_SRC,[np.arange(i+1),residual_SRC[:i+1],residual_NGS[:i+1]],wfs.cam.frame,wfs.get_modulation_frame(radius = 20,norma=False),NGS_PSF, SRC_PSF],
                                plt_obj = plot_obj)
         plt.pause(0.001)
         if plot_obj.keep_going is False:

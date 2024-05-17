@@ -377,7 +377,6 @@ def compute_fourier_mode(pupil,spatial_frequency,angle_deg,zeropadding = 2):
     
     return mode
 
-
 def circularProfile(img, maximum = False):
     # Compute circular average profile from an image, reference to center of image
     # Get image parameters
@@ -407,3 +406,23 @@ def circularProfile(img, maximum = False):
         index += 1
     return intensity
 
+def set_binning( array, binning_factor,mode='sum'):
+    if array.shape[0]%binning_factor == 0:
+        if array.ndim == 2:
+            new_shape = [int(np.round(array.shape[0]/binning_factor)), int(np.round(array.shape[1]/binning_factor))]
+            shape = (new_shape[0], array.shape[0] // new_shape[0], 
+                     new_shape[1], array.shape[1] // new_shape[1])
+            if mode == 'sum':
+                return array.reshape(shape).sum(-1).sum(1)
+            else:
+                return array.reshape(shape).mean(-1).mean(1)
+        else:
+            new_shape = [int(np.round(array.shape[0]/binning_factor)), int(np.round(array.shape[1]/binning_factor)), array.shape[2]]
+            shape = (new_shape[0], array.shape[0] // new_shape[0], 
+                     new_shape[1], array.shape[1] // new_shape[1], new_shape[2])
+            if mode == 'sum':
+                return array.reshape(shape).sum(-2).sum(1)
+            else:
+                return array.reshape(shape).mean(-2).mean(1)
+    else:
+        raise ValueError('Binning factor %d not compatible with the array size'%(binning_factor))

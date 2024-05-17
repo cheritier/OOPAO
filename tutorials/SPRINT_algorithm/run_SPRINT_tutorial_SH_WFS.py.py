@@ -103,13 +103,35 @@ plt.ylabel('[m]')
     # make sure tel and atm are separated to initialize the PWFS
 from OOPAO.ShackHartmann import ShackHartmann
 tel-atm
+
+pupil_0 = tel.pupil.copy()
+
+
+P = tel.pupil.copy()*0
+
+n = 4
+
+n_crop = n*param['nPixelPerSubap']
+
+P[n_crop:-n_crop,n_crop:-n_crop] = 1
+
+plt.figure(),plt.imshow(P)
+
+tel.pupil = P.copy()
+ngs*tel
+
 wfs = ShackHartmann(nSubap       = param['nSubaperture'],\
                     telescope    = tel,\
                     lightRatio   = param['lightThreshold'] ,\
                     is_geometric = param['is_geometric'])    
     
+    
+tel.pupil = pupil_0.copy()
 # propagate the light through the WFS
-tel*wfs
+ngs*tel*wfs
+plt.figure(),plt.imshow(wfs.cam.frame)
+
+plt.figure(),plt.imshow(tel.pupil)
 
 #%% -----------------------     Modal Basis   ----------------------------------
 # compute the modal basis
@@ -137,7 +159,7 @@ ao_calib =  ao_calibration(param            = param,\
                            dm               = dm,\
                            wfs              = wfs,\
                            nameFolderIntMat = None,\
-                           nameIntMat       = None,\
+                           nameIntMat       = 'new',\
                            nameFolderBasis  = None,\
                            nameBasis        = None,\
                            nMeasurements    = 100)
@@ -176,7 +198,7 @@ from OOPAO.tools.tools import emptyClass
 Case where the initial mis-registration is quite small (Closed Loop) => USE A MIDDLE ORDER MODE!
 """
 # modal basis considered
-index_modes = [100]
+index_modes = [50]
 basis =  emptyClass()
 basis.modes         = ao_calib.M2C[:,index_modes]
 basis.extra         = 'VLT_KL_'+str(index_modes[0])              # EXTRA NAME TO DISTINGUISH DIFFERENT SENSITIVITY MATRICES, BE CAREFUL WITH THIS!     
@@ -326,7 +348,7 @@ from OOPAO.tools.tools import emptyClass
 Case where the initial mis-registration is very large (Bootstrapping) => USE A LOW ORDER MODE!
 """
 # modal basis considered
-index_modes = [10]
+index_modes = [8,13,16]
 basis =  emptyClass()
 basis.modes         = ao_calib.M2C[:,index_modes]
 basis.extra         = 'KL_'+str(index_modes[0])+'_'+str(index_modes[-1])              # EXTRA NAME TO DISTINGUISH DIFFERENT SENSITIVITY MATRICES, BE CAREFUL WITH THIS!     
@@ -354,9 +376,9 @@ from OOPAO.mis_registration_identification_algorithm.applyMisRegistration import
 
 
 # mis-reg considered
-shiftX =    [120] # in % of subap
-shiftY =    [150] # in % of subap
-rot =       [2]   # in degrees
+shiftX =    [0] # in % of subap
+shiftY =    [100] # in % of subap
+rot =       [0]   # in degrees
 
 n = len(shiftX)
 
@@ -387,7 +409,7 @@ for i_misReg in range(n):
         im = np.zeros([wfs.nSignal])
         #  PUSH
         # set residual OPD for tel.OPD
-        tel.OPD = phi_residual_push 
+        tel.OPD = phi_residual_push*0 
         # apply modes on the DM
         dm_cl.coefs = basis.modes * amp[i_amp]*1e-9
         # propagate through DM and WFS
@@ -397,7 +419,7 @@ for i_misReg in range(n):
       
         #  PULL
         # set residual OPD for tel.OPD
-        tel.OPD = phi_residual_pull
+        tel.OPD = phi_residual_pull*0
         # apply modes on the DM
         dm_cl.coefs = - basis.modes * amp[i_amp]*1e-9
         # propagate through DM and WFS
@@ -421,3 +443,11 @@ for i_misReg in range(n):
     
 
 misReg_out = np.asarray(misReg_out)
+#%%
+
+from OOPAO.tools.displayTools import display_wfs_signals
+
+
+
+display_wfs_signals(wfs, Sprint.calib_0.D)
+display_wfs_signals(wfs, im)

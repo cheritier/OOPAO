@@ -27,7 +27,7 @@ n_subaperture = 20
 from OOPAO.Telescope import Telescope
 
 # create the Telescope object
-tel = Telescope(resolution           = 8*n_subaperture,                          # resolution of the telescope in [pix]
+tel = Telescope(resolution           = 6*n_subaperture,                          # resolution of the telescope in [pix]
                 diameter             = 8,                                        # diameter in [m]        
                 samplingTime         = 1/1000,                                   # Sampling time in [s] of the AO loop
                 centralObstruction   = 0.1,                                      # Central obstruction in [%] of a diameter 
@@ -212,7 +212,7 @@ dm = DeformableMirror(telescope  = tel,                        # Telescope
                     mechCoupling = 0.35,                       # Mechanical Coupling for the influence functions
                     misReg       = misReg,                     # Mis-registration associated 
                     coordinates  = None,                       # coordinates in [m]. Should be input as an array of size [n_actuators, 2] 
-                    pitch        = tel.D/nAct)                 # inter actuator distance. Only used to compute the influence function coupling. The default is based on the n_subaperture value. 
+                    pitch        = tel.D/nAct,floating_precision=32)                 # inter actuator distance. Only used to compute the influence function coupling. The default is based on the n_subaperture value. 
     
 
 # plot the dm actuators coordinates with respect to the pupil
@@ -382,8 +382,8 @@ plot_obj = cl_plot(list_fig          = [atm.OPD,
                                         wfs.cam.frame,
                                         [dm.coordinates[:,0],np.flip(dm.coordinates[:,1]),dm.coefs],
                                         [[0,0],[0,0],[0,0]],
-                                        np.log10(tel.PSF_norma_zoom),
-                                        np.log10(tel.PSF_norma_zoom)],
+                                        np.log10(tel.PSF),
+                                        np.log10(tel.PSF)],
                    type_fig          = ['imshow',
                                         'imshow',
                                         'imshow',

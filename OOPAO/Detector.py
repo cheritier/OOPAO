@@ -7,6 +7,7 @@ Created on Wed Apr  3 14:18:03 2024
 
 import numpy as np
 import time
+from OOPAO.tools.tools import set_binning
 
 class Detector:
     def __init__(self,
@@ -136,28 +137,8 @@ class Detector:
             out = (arr.reshape(shape).mean(-1).mean(1)) * (arr.shape[0] // new_shape[0]) * (arr.shape[1] // new_shape[1])        
             return out
         
-        
     def set_binning(self, array, binning_factor,mode='sum'):
-        if array.shape[0]%binning_factor == 0:
-            if array.ndim == 2:
-                new_shape = [int(np.round(array.shape[0]/binning_factor)), int(np.round(array.shape[1]/binning_factor))]
-                shape = (new_shape[0], array.shape[0] // new_shape[0], 
-                         new_shape[1], array.shape[1] // new_shape[1])
-                if mode == 'sum':
-                    return array.reshape(shape).sum(-1).sum(1)
-                else:
-                    return array.reshape(shape).mean(-1).mean(1)
-            else:
-                new_shape = [int(np.round(array.shape[0]/binning_factor)), int(np.round(array.shape[1]/binning_factor)), array.shape[2]]
-                shape = (new_shape[0], array.shape[0] // new_shape[0], 
-                         new_shape[1], array.shape[1] // new_shape[1], new_shape[2])
-                if mode == 'sum':
-                    return array.reshape(shape).sum(-2).sum(1)
-                else:
-                    return array.reshape(shape).mean(-2).mean(1)
-        else:
-            raise ValueError('Binning factor %d not compatible with detector size'%(binning_factor))
-
+        set_binning(array, binning_factor,mode)
 
     def set_sampling(self,array):
         sx, sy = array.shape
@@ -204,7 +185,6 @@ class Detector:
             frame += self.backgroundNoiseAdded
             return frame
         
-        
     def set_readout_noise(self,frame):
         noise = (np.round(self.random_state_readout_noise.randn(frame.shape[0],frame.shape[1])*self.readoutNoise)).astype(int)  #before np.int64(...)
         frame += noise
@@ -231,11 +211,11 @@ class Detector:
             
             # If the sensor is EMCCD the applyed gain is before the analog-to-digital conversion
             if self.sensor == 'EMCCD': 
-                frame = self.set_photon_noise(frame) * self.gain
+                frame *= self.gain
     
             # Simulate hardware binning of the detector
             if self.binning != 1:
-                frame = self.set_binning(frame,self.binning)
+                frame = set_binning(frame,self.binning)
            
             # Apply readout noise
             if self.readoutNoise!=0:    
