@@ -16,6 +16,8 @@ except ImportError or ModuleNotFoundError:
     csg = sg
     global_gpu_flag = False
 
+from OOPAO.tools.tools import set_binning
+
 class LiFT:
     def __init__(self, tel, modeBasis, diversity_OPD, iterations, det, ang_pixel, img_resolution):
 
@@ -100,7 +102,7 @@ class LiFT:
         EMF = EMF[ids[0]:ids[1], ids[0]:ids[1]]
 
         if return_intensity:
-            return self.binning(xp.abs(EMF) ** 2, oversampling)
+            return set_binning(xp.abs(EMF) ** 2, oversampling)
 
         return EMF, oversampling
 
@@ -145,7 +147,7 @@ class LiFT:
                 buf, aux_oversampling = self.PropagateField(np.squeeze(
                     self.modeBasis.modesFullRes[:, :, i]) * initial_amplitude, initial_phase, \
                                                         return_intensity=False, oversampling=1)
-                derivative = 2 * self.binning((xp.real(1j * buf * Pd)), aux_oversampling) * k
+                derivative = 2 * set_binning((xp.real(1j * buf * Pd)), aux_oversampling) * k
                 derivative = self.obj_convolve(derivative)
 
                 H_spectral.append(derivative.flatten())
