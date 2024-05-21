@@ -104,9 +104,9 @@ class Detector:
         self.backgroundNoise    = backgroundNoise   
         self.backgroundNoiseMap = backgroundNoiseMap
         if self.resolution is not None:
-            self.frame              = np.zeros([nRes,nRes])
+            self.frame              = np.zeros([self.resolution,self.resolution])
         else:
-            self.frame              = np.zeros([10,10])            
+            self.frame              = np.zeros([2,2])            
                 
         self.saturation         = 0
         self.tag                = 'detector'   
@@ -137,7 +137,8 @@ class Detector:
         
         
     def set_binning(self, array, binning_factor,mode='sum'):
-        set_binning(array, binning_factor,mode)
+        frame = set_binning(array, binning_factor,mode)
+        return frame
 
 
     def set_sampling(self,array):
