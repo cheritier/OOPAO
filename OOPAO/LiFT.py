@@ -16,6 +16,8 @@ except ImportError or ModuleNotFoundError:
     csg = sg
     global_gpu_flag = False
 
+from OOPAO.tools.tools import set_binning
+
 class LiFT:
     def __init__(self, tel, modeBasis, diversity_OPD, iterations, det, ang_pixel, img_resolution):
 
@@ -37,6 +39,9 @@ class LiFT:
 
         if self.gpu:
             self.diversity_OPD = cp.array(self.diversity_OPD, dtype=cp.float32)
+
+        self.ang_pixel_rad = self.ang_pixel/((180/np.pi)*3600*1000)
+        self.zeroPaddingFactor = (self.tel.src.wavelength / self.tel.D) * (1/(self.ang_pixel_rad))
 
     def PropagateField(self, amplitude, phase, return_intensity = False, oversampling=1):
 
@@ -100,7 +105,7 @@ class LiFT:
         EMF = EMF[ids[0]:ids[1], ids[0]:ids[1]]
 
         if return_intensity:
-            return self.binning(xp.abs(EMF) ** 2, oversampling)
+            return set_binning(xp.abs(EMF) ** 2, oversampling)
 
         return EMF, oversampling
 
@@ -136,16 +141,27 @@ class LiFT:
             k = 2 * xp.pi / wavelength
 
             initial_phase = k * initial_OPD
-            Pd = xp.conj(
-                self.PropagateField(initial_amplitude, initial_phase, return_intensity=False,
-                               oversampling=1)[0])
+            # Pd = xp.conj(
+            #     self.PropagateField(initial_amplitude, initial_phase, return_intensity=False,
+            #                    oversampling=1)[0])
+
+            _ = self.tel.PropagateField(initial_amplitude, initial_phase, self.zeroPaddingFactor,
+                               self.img_resolution)
+            Pd = xp.conj(self.tel.focal_EMF)
 
             H_spectral = []
             for i in modes_ids:
-                buf, aux_oversampling = self.PropagateField(np.squeeze(
+                # buf, aux_oversampling = self.PropagateField(np.squeeze(
+                #     self.modeBasis.modesFullRes[:, :, i]) * initial_amplitude, initial_phase, \
+                #                                         return_intensity=False, oversampling=1)
+                # derivative = 2 * set_binning((xp.real(1j * buf * Pd)), aux_oversampling) * k
+                # derivative = self.obj_convolve(derivative)
+
+                aux_oversampling = self.tel.PropagateField(np.squeeze(
                     self.modeBasis.modesFullRes[:, :, i]) * initial_amplitude, initial_phase, \
-                                                        return_intensity=False, oversampling=1)
-                derivative = 2 * self.binning((xp.real(1j * buf * Pd)), aux_oversampling) * k
+                                                        self.zeroPaddingFactor, self.img_resolution)
+                buf = self.tel.focal_EMF
+                derivative = 2 * set_binning((xp.real(1j * buf * Pd)), aux_oversampling) * k
                 derivative = self.obj_convolve(derivative)
 
                 H_spectral.append(derivative.flatten())
@@ -159,12 +175,20 @@ class LiFT:
 
             for i in modes_ids:
                 self.tel.OPD = (np.squeeze(self.modeBasis.modesFullRes[:, :, i]) * delta) + initial_OPD
-                tmp1 = self.PropagateField(xp.sqrt(self.tel.src.fluxMap), k * self.tel.OPD,
-                                      return_intensity=True, oversampling=1) * flux_norm
+                # tmp1 = self.PropagateField(xp.sqrt(self.tel.src.fluxMap), k * self.tel.OPD,
+                #                       return_intensity=True, oversampling=1) * flux_norm
+
+                self.tel.PropagateField(xp.sqrt(self.tel.src.fluxMap), k * self.tel.OPD,
+                                      self.zeroPaddingFactor, self.img_resolution)
+                tmp1 = self.tel.PSF * flux_norm
 
                 self.tel.OPD = -(np.squeeze(self.modeBasis.modesFullRes[:, :, i]) * delta) + initial_OPD
-                tmp2 = self.PropagateField(xp.sqrt(self.tel.src.fluxMap), k * self.tel.OPD,
-                                      return_intensity=True, oversampling=1) * flux_norm
+                # tmp2 = self.PropagateField(xp.sqrt(self.tel.src.fluxMap), k * self.tel.OPD,
+                #                       return_intensity=True, oversampling=1) * flux_norm
+
+                self.tel.PropagateField(xp.sqrt(self.tel.src.fluxMap), k * self.tel.OPD,
+                                      self.zeroPaddingFactor, self.img_resolution)
+                tmp2 = self.tel.PSF * flux_norm
 
                 derivative = self.obj_convolve((tmp1 - tmp2) / 2 / delta)
 
@@ -209,8 +233,12 @@ class LiFT:
             self.tel.OPD = self.diversity_OPD + OPD
             wavelength = self.tel.src.wavelength
             k = 2 * np.pi / wavelength
-            PSF = self.PropagateField(xp.sqrt(self.tel.src.fluxMap), k * self.tel.OPD,
-                                 return_intensity=True, oversampling=1)
+            # PSF = self.PropagateField(xp.sqrt(self.tel.src.fluxMap), k * self.tel.OPD,
+            #                      return_intensity=True, oversampling=1)
+            self.tel.PropagateField(xp.sqrt(self.tel.src.fluxMap), k * self.tel.OPD,
+                                 self.zeroPaddingFactor, self.img_resolution)
+            PSF = self.tel.PSF
+
             return self.obj_convolve(PSF)
 
         C = []  # optimization criterion

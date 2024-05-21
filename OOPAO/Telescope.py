@@ -284,12 +284,11 @@ class Telescope:
  
     
     def PropagateField(self, amplitude, phase, zeroPaddingFactor, img_resolution = None):
+
         xp                  = np
         oversampling        = 1
         resolution          = self.pupil.shape[0]
-        
-        
-        
+
         if oversampling is not None: oversampling = oversampling
 
         if img_resolution is not None:
@@ -331,16 +330,20 @@ class Telescope:
                 shift_pix = 1
             else:
                 shift_pix = -1
-        self.em_field_padded = EMF
+
+        # self.em_field_padded = EMF
+
         # Support only rectangular PSFs
         ids = xp.array(
             [np.ceil(N / 2) - img_size // 2 + (1 - N % 2) - 1, np.ceil(N / 2) + img_size // 2 + shift_pix]).astype(
             xp.int32)
         EMF = EMF[ids[0]:ids[1], ids[0]:ids[1]]
+
+        self.focal_EMF = EMF
     
         if oversampling !=1:
-            # self.PSF = set_binning(xp.abs(EMF) ** 2, oversampling)
-            self.PSF = xp.abs(EMF) ** 2
+            self.PSF = set_binning(xp.abs(EMF) ** 2, oversampling)
+            # self.PSF = xp.abs(EMF) ** 2
 
         else:
             self.PSF = xp.abs(EMF) ** 2
