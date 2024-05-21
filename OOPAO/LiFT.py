@@ -187,7 +187,7 @@ class LiFT:
                 #                       return_intensity=True, oversampling=1) * flux_norm
 
                 self.tel.PropagateField(xp.sqrt(self.tel.src.fluxMap), k * self.tel.OPD,
-                                      self.zeroPaddingFactor, self.img_resolution) * flux_norm
+                                      self.zeroPaddingFactor, self.img_resolution)
                 tmp2 = self.tel.PSF * flux_norm
 
                 derivative = self.obj_convolve((tmp1 - tmp2) / 2 / delta)
