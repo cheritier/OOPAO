@@ -19,95 +19,26 @@ except ImportError or ModuleNotFoundError:
 from OOPAO.tools.tools import set_binning
 
 class LiFT:
-    def __init__(self, tel, modeBasis, diversity_OPD, iterations, det, ang_pixel, img_resolution):
+    def __init__(self, tel, basis, diversity_OPD, iterations, det, ang_pixel, img_resolution):
 
         global global_gpu_flag
-        self.tel = tel
-        self.det = det
-        self.modeBasis = modeBasis
-        self.diversity_OPD = diversity_OPD
-        self.iterations = iterations
-
-        # self.pixel_size = pixel_size  # m
-        # self.readoutNoise = RON  # STD of the readout noise
-        self.ang_pixel = ang_pixel  # mas
-        # self.f = self.pixel_size / self.ang_pixel * 206264806.71915  # [m]
+        self.tel            = tel
+        self.det            = det
+        self.basis          = basis
+        self.diversity_OPD  = diversity_OPD
+        self.iterations     = iterations
+        self.ang_pixel      = ang_pixel  # mas
         self.img_resolution = img_resolution
-        self.object = None
+        self.object         = None
 
         self.gpu = False and global_gpu_flag
 
         if self.gpu:
             self.diversity_OPD = cp.array(self.diversity_OPD, dtype=cp.float32)
 
-        self.ang_pixel_rad = self.ang_pixel/((180/np.pi)*3600*1000)
-        self.zeroPaddingFactor = (self.tel.src.wavelength / self.tel.D) * (1/(self.ang_pixel_rad))
+        self.ang_pixel_rad      = self.ang_pixel/((180/np.pi)*3600*1000)
+        self.zeroPaddingFactor  = (self.tel.src.wavelength / self.tel.D) * (1/(self.ang_pixel_rad))
 
-    def PropagateField(self, amplitude, phase, return_intensity = False, oversampling=1):
-
-        xp = np
-
-        wavelength = self.tel.src.wavelength
-        # zeroPaddingFactor = self.f / self.pixel_size * wavelength / self.tel.D
-
-        conversion_constant = (180/np.pi)*3600*1000
-        ang_pixel_rad = self.ang_pixel/conversion_constant
-
-        zeroPaddingFactor = (wavelength / self.tel.D) * (1/(ang_pixel_rad))
-        resolution = self.tel.pupil.shape[0]
-
-        if oversampling is not None: oversampling = oversampling
-
-        if self.img_resolution > zeroPaddingFactor * resolution:
-            print('Error: image has too many pixels for this pupil sampling. Try using a pupil mask with more pixels')
-            return None
-
-        # If PSF is undersampled apply the integer oversampling
-        if zeroPaddingFactor * oversampling < 2:
-            oversampling = (np.ceil(2.0 / zeroPaddingFactor)).astype('int')
-
-        # This is to ensure that PSF will be binned properly if number of pixels is odd
-        if oversampling % 2 != self.img_resolution % 2:
-            oversampling += 1
-
-        img_size = np.ceil(self.img_resolution * oversampling).astype('int')
-        N = np.fix(zeroPaddingFactor * oversampling * resolution).astype('int')
-        pad_width = np.ceil((N - resolution) / 2).astype('int')
-
-        if not hasattr(amplitude, 'device'): amplitude = xp.array(amplitude, dtype=cp.float32)
-        if not hasattr(phase, 'device'):     phase = xp.array(phase, dtype=cp.complex64)
-
-        # supportPadded = cp.pad(amplitude * cp.exp(1j*phase), pad_width=pad_width, constant_values=0)
-        supportPadded = xp.pad(amplitude * xp.exp(1j * phase),
-                               pad_width=((pad_width, pad_width), (pad_width, pad_width)), constant_values=0)
-        N = supportPadded.shape[0]  # make sure the number of pxels is correct after the padding
-
-        # PSF computation
-        [xx, yy] = xp.meshgrid(xp.linspace(0, N - 1, N), xp.linspace(0, N - 1, N), copy=False)
-        center_aligner = xp.exp(-1j * xp.pi / N * (xx + yy) * (1 - self.img_resolution % 2)).astype(xp.complex64)
-        #                                                        ^--- this is to account odd/even number of pixels
-        # Propagate with Fourier shifting
-        EMF = xp.fft.fftshift(1 / N * xp.fft.fft2(xp.fft.ifftshift(supportPadded * center_aligner)))
-
-        # Again, this is to properly crop a PSF with the odd/even number of pixels
-        if N % 2 == img_size % 2:
-            shift_pix = 0
-        else:
-            if N % 2 == 0:
-                shift_pix = 1
-            else:
-                shift_pix = -1
-
-        # Support only rectangular PSFs
-        ids = xp.array(
-            [np.ceil(N / 2) - img_size // 2 + (1 - N % 2) - 1, np.ceil(N / 2) + img_size // 2 + shift_pix]).astype(
-            xp.int32)
-        EMF = EMF[ids[0]:ids[1], ids[0]:ids[1]]
-
-        if return_intensity:
-            return set_binning(xp.abs(EMF) ** 2, oversampling)
-
-        return EMF, oversampling
 
     def print_modes(self, A_vec):
         xp = cp if self.gpu else np
@@ -115,6 +46,7 @@ class LiFT:
             val = A_vec[i]
             if val != None and not xp.isnan(val): val = xp.round(val, 4)
             print('Mode #', i, val)
+            
 
     def obj_convolve(self, mat):
         xg = csg if self.gpu else sg
@@ -123,13 +55,14 @@ class LiFT:
         else:
             return mat
 
+
     def generateLIFTinteractionMatrices(self, coefs, modes_ids, flux_norm=1.0, numerical=False):
         xp = cp if self.gpu else np
 
         if isinstance(coefs, list):
             coefs = xp.array(coefs)
 
-        initial_OPD = np.squeeze(self.modeBasis.modesFullRes @ coefs) + self.diversity_OPD
+        initial_OPD = np.squeeze(self.basis @ coefs) + self.diversity_OPD
 
         H = []
         if not numerical:
@@ -141,9 +74,6 @@ class LiFT:
             k = 2 * xp.pi / wavelength
 
             initial_phase = k * initial_OPD
-            # Pd = xp.conj(
-            #     self.PropagateField(initial_amplitude, initial_phase, return_intensity=False,
-            #                    oversampling=1)[0])
 
             _ = self.tel.PropagateField(initial_amplitude, initial_phase, self.zeroPaddingFactor,
                                self.img_resolution)
@@ -151,14 +81,9 @@ class LiFT:
 
             H_spectral = []
             for i in modes_ids:
-                # buf, aux_oversampling = self.PropagateField(np.squeeze(
-                #     self.modeBasis.modesFullRes[:, :, i]) * initial_amplitude, initial_phase, \
-                #                                         return_intensity=False, oversampling=1)
-                # derivative = 2 * set_binning((xp.real(1j * buf * Pd)), aux_oversampling) * k
-                # derivative = self.obj_convolve(derivative)
 
                 aux_oversampling = self.tel.PropagateField(np.squeeze(
-                    self.modeBasis.modesFullRes[:, :, i]) * initial_amplitude, initial_phase, \
+                    self.basis[:, :, i]) * initial_amplitude, initial_phase, \
                                                         self.zeroPaddingFactor, self.img_resolution)
                 buf = self.tel.focal_EMF
                 derivative = 2 * set_binning((xp.real(1j * buf * Pd)), aux_oversampling) * k
@@ -174,17 +99,13 @@ class LiFT:
             k = 2 * xp.pi / wavelength
 
             for i in modes_ids:
-                self.tel.OPD = (np.squeeze(self.modeBasis.modesFullRes[:, :, i]) * delta) + initial_OPD
-                # tmp1 = self.PropagateField(xp.sqrt(self.tel.src.fluxMap), k * self.tel.OPD,
-                #                       return_intensity=True, oversampling=1) * flux_norm
+                self.tel.OPD = (np.squeeze(self.basis[:, :, i]) * delta) + initial_OPD
 
                 self.tel.PropagateField(xp.sqrt(self.tel.src.fluxMap), k * self.tel.OPD,
                                       self.zeroPaddingFactor, self.img_resolution)
                 tmp1 = self.tel.PSF * flux_norm
 
-                self.tel.OPD = -(np.squeeze(self.modeBasis.modesFullRes[:, :, i]) * delta) + initial_OPD
-                # tmp2 = self.PropagateField(xp.sqrt(self.tel.src.fluxMap), k * self.tel.OPD,
-                #                       return_intensity=True, oversampling=1) * flux_norm
+                self.tel.OPD = -(np.squeeze(self.basis[:, :, i]) * delta) + initial_OPD
 
                 self.tel.PropagateField(xp.sqrt(self.tel.src.fluxMap), k * self.tel.OPD,
                                       self.zeroPaddingFactor, self.img_resolution)
@@ -197,6 +118,7 @@ class LiFT:
 
         return xp.dstack(H).sum(axis=2)  # sum all spectral interaction matricies
 
+
     def Reconstruct(self, PSF_inp, R_n, mode_ids, A_0=None, verbous=False, optimize_norm='sum'):
         """
         Function to reconstruct modal coefficients from the input PSF image using LIFT
@@ -207,7 +129,6 @@ class LiFT:
             R_n (ndarray or string or None): The pixel weighting matrix for LIFT. It can be passed to the function.
                                              from outside, modeled ('model'), updated dynamically ('iterative'), or
                                              assumed to be just detector's readout noise ('None').
-            mode_ids (ndarray or list):      IDs of the modal coefficients to be reconstructed
             A_0 (ndarray):                   initial assumtion for the coefficient values. In some sense, it acts as an additional
                                              phase diversity on top of the main phase diversity which is passed when class is initialized.
 
@@ -229,7 +150,7 @@ class LiFT:
 
         def PSF_from_coefs(coefs):
 
-            OPD = np.squeeze(self.modeBasis.modesFullRes @ coefs)
+            OPD = np.squeeze(self.basis @ coefs)
             self.tel.OPD = self.diversity_OPD + OPD
             wavelength = self.tel.src.wavelength
             k = 2 * np.pi / wavelength
@@ -252,10 +173,10 @@ class LiFT:
         # Account for the intial assumtion for the coefficients values
         if A_0 is None:
             # A_est = xp.zeros(modes.max().item() + 1, dtype=xp.float32)
-            A_est = xp.zeros(self.modeBasis.nModes, dtype=xp.float32)
+            A_est = xp.zeros(self.basis.shape[-1], dtype=xp.float32)
         else:
             # A_est = xp.array(A_0, dtype=xp.float32)
-            A_est = xp.zeros(self.modeBasis.nModes, dtype=xp.float32)
+            A_est = xp.zeros(self.basis.shape[-1], dtype=xp.float32)
             A_est[:len(A_0)] = xp.array(A_0, dtype=xp.float32)
         A_ests.append(xp.copy(A_est))
 

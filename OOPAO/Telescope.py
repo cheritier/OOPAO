@@ -262,6 +262,7 @@ class Telescope:
         conversion_constant = (180/np.pi)*3600*1000
         if detector is not None:
             zeroPaddingFactor = detector.psf_sampling
+            img_resolution    = detector.resolution
         if self.src is None:
             raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')   
             
@@ -293,8 +294,7 @@ class Telescope:
 
         if img_resolution is not None:
             if img_resolution > zeroPaddingFactor * resolution:
-                print('Error: image has too many pixels for this pupil sampling. Try using a pupil mask with more pixels')
-                return None
+                raise ValueError('Error: image has too many pixels for this pupil sampling. Try using a pupil mask with more pixels')
         else:
                 img_resolution = zeroPaddingFactor * resolution
 

@@ -51,7 +51,7 @@ cam2.FWC = 20000 # saturation of the detector in e-
 
 
 
-
+cam3.resolution = 20
 cam3.readoutNoise = 10
 cam3.photonNoise = True
 cam3.integrationTime = tel.samplingTime
