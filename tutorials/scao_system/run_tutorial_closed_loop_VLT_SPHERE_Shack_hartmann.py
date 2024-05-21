@@ -139,10 +139,10 @@ M2C = compute_M2C(telescope=tel, \
                   deformableMirror=dm, \
                   param=param, \
                   mem_available=8.1e9, \
-                  nmo=1000, \
+                  nmo=100, \
                   nZer=3, \
                   remove_piston=True, \
-                  recompute_cov=False)  # forces to recompute covariance matrix
+                  recompute_cov=False,lim_inversion=1e-30)  # forces to recompute covariance matrix
 
 tel.resetOPD()
 # project the mode on the DM

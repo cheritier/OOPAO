@@ -133,13 +133,13 @@ def estimateMisRegistration_Pyramid(nameFolder, nameSystem, tel, atm, ngs, dm_0,
         # define the next working point to adjust the scaling factor
         if contain_nan is False:
             for i_mis_reg in range(n_mis_reg):
-                val = (getattr(misRegistration_out, epsilonMisRegistration_field[i_mis_reg]) + np.round(misReg_tmp[i_mis_reg],precision))
+                val = (getattr(misRegistration_out, epsilonMisRegistration_field[i_mis_reg]) + np.round(misReg_tmp[i_mis_reg],precision)) -getattr(misRegistrationZeroPoint, epsilonMisRegistration_field[i_mis_reg]) 
                 if val>=0:
                     val=val%n_max
                 else:
                     val = -(n_max-val%n_max)
                     
-                setattr(misRegistration_out, epsilonMisRegistration_field[i_mis_reg],val)
+                setattr(misRegistration_out, epsilonMisRegistration_field[i_mis_reg],val+getattr(misRegistrationZeroPoint, epsilonMisRegistration_field[i_mis_reg]) )
                         
         
         # save the data for each iteration

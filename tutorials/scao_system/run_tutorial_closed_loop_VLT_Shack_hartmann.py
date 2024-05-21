@@ -131,10 +131,17 @@ tel*wfs
 plt.figure()
 plt.imshow(wfs.cam.frame)
 plt.title('WFS Camera Frame - With Noise')
-#%% -----------------------     Modal Basis   ----------------------------------
-# compute the modal basis
+
+
+# displayMap(wfs.maps_intensity_test[:,:,:],axis=0)
+displayMap(wfs.maps_intensity[:,:,:],axis=0)
+#%%
+
+# #%% -----------------------     Modal Basis   ----------------------------------
+# # compute the modal basis
 from OOPAO.calibration.compute_KL_modal_basis import compute_KL_basis
 M2C_KL = compute_KL_basis(tel,atm,dm)
+#%%
 # foldername_M2C  = None  # name of the folder to save the M2C matrix, if None a default name is used 
 # filename_M2C    = None  # name of the filename, if None a default name is used 
 # # KL Modal basis
@@ -167,27 +174,27 @@ M2C_KL = compute_KL_basis(tel,atm,dm)
 #                            nameBasis        = None,\
 #                            nMeasurements    = 100)
 
-#%% ZERNIKE Polynomials
-# create Zernike Object
-Z = Zernike(tel,300)
-# compute polynomials for given telescope
-Z.computeZernike(tel)
+# #%% ZERNIKE Polynomials
+# # create Zernike Object
+# Z = Zernike(tel,300)
+# # compute polynomials for given telescope
+# Z.computeZernike(tel)
 
-# mode to command matrix to project Zernike Polynomials on DM
-M2C_zernike = np.linalg.pinv(np.squeeze(dm.modes[tel.pupilLogical,:]))@Z.modes
+# # mode to command matrix to project Zernike Polynomials on DM
+# M2C_zernike = np.linalg.pinv(np.squeeze(dm.modes[tel.pupilLogical,:]))@Z.modes
 
-# show the first 10 zernikes
-dm.coefs = M2C_zernike[:,:10]
-tel*dm
-displayMap(tel.OPD)
+# # show the first 10 zernikes
+# dm.coefs = M2C_zernike[:,:10]
+# tel*dm
+# displayMap(tel.OPD)
 
-#%% to manually measure the interaction matrix
+# #%% to manually measure the interaction matrix
 
-# amplitude of the modes in m
+# # amplitude of the modes in m
 stroke=1e-9
 # Modal Interaction Matrix
 
-#%%
+#%
 wfs.is_geometric = True
 
 M2C_zonal = np.eye(dm.nValidAct)
@@ -211,18 +218,18 @@ plt.ylabel('WFS slopes STD')
 # Modal interaction matrix
 
 # Modal interaction matrix
-calib_zernike = CalibrationVault(calib_zonal.D@M2C_zernike)
+calib_zernike = CalibrationVault(calib_zonal.D@M2C_KL)
 
 plt.figure()
 plt.plot(np.std(calib_zernike.D,axis=0))
 plt.xlabel('Mode Number')
 plt.ylabel('WFS slopes STD')
 
-#%% switch to a diffractive SH-WFS
+#% switch to a diffractive SH-WFS
 
 wfs.is_geometric = False
 
-#%%
+#%
 tel.resetOPD()
 # initialize DM commands
 dm.coefs=0
@@ -236,7 +243,7 @@ plt.close('all')
     
 # These are the calibration data used to close the loop
 calib_CL    = calib_zernike
-M2C_CL      = M2C_zernike
+M2C_CL      = M2C_KL
 
 
 # combine telescope with atmosphere
@@ -267,8 +274,7 @@ plot_obj = cl_plot(list_fig          = [atm.OPD,tel.mean_removed_OPD,wfs.cam.fra
                    list_display_axis = [None,None,None,None,True,None,None],\
                    list_ratio        = [[0.95,0.95,0.1],[1,1,1,1]], s=20)
 # loop parameters
-gainCL                  = 0.4
-wfs.cam.photonNoise     = True
+gainCL                  = 0.5
 display                 = True
 
 reconstructor = M2C_CL@calib_CL.M
@@ -284,7 +290,6 @@ for i in range(param['nLoop']):
     # propagate to the WFS with the CL commands applied
     ngs*tel*dm*wfs
     src*tel
-    tel.print_optical_path()
     dm.coefs=dm.coefs-gainCL*np.matmul(reconstructor,wfsSignal)
     # store the slopes after computing the commands => 2 frames delay
     wfsSignal=wfs.signal

@@ -508,6 +508,8 @@ class DeformableMirror:
     
         G=np.exp(-(a*(X-x0)**2 +2*b*(X-x0)*(Y-y0) + c*(Y-y0)**2))    
         output = np.reshape(G,[1,self.resolution**2])
+        if self.floating_precision == 32:
+            output = np.float32(output)
         return output
     
     def print_properties(self):

@@ -234,7 +234,7 @@ displayMap(tel.OPD)
 
 from OOPAO.calibration.compute_KL_modal_basis import compute_KL_basis
 # use the default definition of the KL modes with forced Tip and Tilt. For more complex KL modes, consider the use of the compute_KL_basis function. 
-M2C_KL = compute_KL_basis(tel, atm, dm)
+M2C_KL = compute_KL_basis(tel, atm, dm,lim = 0)
 dm.coefs = M2C_KL[:,:10]
 tel*dm
 displayMap(tel.OPD)

@@ -87,7 +87,7 @@ filename = None
 extra_name = ''
 # name of the output folder -- if set to None automatically genmerated from the parameter file
 OPD_buffer = []
-nLoop = 1000
+nLoop = 2000
 import time
 
 wfs_signals             = np.zeros([nLoop,obj_stage_1.wfs.nSignal])
@@ -125,7 +125,7 @@ get_le_psf = True
 PSF_LE_1 = []
 PSF_LE_2 = []
 
-display = True
+display = False
 
 if display:
     from OOPAO.tools.displayTools import cl_plot
@@ -139,8 +139,8 @@ if display:
                        list_display_axis = [None,None,None],\
                        list_ratio        = [[0.95,0.1],[1,1,1]])
 
-gain_cl_first_stage = 0.7
-gain_cl_second_stage = 0.7
+gain_cl_first_stage = 0.3
+gain_cl_second_stage = 0.5
 
 from OOPAO.OPD_map import OPD_map
 opd = OPD_map(telescope=obj_stage_2.tel)
@@ -240,6 +240,8 @@ for i_loop in range(nLoop):
 
 #%% check the long exposure psf if requested
 
+N = 80
+
 # get the long exposure PSF
 le_psf = np.mean(np.asarray(PSF_LE_1),axis =0)
 
@@ -248,10 +250,11 @@ le_psf /= le_psf.max()
 
 plt.figure(),
 plt.subplot(1,2,1)
-plt.imshow(np.log10(le_psf),extent = [obj_stage_1.tel.xPSF_arcsec[0],obj_stage_1.tel.xPSF_arcsec[1],obj_stage_1.tel.xPSF_arcsec[0],obj_stage_1.tel.xPSF_arcsec[1]])
-plt.clim([-4,0])    
+plt.imshow(np.log10(le_psf)[N:-N,N:-N],extent = [obj_stage_1.tel.xPSF_arcsec[0]*(320-2*N)/320,obj_stage_1.tel.xPSF_arcsec[1]*(320-2*N)/320,obj_stage_1.tel.xPSF_arcsec[0]*(320-2*N)/320,obj_stage_1.tel.xPSF_arcsec[1]*(320-2*N)/320])
+plt.clim([-3,0])    
 plt.xlabel('[Arcsec]')
 plt.ylabel('[Arcsec]')
+plt.title('First Stage PSF')
 
 # get the long exposure PSF
 le_psf = np.mean(np.asarray(PSF_LE_2),axis =0)
@@ -260,7 +263,8 @@ le_psf = np.mean(np.asarray(PSF_LE_2),axis =0)
 le_psf /= le_psf.max()
 plt.subplot(1,2,2)
 
-plt.imshow(np.log10(le_psf),extent = [obj_stage_1.tel.xPSF_arcsec[0],obj_stage_1.tel.xPSF_arcsec[1],obj_stage_1.tel.xPSF_arcsec[0],obj_stage_1.tel.xPSF_arcsec[1]])
-plt.clim([-4,0])    
+plt.imshow(np.log10(le_psf)[N:-N,N:-N],extent = [obj_stage_1.tel.xPSF_arcsec[0]*(320-2*N)/320,obj_stage_1.tel.xPSF_arcsec[1]*(320-2*N)/320,obj_stage_1.tel.xPSF_arcsec[0]*(320-2*N)/320,obj_stage_1.tel.xPSF_arcsec[1]*(320-2*N)/320])
+plt.clim([-3,0])    
 plt.xlabel('[Arcsec]')
 plt.ylabel('[Arcsec]')
+plt.title('Second Stage PSF')

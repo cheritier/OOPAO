@@ -29,11 +29,11 @@ tel+atm
 
 # create different detector objects
 
-cam = Detector(psf_sampling=4)
+cam = Detector(psf_sampling=1)
 
 cam2 = Detector(psf_sampling=2)
 
-cam3 = Detector(psf_sampling=2)
+cam3 = Detector(psf_sampling=4)
 
 ngs*tel*cam*cam2*cam3
 
@@ -51,20 +51,20 @@ cam2.FWC = 20000 # saturation of the detector in e-
 
 
 
+cam3.resolution = 20
 cam3.readoutNoise = 10
 cam3.photonNoise = True
 cam3.integrationTime = tel.samplingTime
 
 
 # number of pixels to crop to zoom on the core of the PSF 
-N = 20
 
 plt.close('all')
 
 from OOPAO.tools.displayTools import cl_plot
 
 
-plot_obj = cl_plot(list_fig          = [cam.frame[N:-N,N:-N],cam2.frame[N:-N,N:-N],cam3.frame[N:-N,N:-N]],\
+plot_obj = cl_plot(list_fig          = [cam.frame[:],cam2.frame[:],cam3.frame[:]],\
                    type_fig          = ['imshow','imshow','imshow'],\
                    list_title        = ['Integration Time: '+str(cam.integrationTime)+' s','Integration Time: '+str(cam2.integrationTime)+' s','Integration Time: '+str(cam3.integrationTime)+' s'],\
                    list_lim          = [None,None,None],\
@@ -75,11 +75,12 @@ plot_obj = cl_plot(list_fig          = [cam.frame[N:-N,N:-N],cam2.frame[N:-N,N:-
 
 for i in range(20000):
     atm.generateNewPhaseScreen(i)
+    tel-atm
     ngs*tel*cam
     ngs*tel*cam2
     ngs*tel*cam3
 
-    cl_plot(list_fig   = [cam.frame[N:-N,N:-N],cam2.frame[N:-N,N:-N],cam3.frame[N:-N,N:-N]],
+    cl_plot(list_fig   = [cam.frame[:],cam2.frame[:],cam3.frame[:]],
                                plt_obj = plot_obj)
     plt.pause(0.001)
     if plot_obj.keep_going is False:

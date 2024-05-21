@@ -7,10 +7,11 @@ Created on Wed Apr  3 14:18:03 2024
 
 import numpy as np
 import time
+from OOPAO.tools.tools import set_binning
 
 class Detector:
     def __init__(self,
-                 nRes:int=10,
+                 nRes:int=None,
                  integrationTime:float=None,
                  bits:int=None,
                  FWC:int=None,
@@ -82,12 +83,6 @@ class Detector:
             Background 2D map to consider to apply the background noise.
             The default is None.
 
-        Raises
-        ------
-        ValueError
-            DESCRIPTION.
-
-        Returns
         -------
         None.
 
@@ -108,7 +103,11 @@ class Detector:
         self.photonNoise        = photonNoise        
         self.backgroundNoise    = backgroundNoise   
         self.backgroundNoiseMap = backgroundNoiseMap
-        self.frame              = np.zeros([nRes,nRes])
+        if self.resolution is not None:
+            self.frame              = np.zeros([nRes,nRes])
+        else:
+            self.frame              = np.zeros([10,10])            
+                
         self.saturation         = 0
         self.tag                = 'detector'   
         self.buffer_frame       = []
@@ -138,25 +137,7 @@ class Detector:
         
         
     def set_binning(self, array, binning_factor,mode='sum'):
-        if array.shape[0]%binning_factor == 0:
-            if array.ndim == 2:
-                new_shape = [int(np.round(array.shape[0]/binning_factor)), int(np.round(array.shape[1]/binning_factor))]
-                shape = (new_shape[0], array.shape[0] // new_shape[0], 
-                         new_shape[1], array.shape[1] // new_shape[1])
-                if mode == 'sum':
-                    return array.reshape(shape).sum(-1).sum(1)
-                else:
-                    return array.reshape(shape).mean(-1).mean(1)
-            else:
-                new_shape = [int(np.round(array.shape[0]/binning_factor)), int(np.round(array.shape[1]/binning_factor)), array.shape[2]]
-                shape = (new_shape[0], array.shape[0] // new_shape[0], 
-                         new_shape[1], array.shape[1] // new_shape[1], new_shape[2])
-                if mode == 'sum':
-                    return array.reshape(shape).sum(-2).sum(1)
-                else:
-                    return array.reshape(shape).mean(-2).mean(1)
-        else:
-            raise ValueError('Binning factor %d not compatible with detector size'%(binning_factor))
+        set_binning(array, binning_factor,mode)
 
 
     def set_sampling(self,array):
@@ -186,7 +167,7 @@ class Detector:
         else:
             self.saturation = (100*frame.max()/self.FWC)
             if frame.max() > self.FWC:
-                print('Warning: the detector is saturating (gain applyed %i), %.1f %%'%(self.gain,self.saturation))
+                print('Warning: the ADC is saturating (gain applyed %i), %.1f %%'%(self.gain,self.saturation))
             frame = (frame / self.FWC * (2**self.bits-1)).astype(int) 
             return np.clip(frame, a_min=frame.min(), a_max=2**self.bits-1)
 
@@ -231,11 +212,11 @@ class Detector:
             
             # If the sensor is EMCCD the applyed gain is before the analog-to-digital conversion
             if self.sensor == 'EMCCD': 
-                frame = self.set_photon_noise(frame) * self.gain
+                frame *= self.gain
     
             # Simulate hardware binning of the detector
             if self.binning != 1:
-                frame = self.set_binning(frame,self.binning)
+                frame = set_binning(frame,self.binning)
            
             # Apply readout noise
             if self.readoutNoise!=0:    
@@ -252,7 +233,8 @@ class Detector:
             # Save the integrated frame and buffer
             self.frame  = frame.copy()
             self.buffer = self.buffer_frame.copy()
-            self.resolution       = self.frame.shape[0]
+            if self.resolution is None:
+                self.resolution       = self.frame.shape[0]
             if self.fov_arcsec is not None:
                 self.pixel_size_rad     = self.fov_rad/self.resolution 
                 self.pixel_size_arcsec  = self.fov_arcsec/self.resolution
@@ -260,7 +242,7 @@ class Detector:
             # reset the buffer and _integrated_time property
             self.buffer_frame     = []
             self._integrated_time = 0
-            return 
+             
     
     def integrate(self,frame):
         self.perfect_frame = frame.copy()
@@ -345,7 +327,8 @@ class Detector:
         print()
         print('------------ Detector ------------')
         print('{:^25s}|{:^9s}'.format('Sensor type',self.sensor))
-        print('{:^25s}|{:^9d}'.format('Resolution [px]',self.resolution//self.binning))
+        if self.resolution is not None:
+            print('{:^25s}|{:^9d}'.format('Resolution [px]',self.resolution//self.binning))
         if self.integrationTime is not None:
             print('{:^25s}|{:^9.4f}'.format('Exposure time [s]',self.integrationTime))
         if self.bits is not None:
