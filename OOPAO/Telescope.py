@@ -268,7 +268,7 @@ class Telescope:
             
         amp_mask = 1
         phase    = self.src.phase
-        amp      = amp_mask*self.pupil*self.pupilReflectivity*np.sqrt(self.src.fluxMap)*np.exp(1j*phase) 
+        amp      = amp_mask*self.pupil*self.pupilReflectivity*np.sqrt(self.src.fluxMap)
         # function to compute the em-field and PSF        
         self.PropagateField(amplitude = amp , phase = phase, zeroPaddingFactor = zeroPaddingFactor,img_resolution=img_resolution)
 
