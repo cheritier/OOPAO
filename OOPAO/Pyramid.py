@@ -978,9 +978,14 @@ class Pyramid:
     def __mul__(self,obj): 
         if obj.tag=='detector':
             obj._integrated_time+=self.telescope.samplingTime
-            if obj.resolution == self.nRes:
-                frame = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)                
-            else:
+            try:
+                if obj.is_focal_plane_camera:
+                    I = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)   
+                    n_crop = (I.shape[0]-obj.resolution)//2
+                    frame = I[n_crop:-n_crop,n_crop:-n_crop]
+                else:
+                    raise AttributeError    
+            except:
                 I = self.pyramidFrame
                 frame = (obj.set_binning(I,self.nRes/obj.resolution))
 
