@@ -19,7 +19,41 @@ except ImportError or ModuleNotFoundError:
 from OOPAO.tools.tools import set_binning
 
 class LiFT:
-    def __init__(self, tel, basis, diversity_OPD, iterations, det, ang_pixel, img_resolution):
+    def __init__(self, tel,
+                 basis,
+                 det,
+                 diversity_OPD:float,
+                 iterations:int,
+                 ang_pixel:float,
+                 img_resolution:int,
+                 numerical:bool):
+
+        """
+        LiFT: Linearized Focal Plane Technique is a type of Focal Plane Wavefront Sensor
+
+        :param tel:
+            Telescope object coupled with a Source object
+        :param basis:
+            Modal basis: Zernike, KL etc. - data cube with the different basis elements
+        :param det:
+            Detector object
+        :param diversity_OPD: float
+            2D array representing the Diversity Optical Path Difference
+        :param iterations: int
+            Maximum number of iterations allowed for LiFT algorithm
+        :param ang_pixel:float
+            Angular pixel size in mas of the detector - this parameter allows changing the PSF sampling
+        :param img_resolution:
+            Resolution of the PSF: if img_resolution = 10, then we have a PSF with 10*10 pixels
+            When under noisy conditions or under the presence of high-order residuals, choosing a low img_resolution can
+            help LiFT performance; This parameter defines the FoV
+        :param numerical:bool
+            If True, the interaction matrices of LiFT are calculated numerically; if False, which is the default value,
+            the interaction matrices of LiFT are calculated analytically
+
+
+        Examples of usage of this function are provided in the tutorial how_to_LiFT.ipynb
+        """
 
         global global_gpu_flag
         self.tel            = tel
@@ -39,6 +73,8 @@ class LiFT:
         self.ang_pixel_rad      = self.ang_pixel/((180/np.pi)*3600*1000)
         self.zeroPaddingFactor  = (self.tel.src.wavelength / self.tel.D) * (1/(self.ang_pixel_rad))
 
+        self.numerical = numerical
+
 
     def print_modes(self, A_vec):
         xp = cp if self.gpu else np
@@ -56,7 +92,7 @@ class LiFT:
             return mat
 
 
-    def generateLIFTinteractionMatrices(self, coefs, modes_ids, flux_norm=1.0, numerical=False):
+    def generateLIFTinteractionMatrices(self, coefs, modes_ids, flux_norm=1.0):
         xp = cp if self.gpu else np
 
         if isinstance(coefs, list):
@@ -65,7 +101,7 @@ class LiFT:
         initial_OPD = np.squeeze(self.basis @ coefs) + self.diversity_OPD
 
         H = []
-        if not numerical:
+        if not self.numerical:
             wavelength = self.tel.src.wavelength
 
             initial_amplitude = xp.sqrt(self.tel.pupilReflectivity * self.tel.src.nPhoton * flux_norm * self.tel.samplingTime * (
@@ -119,7 +155,7 @@ class LiFT:
         return xp.dstack(H).sum(axis=2)  # sum all spectral interaction matricies
 
 
-    def Reconstruct(self, PSF_inp, R_n, mode_ids, A_0=None, verbous=False, optimize_norm='sum'):
+    def Reconstruct(self, PSF_inp, R_n, mode_ids, A_0=None, verbous=False, optimize_norm='sum',check_convergence=True):
         """
         Function to reconstruct modal coefficients from the input PSF image using LIFT
 
@@ -132,14 +168,17 @@ class LiFT:
             A_0 (ndarray):                   initial assumtion for the coefficient values. In some sense, it acts as an additional
                                              phase diversity on top of the main phase diversity which is passed when class is initialized.
 
-            A_ref (ndarray):                 Reference coefficients to compare the reconstruction with. Useful only when ground-truth (A_ref) is known.
-
             verbous (bool):                  Set 'True' to print the intermediate reconstruction results.
 
             optimize_norm (string or None):  Recomputes the flux of the recontructed PSF iteratively. If 'None', the flux is not recomputed,
                                              this is recommended only if the target brightness is precisely known. In mosyt of the case it is
                                              recommended to switch it on. When 'sum', the reconstructed PSF is normalized to the sum of the pixels
                                              of the input PSF. If 'max', then the reconstructed PSF is normalized to the maximal value of the input PSF.
+
+            ckeck_convergence (bool):        If True, we check both convergence criteria at each iteration, which gives the possibility to exit the cycle
+                                             before reaching the maximum number of iterations (self.iterations). If False, the convergence criteria are ignored
+                                             and the cycle continues until we reach the maximum number of iterations.
+
         """
         if self.gpu:
             xp = cp
@@ -216,7 +255,8 @@ class LiFT:
             if i > 0 and (criterion(i) < 1e-6 or coefs_norm(A_ests[i] - A_ests[i - 1]) < 1e-12):
                 if verbous:
                     print('Criterion', criterion(i), 'is reached at iter.', i)
-                break
+                if check_convergence == True:
+                    break
 
             # Generate interaction matricies
             H = self.generateLIFTinteractionMatrices(A_est, modes, flux_scale / flux_cap)
