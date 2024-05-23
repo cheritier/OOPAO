@@ -12,7 +12,6 @@ import time
 import numpy as np
 from joblib import Parallel, delayed
 
-from .M4_model.make_M4_influenceFunctions import makeM4influenceFunctions
 from .MisRegistration import MisRegistration
 from .tools.interpolateGeometricalTransformation import interpolate_cube
 from .tools.tools import emptyClass, pol2cart, print_
@@ -195,6 +194,8 @@ class DeformableMirror:
         self.M4_param = M4_param
         if M4_param is not None:
             if M4_param['isM4']:
+                from .M4_model.make_M4_influenceFunctions import makeM4influenceFunctions
+
                 print_('Building the set of influence functions of M4...',print_dm_properties)
                 # generate the M4 influence functions            
 
