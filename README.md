@@ -96,14 +96,25 @@ please consider using a `conda` environment and installing these using `conda in
 
 OOPAO multi-threading is based on the use of the numpy package built with the mkl library, make sure that the proper numpy package is installed to make sure that the operations are multi-threaded. 
 To do this you can use the numpy.show_config() function in your python session: 
-
+```
 import numpy
 numpy.show_config()
-
+```
 
 ## CONTRIBUTORS
-C.T. Heritier, C. Vérinaud, B. Engler, J. Aveiro
+Main develloper and maintainer: Cédric Taïssir Héritier
 
+Main contributors: 
+ - João Aveiro
+ - Byron Engler
+ - Arseniy Kuznetsov
+ - Rafael Machado Salgueiro
+ - Arnaud Striffling
+ - Christophe Vérinaud
+
+## CITING OOPAO
+If you use OOPAO for your own research, we kindly ask you to cite the OOPAO AO4ELT7 proceeding (Heritier et al. 2023).
+See https://hal.science/AO4ELT7/hal-04402878v1.
 
 ## ACKNOWLEDGEMENTS
 This tool has been developped during the Engineering & Research Technology Fellowship of C. Héritier funded by ESO. 
@@ -111,4 +122,4 @@ Some functionalities of the code make use of the aotools package developped by M
 
 
 ## LICENSE
-This project is licensed under the terms of the MIT license.
+This project is licensed under the terms of the GPL license.
