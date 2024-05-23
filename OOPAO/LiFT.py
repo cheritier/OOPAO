@@ -19,25 +19,81 @@ except ImportError or ModuleNotFoundError:
 from OOPAO.tools.tools import set_binning
 
 class LiFT:
-    def __init__(self, tel, basis, diversity_OPD, iterations, det, ang_pixel, img_resolution):
+    def __init__(self, tel,
+                 basis,
+                 det,
+                 diversity_OPD:float,
+                 iterations:int,
+                 img_resolution:int,
+                 numerical:bool,
+                 ang_pixel_arcsec:float=None):
+        """
+        LiFT: Linearized Focal Plane Technique is a type of Focal Plane Wavefront Sensor
 
+        Parameters
+        ----------
+        tel : Telescope Object
+            Telescope object coupled with a Source object that carries the wavelength information.
+        basis : ndarray
+            Modal basis: Zernike, KL etc. - provided as a 3D array of size [n_pix, n_pix, n_modes]. The last dimension should be for the mode index.
+        det : Detector object
+            Detector object used to apply the proper sampling (default) and get the read-out noise properties for the weighting of the input data.
+        diversity_OPD : float
+            2D array representing the Diversity Optical Path Difference (OPD) in [m].
+        iterations : int
+            Maximum number of iterations allowed for LiFT algorithm.
+        ang_pixel_arcsec : float
+            Specify the angular pixel size in arcsec - this parameter sets the PSF sampling and overrides the detector sampling.
+        img_resolution : int
+            Resolution of the PSF images in detector pixels.The PSF are computed according to the ang
+            When under noisy conditions or under the presence of high-order residuals, choosing a low img_resolution can
+            help LiFT performance.
+        numerical : bool
+            If True, the interaction matrices of LiFT are calculated numerically; if False,
+            the interaction matrices of LiFT are calculated analytically. The default value is False.
+
+        Returns
+        -------
+        None.
+
+        Examples of usage of this function are provided in the tutorial how_to_LiFT.ipynb
+
+        """
+        
         global global_gpu_flag
         self.tel            = tel
         self.det            = det
-        self.basis          = basis
-        self.diversity_OPD  = diversity_OPD
-        self.iterations     = iterations
-        self.ang_pixel      = ang_pixel  # mas
-        self.img_resolution = img_resolution
-        self.object         = None
+        self.basis          = np.atleast_3d(basis)
+        if self.basis.shape[0]!= self.tel.resolution and self.basis.shape[1]!=self.tel.resolution:
+            raise ValueError ('The modal basis resolution (%i,%i) does not match the telescope resolution %i',self.basis.shape[0],self.basis.shape[1],self.tel.resolution)
+                
+        self.diversity_OPD    = diversity_OPD
+        self.iterations       = iterations
+        self.img_resolution   = img_resolution
+        self.object           = None
 
         self.gpu = False and global_gpu_flag
 
         if self.gpu:
             self.diversity_OPD = cp.array(self.diversity_OPD, dtype=cp.float32)
+        
+        if ang_pixel_arcsec is not None:
+            self.ang_pixel_arcsec   = ang_pixel_arcsec
+            self.ang_pixel_rad      = self.ang_pixel_arcsec/((180/np.pi)*3600)
+            self.zeroPaddingFactor  = (self.tel.src.wavelength / self.tel.D) * (1/(self.ang_pixel_rad))
+            print('Using user-input PSF sampling:%.1f Pixels/FWHM '%self.zeroPaddingFactor)
 
-        self.ang_pixel_rad      = self.ang_pixel/((180/np.pi)*3600*1000)
-        self.zeroPaddingFactor  = (self.tel.src.wavelength / self.tel.D) * (1/(self.ang_pixel_rad))
+
+        else:
+            self.zeroPaddingFactor  = self.det.psf_sampling
+            self.ang_pixel_rad      = (self.tel.src.wavelength / self.tel.D)/ self.zeroPaddingFactor
+            self.ang_pixel_arcsec   = self.ang_pixel_rad *((180/np.pi)*3600)
+            print('Using detector PSF sampling:%.1f Pixels/FWHM '%self.zeroPaddingFactor)
+            
+            
+        
+
+        self.numerical = numerical
 
 
     def print_modes(self, A_vec):
@@ -56,7 +112,7 @@ class LiFT:
             return mat
 
 
-    def generateLIFTinteractionMatrices(self, coefs, modes_ids, flux_norm=1.0, numerical=False):
+    def generateLIFTinteractionMatrices(self, coefs, modes_ids, flux_norm=1.0):
         xp = cp if self.gpu else np
 
         if isinstance(coefs, list):
@@ -65,7 +121,7 @@ class LiFT:
         initial_OPD = np.squeeze(self.basis @ coefs) + self.diversity_OPD
 
         H = []
-        if not numerical:
+        if not self.numerical:
             wavelength = self.tel.src.wavelength
 
             initial_amplitude = xp.sqrt(self.tel.pupilReflectivity * self.tel.src.nPhoton * flux_norm * self.tel.samplingTime * (
@@ -119,35 +175,59 @@ class LiFT:
         return xp.dstack(H).sum(axis=2)  # sum all spectral interaction matricies
 
 
-    def Reconstruct(self, PSF_inp, R_n, mode_ids, A_0=None, verbous=False, optimize_norm='sum'):
+    def Reconstruct(self, PSF_inp, R_n, mode_ids, A_0=None, verbous=False, optimize_norm='sum',check_convergence=True, numerical=None):
+        """        
+        # Function to reconstruct modal coefficients from the input PSF image using LIFT
+
+        Parameters
+        ----------
+        PSF_inp : ndarray
+            2-d array of the input PSF image to reconstruct.
+        R_n : ndarray or string or None
+            The pixel weighting matrix for LIFT. It can be passed to the function.
+            from outside, modeled ('model'), updated dynamically ('iterative'), or
+            assumed to be just detector's readout noise ('None')..
+        mode_ids : list
+            List of index to specify which modes of the basis are reconstructed in the LIFT estimation.
+        A_0 : ndarray, optional
+            initial assumtion for the coefficient values. In some sense, it acts as an additional
+            phase diversity on top of the main phase diversity which is passed when class is initialized. The default is None.
+        verbous : bool, optional
+            Set 'True' to print the intermediate reconstruction results. The default is False.
+        optimize_norm : TYPE, optional
+            Recomputes the flux of the recontructed PSF iteratively. If 'None', the flux is not recomputed,
+            this is recommended only if the target brightness is precisely known. In mosyt of the case it is
+            recommended to switch it on. When 'sum', the reconstructed PSF is normalized to the sum of the pixels
+            of the input PSF. If 'max', then the reconstructed PSF is normalized to the maximal value of the input PSF. The default is 'sum'.
+        check_convergence : TYPE, optional
+            If True, both convergence criteria are considered at each iteration This gives the possibility to exit the cycle
+            before reaching the maximum number of iterations (self.iterations). If False, the convergence criteria are ignored
+            and the cycle continues until we reach the maximum number of iterations specified by self.iterations. The default is True.
+        numerical : bool, optional
+            If True, the interaction matrices of LiFT are calculated numerically; if False, the interaction matrices of LiFT are calculated analytically.
+            The default is None.
+
+        Returns
+        -------
+        A_est : The estimated modal coefficients correponding to the modal basis specified in self.basis.
+
+        PSF_cap : The correponding PSF computed using the estimation A_est.
+            
+        history : Dictionnary providing the ontermediate data saved at each iteration: 
+                - P_ML = Concatenation of the Maximul Likelyhood Reconstructors
+                - H = Concatenation of the interaction matrices.
+                - A_est = Concatenation of the modal coefficients estimation
+                - C = Concatenation of the convergence criterion values.
         """
-        Function to reconstruct modal coefficients from the input PSF image using LIFT
 
-        Parameters:
-            PSF (ndarray):                   2-d array of the input PSF image to reconstruct.
-
-            R_n (ndarray or string or None): The pixel weighting matrix for LIFT. It can be passed to the function.
-                                             from outside, modeled ('model'), updated dynamically ('iterative'), or
-                                             assumed to be just detector's readout noise ('None').
-            A_0 (ndarray):                   initial assumtion for the coefficient values. In some sense, it acts as an additional
-                                             phase diversity on top of the main phase diversity which is passed when class is initialized.
-
-            A_ref (ndarray):                 Reference coefficients to compare the reconstruction with. Useful only when ground-truth (A_ref) is known.
-
-            verbous (bool):                  Set 'True' to print the intermediate reconstruction results.
-
-            optimize_norm (string or None):  Recomputes the flux of the recontructed PSF iteratively. If 'None', the flux is not recomputed,
-                                             this is recommended only if the target brightness is precisely known. In mosyt of the case it is
-                                             recommended to switch it on. When 'sum', the reconstructed PSF is normalized to the sum of the pixels
-                                             of the input PSF. If 'max', then the reconstructed PSF is normalized to the maximal value of the input PSF.
-        """
         if self.gpu:
             xp = cp
             convert = lambda x: cp.asnumpy(x)
         else:
             xp = np
             convert = lambda x: x
-
+        if numerical is not None:
+            self.numerical = numerical
         def PSF_from_coefs(coefs):
 
             OPD = np.squeeze(self.basis @ coefs)
@@ -216,7 +296,8 @@ class LiFT:
             if i > 0 and (criterion(i) < 1e-6 or coefs_norm(A_ests[i] - A_ests[i - 1]) < 1e-12):
                 if verbous:
                     print('Criterion', criterion(i), 'is reached at iter.', i)
-                break
+                if check_convergence == True:
+                    break
 
             # Generate interaction matricies
             H = self.generateLIFTinteractionMatrices(A_est, modes, flux_scale / flux_cap)
