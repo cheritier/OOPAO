@@ -26,24 +26,24 @@ n_subaperture = 20
 from OOPAO.Telescope import Telescope
 
 # create the Telescope object
-tel = Telescope(resolution           = 4*n_subaperture,                          # resolution of the telescope in [pix]
+tel = Telescope(resolution           = 6*n_subaperture,                          # resolution of the telescope in [pix]
                 diameter             = 8,                                        # diameter in [m]        
                 samplingTime         = 1/1000,                                   # Sampling time in [s] of the AO loop
                 centralObstruction   = 0.1,                                      # Central obstruction in [%] of a diameter 
                 display_optical_path = False,                                    # Flag to display optical path
                 fov                  = 10 )                                     # field of view in [arcsec]. If set to 0 (default) this speeds up the computation of the phase screens but is uncompatible with off-axis targets
 
-# # Apply spiders to the telescope pupil
-# thickness_spider    = 0.05                                                       # thickness of the spiders in m
-# angle               = [45, 135, 225, 315]                                        # angle in degrees for each spider
-# offset_Y            = [-0.2, -0.2, 0.2, 0.2]                                     # shift offsets for each spider
-# offset_X            = None
+# Apply spiders to the telescope pupil
+thickness_spider    = 0.1                                                # thickness of the spiders in m
+angle               = [30, 150, 210, 330]                                        # angle in degrees for each spider
+offset_Y            = [-0.1, -0.1, 0.1, 0.1]                                     # shift offsets for each spider
+offset_X            = None
 
-# tel.apply_spiders(angle, thickness_spider, offset_X=offset_X, offset_Y=offset_Y)
+tel.apply_spiders(angle, thickness_spider, offset_X=offset_X, offset_Y=offset_Y)
 
-# # display current pupil
-# plt.figure()
-# plt.imshow(tel.pupil)
+# display current pupil
+plt.figure()
+plt.imshow(tel.pupil)
 
 #%% -----------------------     NGS   ----------------------------------
 from OOPAO.Source import Source
@@ -81,7 +81,7 @@ from OOPAO.Atmosphere import Atmosphere
            
 # create the Atmosphere object
 atm = Atmosphere(telescope     = tel,                               # Telescope                              
-                 r0            = 0.1,                              # Fried Parameter [m]
+                 r0            = 0.15,                              # Fried Parameter [m]
                  L0            = 25,                                # Outer Scale [m]
                  fractionalR0  = [0.45 ,0.1  ,0.1  ,0.25  ,0.1   ], # Cn2 Profile
                  windSpeed     = [10   ,12   ,11   ,15    ,20    ], # Wind Speed in [m]
@@ -266,7 +266,6 @@ plt.figure()
 plt.imshow(wfs.cam.frame)
 plt.title('WFS Camera Frame - With Noise')
 
-
 #%% -----------------------     Modal Basis - Zernike  ----------------------------------
 # from OOPAO.Zernike import Zernike
 
@@ -300,13 +299,14 @@ displayMap(tel.OPD)
 #%% -----------------------     Calibration: Interaction Matrix  ----------------------------------
 
 # amplitude of the modes in m
-stroke=1e-9
+stroke=ngs.wavelength/16
 # zonal Interaction Matrix
 M2C_zonal = np.eye(dm.nValidAct)
 
 # modal Interaction Matrix for 300 modes
 M2C_modal = M2C_KL[:,:300]
 
+tel-atm
 # zonal interaction matrix
 calib_modal = InteractionMatrix(ngs            = ngs,
                                 atm            = atm,
@@ -315,7 +315,7 @@ calib_modal = InteractionMatrix(ngs            = ngs,
                                 wfs            = wfs,   
                                 M2C            = M2C_modal, # M2C matrix used 
                                 stroke         = stroke,    # stroke for the push/pull in M2C units
-                                nMeasurements  = 12,        # number of simultaneous measurements
+                                nMeasurements  = 6,        # number of simultaneous measurements
                                 noise          = 'off',     # disable wfs.cam noise 
                                 display        = True,      # display the time using tqdm
                                 single_pass    = True)      # only push to compute the interaction matrix instead of push-pull
@@ -330,21 +330,25 @@ plt.ylabel('WFS slopes STD')
 from OOPAO.Detector import Detector
 
 # instrument path
-src_cam = Detector(tel.resolution)
-src_cam.psf_sampling = 2
-src_cam.integrationTime = tel.samplingTime*100
+src_cam = Detector(tel.resolution*4)
+src_cam.psf_sampling = 4
+src_cam.integrationTime = tel.samplingTime*1
 # put the scientific target off-axis to simulate anisoplanetism (set to  [0,0] to remove anisoplanetism)
-src.coordinates = [5,0]
+src.coordinates = [0.4,0]
 
 # WFS path
 ngs_cam = Detector(tel.resolution)
-ngs_cam.psf_sampling = 2
+ngs_cam.psf_sampling = 4
 ngs_cam.integrationTime = tel.samplingTime
 
 # initialize Telescope DM commands
 tel.resetOPD()
 dm.coefs=0
 ngs*tel*dm*wfs
+wfs*wfs.focal_plane_camera
+# Update the r0 parameter, generate a new phase screen for the atmosphere and combine it with the Telescope
+# atm.r0 = 0.15
+atm.generateNewPhaseScreen(seed = 10)
 tel+atm
 
 tel.computePSF(4)
@@ -359,8 +363,8 @@ M2C_CL      = M2C_modal
 tel+atm
 
 # initialize DM commands
-dm.coefs=0
-ngs*tel*dm*wfs
+atm*ngs*tel*ngs_cam
+atm*src*tel*src_cam
 
 plt.show()
 
@@ -379,7 +383,7 @@ plot_obj = cl_plot(list_fig          = [atm.OPD,
                                         tel.mean_removed_OPD,
                                         [[0,0],[0,0],[0,0]],
                                         wfs.cam.frame,
-                                        wfs.get_modulation_frame(radius=20),
+                                        wfs.focal_plane_camera.frame,
                                         np.log10(tel.PSF),
                                         np.log10(tel.PSF)],
                    type_fig          = ['imshow',
@@ -399,14 +403,14 @@ plot_obj = cl_plot(list_fig          = [atm.OPD,
                                         None,
                                         None],
                    list_legend       = [None,None,None,['SRC@'+str(src.coordinates[0])+'"','NGS@'+str(ngs.coordinates[0])+'"'],None,None,None,None],
-                   list_label        = [None,None,None,['Time','WFE [nm]'],None,None,['NGS PSF',''],['SRC PSF','']],
+                   list_label        = [None,None,None,['Time','WFE [nm]'],None,None,['NGS PSF@'+str(ngs.coordinates[0])+'" -- FOV: '+str(np.round(ngs_cam.fov_arcsec,2)) +'"',''],['SRC PSF@'+str(src.coordinates[0])+'" -- FOV: '+str(np.round(src_cam.fov_arcsec,2)) +'"','']],
                    n_subplot         = [4,2],
                    list_display_axis = [None,None,None,True,None,None,None,None],
                    list_ratio        = [[0.95,0.95,0.1],[1,1,1,1]], s=20)
 
 # loop parameters
 gainCL                  = 0.4
-wfs.cam.photonNoise     = True
+wfs.cam.photonNoise     = False
 display                 = True
 frame_delay             = 2
 reconstructor = M2C_CL@calib_CL.M
@@ -419,6 +423,7 @@ for i in range(nLoop):
     total[i]=np.std(tel.OPD[np.where(tel.pupil>0)])*1e9
     # propagate light from the NGS through the atmosphere, telescope, DM to the WFS and NGS camera with the CL commands applied
     atm*ngs*tel*dm*wfs*ngs_cam
+    wfs*wfs.focal_plane_camera
     # save residuals corresponding to the NGS
     residual_NGS[i] = np.std(tel.OPD[np.where(tel.pupil>0)])*1e9
     OPD_NGS         = tel.mean_removed_OPD.copy()
@@ -445,11 +450,11 @@ for i in range(nLoop):
     print('Elapsed time: ' + str(time.time()-a) +' s')
     
     # update displays if required
-    if display==True and i>20:        
+    if display==True and i>0:        
         
         SRC_PSF = np.log10(np.abs(src_cam.frame))
         # update range for PSF images
-        plot_obj.list_lim = [None,None,None,None,None,None,[NGS_PSF.max()-4, NGS_PSF.max()],[SRC_PSF.max()-4, SRC_PSF.max()]]        
+        plot_obj.list_lim = [None,None,None,None,None,None,[NGS_PSF.max()-3, NGS_PSF.max()],[SRC_PSF.max()-4, SRC_PSF.max()]]        
         # update title
         plot_obj.list_title = ['Turbulence WFE:'+str(np.round(total[i]))+'[nm]',
                                'NGS@'+str(ngs.coordinates[0])+'" WFE:'+str(np.round(residual_NGS[i]))+'[nm]',
@@ -460,7 +465,7 @@ for i in range(nLoop):
                                 None,
                                 None]
 
-        cl_plot(list_fig   = [1e9*atm.OPD,1e9*OPD_NGS,1e9*OPD_SRC,[np.arange(i+1),residual_SRC[:i+1],residual_NGS[:i+1]],wfs.cam.frame,wfs.get_modulation_frame(radius = 20,norma=False),NGS_PSF, SRC_PSF],
+        cl_plot(list_fig   = [1e9*atm.OPD,1e9*OPD_NGS,1e9*OPD_SRC,[np.arange(i+1),residual_SRC[:i+1],residual_NGS[:i+1]],wfs.cam.frame,wfs.focal_plane_camera.frame,NGS_PSF, SRC_PSF],
                                plt_obj = plot_obj)
         plt.pause(0.001)
         if plot_obj.keep_going is False:

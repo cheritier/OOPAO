@@ -50,14 +50,13 @@ cam2.photonNoise = True
 cam2.FWC = 20000 # saturation of the detector in e-
 
 
-
-cam3.resolution = 20
+cam3.resolution = None
 cam3.readoutNoise = 10
 cam3.photonNoise = True
 cam3.integrationTime = tel.samplingTime
 
 
-# number of pixels to crop to zoom on the core of the PSF 
+## number of pixels to crop to zoom on the core of the PSF 
 
 plt.close('all')
 
@@ -75,7 +74,7 @@ plot_obj = cl_plot(list_fig          = [cam.frame[:],cam2.frame[:],cam3.frame[:]
 
 for i in range(20000):
     atm.generateNewPhaseScreen(i)
-    tel-atm
+    tel+atm
     ngs*tel*cam
     ngs*tel*cam2
     ngs*tel*cam3

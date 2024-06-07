@@ -263,7 +263,6 @@ plt.figure()
 plt.imshow(wfs.cam.frame)
 plt.title('WFS Camera Frame - With Noise')
 
-
 #%% -----------------------     Modal Basis - Zernike  ----------------------------------
 # from OOPAO.Zernike import Zernike
 
@@ -327,26 +326,25 @@ plt.ylabel('WFS slopes STD')
 from OOPAO.Detector import Detector
 
 # instrument path
-src_cam = Detector(tel.resolution)
+src_cam = Detector(tel.resolution*4)
 src_cam.psf_sampling = 4
-src_cam.integrationTime = tel.samplingTime*50
-
+src_cam.integrationTime = tel.samplingTime*10
 # put the scientific target off-axis to simulate anisoplanetism (set to  [0,0] to remove anisoplanetism)
-src.coordinates = [1,0]
-
+src.coordinates = [0.4,0]
 
 # WFS path
 ngs_cam = Detector(tel.resolution)
-ngs_cam.psf_sampling = 2
+ngs_cam.psf_sampling = 4
 ngs_cam.integrationTime = tel.samplingTime
-
 
 # initialize Telescope DM commands
 tel.resetOPD()
 dm.coefs=0
 ngs*tel*dm*wfs
+# Update the r0 parameter, generate a new phase screen for the atmosphere and combine it with the Telescope
+# atm.r0 = 0.15
+atm.generateNewPhaseScreen(seed = 10)
 tel+atm
-
 
 tel.computePSF(4)
 plt.close('all')
@@ -360,8 +358,8 @@ M2C_CL      = M2C_modal
 tel+atm
 
 # initialize DM commands
-dm.coefs=0
-ngs*tel*dm*wfs
+atm*ngs*tel*ngs_cam
+atm*src*tel*src_cam
 
 
 plt.show()
@@ -401,7 +399,7 @@ plot_obj = cl_plot(list_fig          = [atm.OPD,
                                         None,
                                         None],
                    list_legend       = [None,None,None,None,None,['SRC@'+str(src.coordinates[0])+'"','NGS@'+str(ngs.coordinates[0])+'"'],None,None],
-                   list_label        = [None,None,None,None,None,['Time','WFE [nm]'],['NGS PSF',''],['SRC PSF','']],
+                   list_label        = [None,None,None,None,None,['Time','WFE [nm]'],['NGS PSF@'+str(ngs.coordinates[0])+'" -- FOV: '+str(np.round(ngs_cam.fov_arcsec,2)) +'"',''],['SRC PSF@'+str(src.coordinates[0])+'" -- FOV: '+str(np.round(src_cam.fov_arcsec,2)) +'"','']],
                    n_subplot         = [4,2],
                    list_display_axis = [None,None,None,None,None,True,None,None],
                    list_ratio        = [[0.95,0.95,0.1],[1,1,1,1]], s=20)
@@ -446,7 +444,7 @@ for i in range(nLoop):
     print('Elapsed time: ' + str(time.time()-a) +' s')
     
     # update displays if required
-    if display==True and i>20:        
+    if display==True and i>1:        
         
         SRC_PSF = np.log10(np.abs(src_cam.frame))
         # update range for PSF images
@@ -463,10 +461,25 @@ for i in range(nLoop):
 
         cl_plot(list_fig   = [1e9*atm.OPD,1e9*OPD_NGS,1e9*OPD_SRC,wfs.cam.frame,dm.coefs,[np.arange(i+1),residual_SRC[:i+1],residual_NGS[:i+1]],NGS_PSF, SRC_PSF],
                                plt_obj = plot_obj)
-        plt.pause(0.001)
+        plt.pause(0.01)
         if plot_obj.keep_going is False:
             break
     print('Loop'+str(i)+'/'+str(nLoop)+' NGS: '+str(residual_NGS[i])+' -- SRC:' +str(residual_SRC[i])+ '\n')
+
+#%%
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
