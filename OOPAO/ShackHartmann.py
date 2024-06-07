@@ -535,7 +535,7 @@ class ShackHartmann:
                 self.edge_subaperture_criterion = np.sum(I*self.outerMask)/np.sum(I)
                 if self.edge_subaperture_criterion>0.05:
                     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-                    print('WARNING !!!! THE LIGHT IN THE SUBAPERTURE IS MAYBE WRAPPING !!!'+str(np.round(100*self.edge_subaperture_criterion,1))+' % of the total flux detected on the edges of the subapertures. You may want to increase the seeing value or the resolution')
+                    print('WARNING !!!! THE LIGHT IN THE SUBAPERTURE IS MAYBE WRAPPING !!!'+str(np.round(100*self.edge_subaperture_criterion,1))+' % of the total flux detected on the edges of the subapertures. You may want to lower the seeing value or increase the resolution')
                     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
                 # if FoV is extended, zero pad the spot intensity
@@ -566,16 +566,6 @@ class ShackHartmann:
                 # propagate to detector to add noise and detector effects
                 self*self.cam
                 self.split_camera_frame()
-                
-                # # add photon/readout noise to 2D spots
-                # if self.cam.photonNoise!=0:
-                #     self.maps_intensity  = self.random_state_photon_noise.poisson(self.maps_intensity)
-                        
-                # if self.cam.readoutNoise!=0:
-                #     self.maps_intensity += np.int64(np.round(self.random_state_readout_noise.randn(self.maps_intensity.shape[0],self.maps_intensity.shape[1],self.maps_intensity.shape[2])*self.cam.readoutNoise))
-
-                # self.maps_intensity 
-       
 
                 # compute the centroid on valid subaperture
                 self.centroid_lenslets = self.centroid(self.maps_intensity,self.threshold_cog)

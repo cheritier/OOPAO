@@ -259,10 +259,12 @@ class Telescope:
 
     def computePSF(self,zeroPaddingFactor=2,detector = None,img_resolution=None):
         # kept for backward compatibility
-        conversion_constant = (180/np.pi)*3600*1000
+        conversion_constant = (180/np.pi)*3600
         if detector is not None:
             zeroPaddingFactor = detector.psf_sampling
             img_resolution    = detector.resolution
+        if img_resolution is None:
+            img_resolution = zeroPaddingFactor*self.resolution
         if self.src is None:
             raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')   
             
@@ -273,12 +275,12 @@ class Telescope:
         self.PropagateField(amplitude = amp , phase = phase, zeroPaddingFactor = zeroPaddingFactor,img_resolution=img_resolution)
 
         # axis in arcsec
-        self.xPSF_arcsec       = [-conversion_constant*(self.src.wavelength/self.D) * (self.resolution/2), conversion_constant*(self.src.wavelength/self.D) * (self.resolution/2)]
-        self.yPSF_arcsec       = [-conversion_constant*(self.src.wavelength/self.D) * (self.resolution/2), conversion_constant*(self.src.wavelength/self.D) * (self.resolution/2)]
+        self.xPSF_arcsec       = [-conversion_constant*(self.src.wavelength/self.D) * (img_resolution/2/zeroPaddingFactor), conversion_constant*(self.src.wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
+        self.yPSF_arcsec       = [-conversion_constant*(self.src.wavelength/self.D) * (img_resolution/2/zeroPaddingFactor), conversion_constant*(self.src.wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
         
         # axis in radians
-        self.xPSF_rad   = [-(self.src.wavelength/self.D) * (self.resolution/2),(self.src.wavelength/self.D) * (self.resolution/2)]
-        self.yPSF_rad   = [-(self.src.wavelength/self.D) * (self.resolution/2),(self.src.wavelength/self.D) * (self.resolution/2)]
+        self.xPSF_rad   = [-(self.src.wavelength/self.D) * (img_resolution/2/zeroPaddingFactor),(self.src.wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
+        self.yPSF_rad   = [-(self.src.wavelength/self.D) * (img_resolution/2/zeroPaddingFactor),(self.src.wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
         
         # normalized PSF           
         self.PSF_norma  = self.PSF/self.PSF.max()  

@@ -250,7 +250,8 @@ class Pyramid:
         self.zeroPadding        = (self.nRes - self.telescope.resolution)//2                             # zero-Padding Factor
         self.tag                        = 'pyramid'                                                          # Tag of the object 
         self.cam                        = Detector(round(nSubap*self.zeroPaddingFactor))                     # WFS detector object (see Detector class)
-        self.focal_plane_camera         = Detector(self.nRes)                                                # WFS focal plane detector object (see Detector class)
+        self.focal_plane_camera         = Detector(int((modulation+12)*self.zeroPaddingFactor),psf_sampling=self.zeroPaddingFactor)                                                # WFS focal plane detector object (see Detector class)
+        self.focal_plane_camera.is_focal_plane_camera = True
         self.lightRatio                 = lightRatio
         if calibModulation>= self.telescope.resolution/2:
             self.calibModulation            = self.telescope.resolution/2 -1
@@ -475,6 +476,7 @@ class Pyramid:
             em_field     = self.maskAmplitude*np.exp(1j*phase_in)
         # zero-padding for the FFT computation
         support[self.center-self.telescope.resolution//2:self.center+self.telescope.resolution//2,self.center-self.telescope.resolution//2:self.center+self.telescope.resolution//2] = em_field
+        
         del em_field
         # case with mask centered on 4 pixels
         if self.psfCentering:
@@ -705,7 +707,8 @@ class Pyramid:
             # global normalisation
             I4Q         = I1+I2+I3+I4
             subArea     = (self.telescope.D / self.nSubap)**2
-            self.norma       = np.float64(self.telescope.src.nPhoton*self.telescope.samplingTime*subArea)
+            # self.norma       = np.float64(self.telescope.src.nPhoton*self.telescope.samplingTime*subArea)
+            self.norma       = np.float64(self.cam.frame.mean())
 
             # slopesMaps computation cropped to the valid pixels
             Sx         = (I1-I2+I4-I3)            
@@ -720,8 +723,11 @@ class Pyramid:
         
         if self.postProcessing == 'fullFrame_incidence_flux':
             # global normalization
-            subArea     = (self.telescope.D / self.nSubap)**2
-            self.norma       = np.float64(self.telescope.src.nPhoton*self.telescope.samplingTime*subArea)/4
+            # subArea     = (self.telescope.D / self.nSubap)**2
+            # self.norma       = np.float64(self.telescope.src.nPhoton*self.telescope.samplingTime*subArea)/4
+
+            self.norma       = np.float64(self.cam.frame.mean())
+
             # 2D full-frame
             fullFrameMaps  = (cameraFrame / self.norma )  - self.referenceSignal_2D
             # full-frame vector
@@ -743,7 +749,7 @@ class Pyramid:
             Warning('radius for the field of view must be a strictly positive number. Ignoring the input value.')
             radius =  self.telescope.resolution//2
             
-        self*self.focal_plane_camera
+        # self*self.focal_plane_camera
         self.modulation_camera_frame = self.focal_plane_camera.frame.astype(float)
         
         # self.modulation_camera_frame = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)

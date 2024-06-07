@@ -15,7 +15,8 @@ class NCPA:
                  modal_basis='KL',
                  coefficients = None,
                  f2=None,
-                 seed=5):
+                 seed=5,
+                 M2C=None):
         """
         ************************** REQUIRED PARAMETERS **************************
         
@@ -26,10 +27,11 @@ class NCPA:
                 
         ************************** OPTIONAL PARAMETERS **************************
         
-        _ modal_basis            : str, 'KL' (default) or 'Zernike' as modal basis for NCPA generation
+        _ modal_basis            : str, 'KL' (default), 'Zernike', or 'M2C' to import from an M2C matrix, as modal basis for NCPA generation
         _ coefficients           : a list of coefficients of chosen modal basis. The coefficients are normalized to 1 m. 
         _ f2                     : a list of 3 elements [amplitude, start mode, end mode, cutoff_freq] which will follow 1/f2 law
         _ seed                   : pseudo-random value to create the NCPA with repeatability 
+        _ M2C                    : M2C matrix to compute modal basis if modal_basis is set to 'M2C'
         
         ************************** MAIN PROPERTIES **************************
         
@@ -61,11 +63,12 @@ class NCPA:
         self.tel   = tel
         self.atm   = atm
         self.dm    = dm
-        self.seed  = seed 
+        self.seed  = seed
+        self.M2C   = M2C
         
         if f2 is None:
             if coefficients is None:
-                self.OPD = self.pupil.astype(float)
+                self.OPD = self.tel.pupil.astype(float)
             
             if coefficients is not None:
                 if type(coefficients) is list:
@@ -97,6 +100,16 @@ class NCPA:
                 self.B = self.Zernike_basis(f2[2])
                 self.OPD = np.sum([np.random.RandomState(i*self.seed).randn()/np.sqrt(i+f2[3])*self.B[:,:,i] for i in range(f2[1],f2[2])],axis=0)
                 self.OPD = self.OPD / np.std(self.OPD[np.where(self.tel.pupil==1)]) * f2[0]
+                
+            if self.basis=='M2C':
+                if self.M2C is not None:
+                    self.B = self.M2C_basis(self.M2C)
+                    self.coefs = ([np.random.RandomState(i*self.seed).randn()/np.sqrt(i+f2[3])*self.B[:,:,i] for i in range(f2[1],f2[2])])
+                    phase = np.sqrt(np.sum(np.array(self.coefs)**2, axis=0))
+                    self.OPD = phase / np.std(phase[np.where(self.tel.pupil==1)]) * f2[0]
+                else:
+                    raise TypeError('M2C should not be None if modal_basis is set to \'M2C\'')
+                
         else:
             raise TypeError('f2 should be a list containing [amplitude, start_mode, end_mode, cutoff]')
         
@@ -113,6 +126,12 @@ class NCPA:
         self.Z = Zernike(self.tel,J=n_max)
         self.Z.computeZernike(self.tel)
         B = self.Z.modesFullRes
+        return B
+    
+    def M2C_basis(self, M2C):
+        self.dm.coefs = M2C
+        self.tel*self.dm
+        B = self.tel.OPD
         return B
     
     def print_properties(self):
