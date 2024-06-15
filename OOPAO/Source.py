@@ -166,6 +166,36 @@ class Source:
         class phot:
             pass
         
+        ## New entries with corrected zero point flux values 
+        phot.U      = [ 0.360e-6 , 0.070e-6 , 1.96e12 ]
+        phot.B      = [ 0.440e-6 , 0.100e-6 , 5.38e12 ]
+        phot.V0     = [ 0.500e-6 , 0.090e-6 , 3.64e12 ]
+        phot.V      = [ 0.550e-6 , 0.090e-6 , 3.31e12 ]
+        phot.R      = [ 0.640e-6 , 0.150e-6 , 4.01e12 ]
+        phot.R2     = [ 0.650e-6 , 0.300e-6 , 7.9e12  ] 
+        phot.R3     = [ 0.600e-6 , 0.300e-6 , 8.56e12 ] # Fixed (entries with big difference)
+        phot.R4     = [ 0.670e-6 , 0.300e-6 , 7.66e12 ] # Fixed (entries with big difference)
+        phot.I      = [ 0.790e-6 , 0.150e-6 , 2.69e12 ]
+        phot.I1     = [ 0.700e-6 , 0.033e-6 , 0.67e12 ] # Fixed (entries with big difference)
+        phot.I2     = [ 0.750e-6 , 0.033e-6 , 0.62e12 ] # Fixed (entries with big difference)
+        phot.I3     = [ 0.800e-6 , 0.033e-6 , 0.58e12 ] # Fixed (entries with big difference)
+        phot.I4     = [ 0.700e-6 , 0.100e-6 , 2.02e12 ] # Fixed (entries with big difference)
+        phot.I5     = [ 0.850e-6 , 0.100e-6 , 1.67e12 ] # Fixed (entries with big difference)
+        phot.I6     = [ 1.000e-6 , 0.100e-6 , 1.42e12 ] # Fixed (entries with big difference)
+        phot.I7     = [ 0.850e-6 , 0.300e-6 , 5.00e12 ] # Fixed (entries with big difference)
+        phot.I8     = [ 0.750e-6 , 0.100e-6 , 1.89e12 ] # Fixed (entries with big difference)
+        phot.I9     = [ 0.850e-6 , 0.300e-6 , 5.00e12 ] # Fixed (entries with big difference)
+        phot.I10    = [ 0.900e-6 , 0.300e-6 , 4.72e12 ] # Fixed (entries with big difference)
+        phot.J      = [ 1.215e-6 , 0.260e-6 , 1.90e12 ]
+        phot.J2     = [ 1.550e-6 , 0.260e-6 , 1.49e12 ] # Fixed (entries with big difference)
+        phot.H      = [ 1.654e-6 , 0.290e-6 , 1.05e12 ]
+        phot.Kp     = [ 2.1245e-6 , 0.351e-6 , 0.62e12 ]
+        phot.Ks     = [ 2.157e-6 , 0.320e-6 , 0.55e12 ]
+        phot.K      = [ 2.179e-6 , 0.410e-6 , 0.70e12 ]
+        phot.K0     = [ 2.000e-6 , 0.410e-6 , 0.76e12 ]
+        phot.K1     = [ 2.400e-6 , 0.410e-6 , 0.64e12 ]
+'''
+#  Old entries
         phot.U      = [ 0.360e-6 , 0.070e-6 , 2.0e12 ]
         phot.B      = [ 0.440e-6 , 0.100e-6 , 5.4e12 ]
         phot.V0     = [ 0.500e-6 , 0.090e-6 , 3.3e12 ]
@@ -193,12 +223,12 @@ class Source:
         phot.K      = [ 2.179e-6 , 0.410e-6 , 7.0e11 ]
         phot.K0     = [ 2.000e-6  , 0.410e-6 , 7.0e11 ]
         phot.K1     = [ 2.400e-6 , 0.410e-6 , 7.0e11 ]
-        phot.IR1310 = [ 1.310e-6 , 0        , 2e12 ]
-
+        phot.IR1310 = [ 1.310e-6 , 0        , 2e12 ]   # bandwidth is zero?
+'''
         phot.L      = [ 3.547e-6 , 0.570e-6 , 2.5e11 ]
         phot.M      = [ 4.769e-6 , 0.450e-6 , 8.4e10 ]
-        phot.Na     = [ 0.589e-6 , 0        , 3.3e12 ]
-        phot.EOS    = [ 1.064e-6 , 0        , 3.3e12 ]
+        phot.Na     = [ 0.589e-6 , 0        , 3.3e12 ]  # bandwidth is zero?
+        phot.EOS    = [ 1.064e-6 , 0        , 3.3e12 ]  # bandwidth is zero?
         
         if isinstance(arg,str):
             if hasattr(phot,arg):
