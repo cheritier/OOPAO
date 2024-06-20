@@ -194,8 +194,8 @@ class Source:
         phot.K      = [ 2.179e-6 , 0.410e-6 , 0.70e12 ]
         phot.K0     = [ 2.000e-6 , 0.410e-6 , 0.76e12 ]
         phot.K1     = [ 2.400e-6 , 0.410e-6 , 0.64e12 ]
-'''
-#  Old entries
+        '''
+        #  Old entries
         phot.U      = [ 0.360e-6 , 0.070e-6 , 2.0e12 ]
         phot.B      = [ 0.440e-6 , 0.100e-6 , 5.4e12 ]
         phot.V0     = [ 0.500e-6 , 0.090e-6 , 3.3e12 ]
@@ -224,7 +224,7 @@ class Source:
         phot.K0     = [ 2.000e-6  , 0.410e-6 , 7.0e11 ]
         phot.K1     = [ 2.400e-6 , 0.410e-6 , 7.0e11 ]
         phot.IR1310 = [ 1.310e-6 , 0        , 2e12 ]   # bandwidth is zero?
-'''
+        '''
         phot.L      = [ 3.547e-6 , 0.570e-6 , 2.5e11 ]
         phot.M      = [ 4.769e-6 , 0.450e-6 , 8.4e10 ]
         phot.Na     = [ 0.589e-6 , 0        , 3.3e12 ]  # bandwidth is zero?
