@@ -229,6 +229,7 @@ class Source:
         phot.M      = [ 4.769e-6 , 0.450e-6 , 8.4e10 ]
         phot.Na     = [ 0.589e-6 , 0        , 3.3e12 ]  # bandwidth is zero?
         phot.EOS    = [ 1.064e-6 , 0        , 3.3e12 ]  # bandwidth is zero?
+        phot.IR1310 = [ 1.310e-6 , 0        , 2e12 ]   # bandwidth is zero?
         
         if isinstance(arg,str):
             if hasattr(phot,arg):
