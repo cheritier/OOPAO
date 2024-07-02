@@ -296,6 +296,16 @@ class Detector:
         print('-------------------------------------')
         pass
     
+    def __mul__(self,obj): 
+        if obj.tag=='OG':
+            if obj.calibration_ready is False:
+                obj.optical_gains_calibration(self.frame)
+            else:
+                obj.optical_gains_computation(self.frame)
+        else:
+            raise AttributeError('Coupled object non recognized, type is %s'%obj.tag)
+        return -1
+    
     
     @property
     def backgroundNoise(self):
