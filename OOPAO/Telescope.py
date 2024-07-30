@@ -267,10 +267,17 @@ class Telescope:
             img_resolution = zeroPaddingFactor*self.resolution
         if self.src is None:
             raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')   
-            
-        amp_mask = 1
-        phase    = self.src.phase
+        
+        if self.spatialFilter is None:            
+            amp_mask = 1
+            phase    = self.src.phase
+
+        else:
+            amp_mask = self.amplitude_filtered               
+            phase    = self.phase_filtered
+
         amp      = amp_mask*self.pupil*self.pupilReflectivity*np.sqrt(self.src.fluxMap)
+        
         # function to compute the em-field and PSF        
         self.PropagateField(amplitude = amp , phase = phase, zeroPaddingFactor = zeroPaddingFactor,img_resolution=img_resolution)
 
