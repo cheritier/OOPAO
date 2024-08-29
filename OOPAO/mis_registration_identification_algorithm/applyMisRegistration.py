@@ -11,26 +11,29 @@ from ..DeformableMirror import DeformableMirror
 from ..MisRegistration import MisRegistration
 
 
-def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis_registration = None,print_dm_properties=True,floating_precision=64):
-        if extra_dm_mis_registration is None:
-            extra_dm_mis_registration = MisRegistration()
-        try:
-                if param['pitch'] is None:
-                    pitch = None
-                else:
-                    pitch = param['pitch'] 
-        except:
-                pitch = None
-        if wfs is None:
+def applyMisRegistration(tel,misRegistration_tmp,param = None, wfs = None, extra_dm_mis_registration = None,print_dm_properties=True,floating_precision=64,dm_input = None):
+    
             
-            # case synthetic DM - with user-defined coordinates
-            try:
-                if param['dm_coordinates'] is None:
-                    coordinates = None
-                else:
-                    coordinates = param['dm_coordinates'] 
-            except:
+    if extra_dm_mis_registration is None:
+        extra_dm_mis_registration = MisRegistration()
+    try:
+            if param['pitch'] is None:
+                pitch = None
+            else:
+                pitch = param['pitch'] 
+    except:
+            pitch = None
+    if wfs is None:
+        try:
+            if param['dm_coordinates'] is None:
                 coordinates = None
+            else:
+                coordinates = param['dm_coordinates'] 
+        except:
+            coordinates = None
+        if dm_input is None:
+
+            # case synthetic DM - with user-defined coordinates
                 
             
                 
@@ -89,29 +92,46 @@ def applyMisRegistration(tel,misRegistration_tmp,param, wfs = None, extra_dm_mis
                     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
                     print('Mis-Registrations Applied on Synthetic DM!')
         else:
-            if wfs.tag == 'pyramid':
-                misRegistration_wfs                 = MisRegistration()
-                misRegistration_wfs.shiftX          = misRegistration_tmp.shiftX
-                misRegistration_wfs.shiftY          = misRegistration_tmp.shiftY
-                
-                wfs.apply_shift_wfs( misRegistration_wfs.shiftX, misRegistration_wfs.shiftY)
+              dm_tmp = DeformableMirror(telescope    = tel,
+                      nSubap       = dm_input.nAct-1,
+                      mechCoupling = dm_input.mechCoupling,
+                      coordinates  = coordinates,
+                      pitch        = dm_input.pitch,
+                      misReg       = misRegistration_tmp + extra_dm_mis_registration,
+                      flip         = dm_input.flip_,
+                      flip_lr      = dm_input.flip_lr,
+                      sign         = dm_input.sign, 
+                      print_dm_properties = print_dm_properties)
+              if print_dm_properties:
+                  print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                  print('Mis-Registrations Applied to input DM!')
+            
+                        
+    else:
+        if wfs.tag == 'pyramid':
+            misRegistration_wfs                 = MisRegistration()
+            misRegistration_wfs.shiftX          = misRegistration_tmp.shiftX
+            misRegistration_wfs.shiftY          = misRegistration_tmp.shiftY
+            
+            wfs.apply_shift_wfs( misRegistration_wfs.shiftX, misRegistration_wfs.shiftY)
 
-                
-                misRegistration_dm                   = MisRegistration()
-                misRegistration_dm.rotationAngle     = misRegistration_tmp.rotationAngle
-                misRegistration_dm.tangentialScaling = misRegistration_tmp.tangentialScaling
-                misRegistration_dm.radialScaling     = misRegistration_tmp.radialScaling
-                
-                dm_tmp = applyMisRegistration(tel,misRegistration_dm + extra_dm_mis_registration, param, wfs = None, print_dm_properties = print_dm_properties)
-                if print_dm_properties:
-                    print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-                    print('Mis-Registrations Applied on both DM and WFS!')
-            else:
+            
+            misRegistration_dm                   = MisRegistration()
+            misRegistration_dm.rotationAngle     = misRegistration_tmp.rotationAngle
+            misRegistration_dm.tangentialScaling = misRegistration_tmp.tangentialScaling
+            misRegistration_dm.radialScaling     = misRegistration_tmp.radialScaling
+            
+            dm_tmp = applyMisRegistration(tel,misRegistration_dm + extra_dm_mis_registration, param, wfs = None, print_dm_properties = print_dm_properties)
+            if print_dm_properties:
                 print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-                print('Wrong object passed as a wfs.. aplying the mis-registrations to the DM only')
-                dm_tmp = applyMisRegistration(tel,misRegistration_tmp + extra_dm_mis_registration, param, wfs = None)
-                             
-        return dm_tmp
+                print('Mis-Registrations Applied on both DM and WFS!')
+        else:
+            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+            print('Wrong object passed as a wfs.. aplying the mis-registrations to the DM only')
+            dm_tmp = applyMisRegistration(tel,misRegistration_tmp + extra_dm_mis_registration, param, wfs = None)
+                
+                         
+    return dm_tmp
     
     
     
