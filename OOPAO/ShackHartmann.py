@@ -591,8 +591,6 @@ class ShackHartmann:
                 self.signal_2D                      = signal_2D/self.slopes_units
                 self.signal                         = self.signal_2D[self.valid_slopes_maps]
 
-                # assign camera_fram to sh.cam.frame
-                self*self.cam
             else:
                 #-- case with multiple wave-fronts to sense--
 
