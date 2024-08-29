@@ -49,7 +49,10 @@ class DeformableMirror:
                  nThreads:int = 20,
                  print_dm_properties:bool = True,
                  floating_precision:int = 64,
-                 altitude:float = None):
+                 altitude:float = None,
+                 flip = False,
+                 flip_lr = False,
+                 sign = 1):
         """DEFORMABLE MIRROR
         A Deformable Mirror object consists in defining the 2D maps of influence functions of the actuators. 
         By default, the actuator grid is cartesian in a Fried Geometry with respect to the nSubap parameter. 
@@ -191,6 +194,9 @@ class DeformableMirror:
         """
         self.print_dm_properties = print_dm_properties
         self.floating_precision = floating_precision
+        self.flip_= flip
+        self.flip_lr = flip_lr 
+        self.sign = sign
         self.M4_param = M4_param
         if M4_param is not None:
             if M4_param['isM4']:
@@ -507,10 +513,18 @@ class DeformableMirror:
         b = -np.sin(2*theta)/(4*cx**2)   +  np.sin(2*theta)/(4*cy**2)
         c = np.sin(theta)**2/(2*cx**2)  +  np.cos(theta)**2/(2*cy**2)
     
-        G=np.exp(-(a*(X-x0)**2 +2*b*(X-x0)*(Y-y0) + c*(Y-y0)**2))    
+        G= self.sign * np.exp(-(a*(X-x0)**2 +2*b*(X-x0)*(Y-y0) + c*(Y-y0)**2))    
+        
+        if self.flip_lr:
+            G = np.fliplr(G)
+
+        if self.flip_:
+            G = np.flip(G)
+            
         output = np.reshape(G,[1,self.resolution**2])
         if self.floating_precision == 32:
             output = np.float32(output)
+            
         return output
     
     def print_properties(self):
