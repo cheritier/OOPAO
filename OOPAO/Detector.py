@@ -14,6 +14,7 @@ class Detector:
                  nRes:int=None,
                  integrationTime:float=None,
                  bits:int=None,
+                 output_precision:int =None,
                  FWC:int=None,
                  gain:int=1,
                  sensor:str='CCD',
@@ -90,6 +91,7 @@ class Detector:
         self.resolution         = nRes
         self.integrationTime    = integrationTime
         self.bits               = bits
+        self.output_precision   = output_precision
         self.FWC                = FWC
         self.gain               = gain
         self.sensor             = sensor
@@ -148,6 +150,27 @@ class Detector:
         array_padded = np.pad(array, (pad_x,pad_y))
         return array_padded
     
+    def set_output_precision(self):
+        if self.output_precision is not None:         
+            value = self.output_precision
+        else:
+            value = self.bits
+            
+        if value ==8:
+            self.output_precision = np.uint8
+            
+        elif value ==16:
+            self.output_precision = np.uint16
+
+        elif value ==32:
+            self.output_precision = np.uint32
+        
+        elif value ==64:
+            self.output_precision = np.uint64
+        else:
+           self.output_precision = int     
+           
+        return 
     
     def conv_photon_electron(self,frame):
         frame = (frame * self.QE)
@@ -162,14 +185,15 @@ class Detector:
     
     
     def digitalization(self,frame):
-        self.quantification_noise = self.FWC * 2**(-self.bits) / np.sqrt(12)
         if self.FWC is None:
-            return (frame / frame.max() * 2**self.bits).astype(int)
+            return (frame / frame.max() * 2**self.bits).astype(self.output_precision)
+            self.quantification_noise = 0
         else:
+            self.quantification_noise = self.FWC * 2**(-self.bits) / np.sqrt(12)
             self.saturation = (100*frame.max()/self.FWC)
             if frame.max() > self.FWC:
                 print('Warning: the ADC is saturating (gain applyed %i), %.1f %%'%(self.gain,self.saturation))
-            frame = (frame / self.FWC * (2**self.bits-1)).astype(int) 
+            frame = (frame / self.FWC * (2**self.bits-1)).astype(self.output_precision) 
             return np.clip(frame, a_min=frame.min(), a_max=2**self.bits-1)
 
     
@@ -219,6 +243,9 @@ class Detector:
             if self.binning != 1:
                 frame = set_binning(frame,self.binning)
            
+            # set precision of output
+            self.set_output_precision()
+            
             # Apply readout noise
             if self.readoutNoise!=0:    
                 frame = self.set_readout_noise(frame)    
@@ -249,7 +276,6 @@ class Detector:
         self.perfect_frame = frame.copy()
         self.flux_max_px = self.perfect_frame.max() 
         self.signal = self.QE * self.flux_max_px
-        
         # Apply photon noise 
         if self.photonNoise!=0:
             frame = self.set_photon_noise(frame)
@@ -321,6 +347,7 @@ class Detector:
         self._integrationTime = val
         self._integrated_time = 0
         self.buffer_frame = []
+
         
              
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% END %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
