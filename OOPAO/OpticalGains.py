@@ -20,7 +20,7 @@ class OpticalGains:
         self.pupil_resolution = self.resolution // 2 - 2
         self.D           = tel.D
         self.obstruction = tel.centralObstruction
-        self.nAct        = dm.nAct
+        self.nAct        = int(dm.nActAlongDiameter+1)
         self.coupling    = dm.mechCoupling 
         self.M2C         = M2C
         self.n_modes     = M2C.shape[1]
