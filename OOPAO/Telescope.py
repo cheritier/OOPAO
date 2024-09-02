@@ -156,6 +156,7 @@ class Telescope:
         self.isPaired                    = False                                                        # indicate if telescope object is paired with an atmosphere object
         self.spatialFilter               = None
         self.display_optical_path        = display_optical_path
+        self.coronagraph_diameter        = None
         self.print_properties()
 
         self.isInitialized= True
@@ -178,101 +179,46 @@ class Telescope:
         self.pupilReflectivity           = self.pupil.astype(float)*self.pupilReflectivity                   # A non uniform reflectivity can be input by the user
         self.pixelArea                   = np.sum(self.pupil)                                           # Total number of pixels in the pupil area
         self.pupilLogical                = np.where(np.reshape(self.pupil,self.resolution*self.resolution)>0)     # index of valid pixels in the pupil
+        
+        
     def computeCoronoPSF(self,zeroPaddingFactor=2, display = False, coronagraphDiameter = 4.5):
+        raise NameError("The method computeCoronoPSF has been depreciated and is now integrated within the computePSF method setting the tel.coronograph_diameter property (default value is None and means no coronograph considered)")
 
-        # coronagraphDiameter is the FPM diameter in L/D of imaging wavelength
-
-        if self.src is None:
-            raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')            # number of pixel considered 
-        N       = int(zeroPaddingFactor * self.resolution)        
-        center  = N//2           
-
-        [xx,yy] = np.meshgrid(np.linspace(0,N-1,N),np.linspace(0,N-1,N))
-        xxc = xx - (N-1)/2
-        yyc = yy - (N-1)/2
-
-        self.pupilPadded = np.sqrt(xxc**2 + yyc**2) < self.resolution/2
-        self.pupilSpiderPadded = np.zeros((N,N))
-        self.pupilSpiderPadded[center-self.resolution//2:center+self.resolution//2,center-self.resolution//2:center+self.resolution//2] = self.pupil
-        self.focalMask = np.sqrt(xxc**2 + yyc**2) > coronagraphDiameter/2 * zeroPaddingFactor
-        self.apodizer  = self.pupilPadded
-        self.lyotStop  = (np.sqrt((xxc-1.0)**2 + (yyc-1.0)**2) < self.resolution/2 * 0.9) * self.pupilSpiderPadded
-        self.diffraction2meterGEO = self.src.wavelength/self.D * 36e6 # assumes GEO orbit 36 000 km
-
-        phase = self.src.phase
-        amp_mask = 1
-
-        # axis limits in meters at GEO orbit
-        self.xPSF_mGEO         = [-self.resolution /2 * self.diffraction2meterGEO, self.resolution/2 * self.diffraction2meterGEO]
-        self.yPSF_mGEO         = [-self.resolution /2 * self.diffraction2meterGEO, self.resolution/2 * self.diffraction2meterGEO]
-
-        # axis in arcsec => BUG ? Assumes Shannon sampling only ?
-        self.xPSF_arcsec       = [-206265*(self.src.wavelength/self.D) * (self.resolution/2), 206265*(self.src.wavelength/self.D) * (self.resolution/2)]
-        self.yPSF_arcsec       = [-206265*(self.src.wavelength/self.D) * (self.resolution/2), 206265*(self.src.wavelength/self.D) * (self.resolution/2)]
-        
-        # axis in radians
-        self.xPSF_rad   = [-(self.src.wavelength/self.D) * (self.resolution/2),(self.src.wavelength/self.D) * (self.resolution/2)]
-        self.yPSF_rad   = [-(self.src.wavelength/self.D) * (self.resolution/2),(self.src.wavelength/self.D) * (self.resolution/2)]
-        
-        # zero-padded support for electric field
-        supportPadded = np.zeros([N,N],dtype='complex')
-        supportPadded [center-self.resolution//2:center+self.resolution//2,center-self.resolution//2:center+self.resolution//2] = amp_mask*self.pupil*self.pupilReflectivity*np.sqrt(self.src.fluxMap)*np.exp(1j*phase)
-        self.phasor                     = np.exp(-(1j*np.pi*(N+1)/N)*(xx+yy))
-        
-
-        # Fields computation in A B C D planes
-        A = self.phasor * supportPadded * self.apodizer
-        B = np.fft.fft2(A) * self.focalMask
-        C = np.fft.fft2(B) * self.lyotStop
-        D = np.fft.fft2(C)
-
-        self.PSFc        = (np.abs(D)**2) / N**6            
-        self.PSFc_norma  = self.PSFc/self.PSFc.max()   
-        N_trunc = int(np.floor(2*N/6))
-        self.PSFc_norma_zoom  = self.PSFc_norma[N_trunc:-N_trunc,N_trunc:-N_trunc]
-
-        if display is True:
-            #subplot(r,c) provide the no. of rows and columns
-            fig1 = plt.figure(num=1, figsize=(16, 6), dpi=80)
-            fig1.suptitle('Pupil & FP electric fields', fontsize=16)
-            axarr = fig1.subplots(1,4) 
-            axarr[0].imshow(np.log(np.abs(A)))
-            axarr[0].title.set_text('Entrance pupil plane A')
-            axarr[1].imshow(np.log(np.abs(B)))
-            axarr[1].title.set_text('After focal plane B')
-            axarr[2].imshow(np.log(np.abs(C)))
-            axarr[2].title.set_text('After Lyot stop plane C')
-            axarr[3].imshow(np.log(np.abs(D)))
-            axarr[3].title.set_text('Detector plane D')
-    
-            #subplot(r,c) provide the no. of rows and columns
-            fig2 = plt.figure(num=2, figsize=(12, 6), dpi=80)
-            fig2.suptitle('Pupil & FP masks')
-            axarr = fig2.subplots(1,3) 
-            axarr[0].imshow(self.apodizer)
-            axarr[1].imshow(self.focalMask)
-            axarr[2].imshow(self.lyotStop)
-            
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF COMPUTATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
 
     def computePSF(self,zeroPaddingFactor=2,detector = None,img_resolution=None):
-        # kept for backward compatibility
         conversion_constant = (180/np.pi)*3600
+
         if detector is not None:
             zeroPaddingFactor = detector.psf_sampling
             img_resolution    = detector.resolution
+
         if img_resolution is None:
             img_resolution = zeroPaddingFactor*self.resolution
+
         if self.src is None:
             raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')   
-            
-        amp_mask = 1
-        phase    = self.src.phase
+        
+        if self.spatialFilter is None:            
+            amp_mask = 1
+            phase    = self.src.phase
+
+        else:
+            amp_mask = self.amplitude_filtered               
+            phase    = self.phase_filtered
+
         amp      = amp_mask*self.pupil*self.pupilReflectivity*np.sqrt(self.src.fluxMap)
+        
+        # add a Tip/Tilt for off-axis sources
+        [Tip,Tilt]            = np.meshgrid(np.linspace(-np.pi,np.pi,self.resolution),np.linspace(-np.pi,np.pi,self.resolution))               
+        self.delta_TT = self.src.coordinates[0]*(1/conversion_constant)*(self.D/self.src.wavelength)*(np.cos(self.src.coordinates[1])*Tip+np.sin(self.src.coordinates[1])*Tilt)*self.pupil
+        
+        
+        
         # function to compute the em-field and PSF        
-        self.PropagateField(amplitude = amp , phase = phase, zeroPaddingFactor = zeroPaddingFactor,img_resolution=img_resolution)
+        self.PropagateField(amplitude = amp , phase = phase+self.delta_TT, zeroPaddingFactor = zeroPaddingFactor,img_resolution=img_resolution)
 
         # axis in arcsec
         self.xPSF_arcsec       = [-conversion_constant*(self.src.wavelength/self.D) * (img_resolution/2/zeroPaddingFactor), conversion_constant*(self.src.wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
@@ -305,9 +251,10 @@ class Telescope:
             oversampling = (np.ceil(2.0 / zeroPaddingFactor)).astype('int')
 
         # This is to ensure that PSF will be binned properly if number of pixels is odd
-        if img_resolution is not None:
-            if oversampling % 2 != img_resolution % 2:
-                oversampling += 1
+
+        # if img_resolution is not None:
+        #     if oversampling % 2 != img_resolution % 2:
+        #         oversampling += 1
 
         img_size = np.ceil(img_resolution * oversampling).astype('int')
         N = np.fix(zeroPaddingFactor * oversampling * resolution).astype('int')
@@ -317,13 +264,40 @@ class Telescope:
                                pad_width=((pad_width, pad_width), (pad_width, pad_width)), constant_values=0)
         N = supportPadded.shape[0]  # make sure the number of pxels is correct after the padding
     
-        # PSF computation
-        [xx, yy] = xp.meshgrid(xp.linspace(0, N - 1, N), xp.linspace(0, N - 1, N), copy=False)
-        phasor = xp.exp(-1j * xp.pi / N * (xx + yy) * (1 - img_resolution % 2)).astype(xp.complex64)
-        #                                                        ^--- this is to account odd/even number of pixels
-        # Propagate with Fourier shifting
-        EMF = xp.fft.fftshift(1 / N * xp.fft.fft2(xp.fft.ifftshift(supportPadded * phasor)))
-    
+        # case considering a coronograph
+        
+        if self.coronagraph_diameter is not None:
+            
+            [xx,yy] = np.meshgrid(np.linspace(0,N-1,N),np.linspace(0,N-1,N))
+            xxc = xx - (N-1)/2
+            yyc = yy - (N-1)/2
+            self.apodiser           = np.sqrt(xxc**2 + yyc**2) < self.resolution/2
+            self.pupilSpiderPadded  = xp.pad(self.pupil, pad_width=((pad_width, pad_width), (pad_width, pad_width)), constant_values=0)
+            self.focalMask          = np.sqrt(xxc**2 + yyc**2) > self.coronagraph_diameter/2 * zeroPaddingFactor
+            self.lyotStop           = ((np.sqrt((xxc-1.0)**2 + (yyc-1.0)**2) < N/2 * 0.9) * self.pupilSpiderPadded)
+            
+            # PSF computation
+            [xx, yy] = xp.meshgrid(xp.linspace(0, N - 1, N), xp.linspace(0, N - 1, N), copy=False)
+            
+            phasor = xp.exp(-1j * xp.pi / N * (xx + yy) * (1 - img_resolution % 2)).astype(xp.complex64)
+            #                                                        ^--- this is to account odd/even number of pixels
+            # Propagate with Fourier shifting
+            EMF = xp.fft.fftshift(1 / N * xp.fft.fft2(xp.fft.ifftshift(supportPadded * phasor*self.apodiser)))
+        
+            self.B  = EMF * self.focalMask * phasor
+            self.C  = xp.fft.fftshift(1* xp.fft.ifft2(xp.fft.ifftshift(self.B))) * self.lyotStop * phasor
+            EMF     = (xp.fft.fftshift( 1* xp.fft.fft2(xp.fft.ifftshift(self.C))))
+            
+            
+        else:
+            # PSF computation
+            [xx, yy] = xp.meshgrid(xp.linspace(0, N - 1, N), xp.linspace(0, N - 1, N), copy=False)
+            
+            phasor = xp.exp(-1j * xp.pi / N * (xx + yy) * (1 - img_resolution % 2)).astype(xp.complex64)
+            #                                                        ^--- this is to account odd/even number of pixels
+            # Propagate with Fourier shifting
+            EMF = xp.fft.fftshift(1 / N * xp.fft.fft2(xp.fft.ifftshift(supportPadded * phasor)))
+
         # Again, this is to properly crop a PSF with the odd/even number of pixels
         if N % 2 == img_size % 2:
             shift_pix = 0
@@ -333,8 +307,6 @@ class Telescope:
             else:
                 shift_pix = -1
 
-        # self.em_field_padded = EMF
-
         # Support only rectangular PSFs
         ids = xp.array(
             [np.ceil(N / 2) - img_size // 2 + (1 - N % 2) - 1, np.ceil(N / 2) + img_size // 2 + shift_pix]).astype(
@@ -342,10 +314,9 @@ class Telescope:
         EMF = EMF[ids[0]:ids[1], ids[0]:ids[1]]
 
         self.focal_EMF = EMF
-    
+
         if oversampling !=1:
             self.PSF = set_binning(xp.abs(EMF) ** 2, oversampling)
-            # self.PSF = xp.abs(EMF) ** 2
 
         else:
             self.PSF = xp.abs(EMF) ** 2

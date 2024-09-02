@@ -56,7 +56,7 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
 """
 
 
-def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, basis, calib_in, misRegistrationZeroPoint, epsilonMisRegistration, param, precision = 3, gainEstimation = 1, sensitivity_matrices = None, return_all = False, fast = False, wfs_mis_registrated = None, nIteration = 3):
+def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, basis, calib_in, misRegistrationZeroPoint, epsilonMisRegistration, param, precision = 3, gainEstimation = 1, sensitivity_matrices = None, return_all = False, fast = False, wfs_mis_registrated = None, nIteration = 3, dm_input = None):
     
     #%%  ---------- LOAD/COMPUTE SENSITIVITY MATRICES --------------------
     # compute the sensitivity matrices. if the data already exits, the files will be loaded
@@ -185,7 +185,7 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
         while criteria ==0:
             i_iter=i_iter+1
             # temporary deformable mirror
-            dm_tmp = applyMisRegistration(tel,misRegistration_out,param, wfs = wfs_mis_registrated,print_dm_properties=False,floating_precision=dm_0.floating_precision)
+            dm_tmp = applyMisRegistration(tel,misRegistration_out,param, wfs = wfs_mis_registrated,print_dm_properties=True,floating_precision=dm_0.floating_precision,dm_input=dm_input)
         
             # temporary interaction matrix
             calib_tmp =  InteractionMatrix(ngs,atm,tel,dm_tmp,wfs,basis.modes,stroke,phaseOffset=0,nMeasurements=50,invert=False,print_time=False)

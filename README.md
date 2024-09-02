@@ -24,6 +24,10 @@ mpmath          => arithmetic with arbitrary precision
 jsonpickle      => json files encoding
 aotools         => zernike modes and functionalities for atmosphere computation
 numba           => required in aotools
+numexpr 		=> optimized maths operations
+psutil			=> access system info
+mpmath			=> real and complex floating-point arithmetic with arbitrary precision
+tqdm 			=> loading bar
 ```
 If GPU computation is available:
 ```
@@ -54,7 +58,7 @@ source ./venv/bin/activate
 # or
 
 # Windows PowerShell
-.\venv\Scripts\Activate.ps1
+.\venv\Scripts\activate
 ```
 
 After the environment is set up and activated, this package can then be easily installed. Anytime you wish to use this

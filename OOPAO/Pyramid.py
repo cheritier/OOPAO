@@ -378,10 +378,10 @@ class Pyramid:
             
             # create a Tip/Tilt combination for each quadrant
             [Tip,Tilt]                   = np.meshgrid(np.linspace(-lim,lim,n_tot//2),np.linspace(-lim,lim,n_tot//2))
-            m[:n_tot//2 ,:n_tot//2  ]   =  Tip * (1- sx[0]/(n_subap+n_pix_separation/2))*norma   +  Tilt * (1- sy[0]/(n_subap+n_pix_separation/2))*norma
-            m[:n_tot//2 ,-n_tot//2: ]   = -Tip * (1+ sx[1]/(n_subap+n_pix_separation/2))*norma   +  Tilt * (1- sy[1]/(n_subap+n_pix_separation/2))*norma
-            m[-n_tot//2 :,-n_tot//2:]   = -Tip * (1+ sx[2]/(n_subap+n_pix_separation/2))*norma   + -Tilt * (1+ sy[2]/(n_subap+n_pix_separation/2))*norma
-            m[-n_tot//2 :,:n_tot//2 ]   =  Tip * (1- sx[3]/(n_subap+n_pix_separation/2))*norma   + -Tilt * (1+ sy[3]/(n_subap+n_pix_separation/2))*norma
+            m[:n_tot//2 ,:n_tot//2  ]   =  Tip * (1+ sx[0]/(n_subap+n_pix_separation/2))*norma   +  Tilt * (1- sy[0]/(n_subap+n_pix_separation/2))*norma
+            m[:n_tot//2 ,-n_tot//2: ]   = -Tip * (1- sx[1]/(n_subap+n_pix_separation/2))*norma   +  Tilt * (1- sy[1]/(n_subap+n_pix_separation/2))*norma
+            m[-n_tot//2 :,-n_tot//2:]   = -Tip * (1- sx[2]/(n_subap+n_pix_separation/2))*norma   + -Tilt * (1+ sy[2]/(n_subap+n_pix_separation/2))*norma
+            m[-n_tot//2 :,:n_tot//2 ]   =  Tip * (1+ sx[3]/(n_subap+n_pix_separation/2))*norma   + -Tilt * (1+ sy[3]/(n_subap+n_pix_separation/2))*norma
         
         else:
             # mask centered on 1 pixel
@@ -394,10 +394,10 @@ class Pyramid:
             [Tip_2,Tilt_2]                   = np.meshgrid(np.linspace(-lim_p,lim_p,n_tot//2 +1),np.linspace(-lim_m,lim_m,n_tot//2 -1))        
             [Tip_3,Tilt_3]                   = np.meshgrid(np.linspace(-lim_m,lim_m,n_tot//2 -1),np.linspace(-lim_m,lim_m,n_tot//2 -1))
             [Tip_4,Tilt_4]                   = np.meshgrid(np.linspace(-lim_m,lim_m,n_tot//2 -1),np.linspace(-lim_p,lim_p,n_tot//2 +1))
-            m[:n_tot//2 +1,:n_tot//2+1]     =  Tip_1 * (1- sx[0]/(n_subap+n_pix_separation/2))*norma   +  Tilt_1 * (1- sy[0]/(n_subap+n_pix_separation/2))*norma
-            m[:n_tot//2 +1,-n_tot//2+1:]    = -Tip_4 * (1+ sx[1]/(n_subap+n_pix_separation/2))*norma   +  Tilt_4 * (1- sy[1]/(n_subap+n_pix_separation/2))*norma
-            m[-n_tot//2 +1:,-n_tot//2 +1:]  = -Tip_3 * (1+ sx[2]/(n_subap+n_pix_separation/2))*norma   + -Tilt_3 * (1+ sy[2]/(n_subap+n_pix_separation/2))*norma
-            m[-n_tot//2 +1:,:n_tot//2 +1]   =  Tip_2 * (1- sx[3]/(n_subap+n_pix_separation/2))*norma   + -Tilt_2 * (1+ sy[3]/(n_subap+n_pix_separation/2))*norma
+            m[:n_tot//2 +1,:n_tot//2+1]     =  Tip_1 * (1+ sx[0]/(n_subap+n_pix_separation/2))*norma   +  Tilt_1 * (1- sy[0]/(n_subap+n_pix_separation/2))*norma
+            m[:n_tot//2 +1,-n_tot//2+1:]    = -Tip_4 * (1- sx[1]/(n_subap+n_pix_separation/2))*norma   +  Tilt_4 * (1- sy[1]/(n_subap+n_pix_separation/2))*norma
+            m[-n_tot//2 +1:,-n_tot//2 +1:]  = -Tip_3 * (1- sx[2]/(n_subap+n_pix_separation/2))*norma   + -Tilt_3 * (1+ sy[2]/(n_subap+n_pix_separation/2))*norma
+            m[-n_tot//2 +1:,:n_tot//2 +1]   =  Tip_2 * (1+ sx[3]/(n_subap+n_pix_separation/2))*norma   + -Tilt_2 * (1+ sy[3]/(n_subap+n_pix_separation/2))*norma
         
         return -m # sign convention for backward compatibility
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
@@ -405,14 +405,17 @@ class Pyramid:
     def initialization(self,telescope):
         telescope.resetOPD()
         if self.userValidSignal is None:
-            print('The valid pixel are selected on flux considerations')
-            self.modulation = self.calibModulation                  # set the modulation to a large value   
-            self.wfs_measure(phase_in=self.telescope.src.phase)
+            if self.lightRatio ==0:
+                self.cam.frame = np.ones([self.cam.resolution,self.cam.resolution])
+            else:
+                print('The valid pixel are selected on flux considerations')
+                self.modulation = self.calibModulation                  # set the modulation to a large value   
+                self.wfs_measure(phase_in=self.telescope.src.phase)
             # save initialization frame
             self.initFrame = self.cam.frame
             
             # save the number of signals depending on the case    
-            if self.postProcessing == 'slopesMaps' or self.postProcessing == 'slopesMaps_incidence_flux':
+            if self.postProcessing[:10] == 'slopesMaps':
                 # select the valid pixels of the detector according to the flux (case slopes-maps)
                 I1 = self.grabQuadrant(1)
                 I2 = self.grabQuadrant(2)
@@ -426,20 +429,20 @@ class Pyramid:
                 self.validSignal    = np.concatenate((self.validI4Q,self.validI4Q))
                 self.nSignal        = int(np.sum(self.validSignal))
                 
-            if self.postProcessing == 'fullFrame' or self.postProcessing == 'fullFrame_incidence_flux':
+            if self.postProcessing[:9] == 'fullFrame':
                 # select the valid pixels of the detector according to the flux (case full-frame)
                 self.validSignal = (self.initFrame>=self.lightRatio*self.initFrame.max())   
                 self.nSignal        = int(np.sum(self.validSignal))
         else:
             print('You are using a user-defined mask for the selection of the valid pixel')
-            if self.postProcessing == 'slopesMaps' or self.postProcessing == 'slopesMaps_incidence_flux':
+            if self.postProcessing[:10] == 'slopesMaps':
                 
                 # select the valid pixels of the detector according to the flux (case full-frame)
                 self.validI4Q       =  self.userValidSignal
                 self.validSignal    = np.concatenate((self.validI4Q,self.validI4Q))
                 self.nSignal        = int(np.sum(self.validSignal))
                 
-            if self.postProcessing == 'fullFrame' or self.postProcessing == 'fullFrame_incidence_flux':            
+            if self.postProcessing[:9] == 'fullFrame':          
                 self.validSignal    = self.userValidSignal  
                 self.nSignal        = int(np.sum(self.validSignal))
                     
@@ -727,6 +730,20 @@ class Pyramid:
             # self.norma       = np.float64(self.telescope.src.nPhoton*self.telescope.samplingTime*subArea)/4
 
             self.norma       = np.float64(self.cam.frame.mean())
+
+            # 2D full-frame
+            fullFrameMaps  = (cameraFrame / self.norma )  - self.referenceSignal_2D
+            # full-frame vector
+            fullFrame  = fullFrameMaps[np.where(self.validSignal==1)]
+            
+            return fullFrameMaps,fullFrame
+        
+        if self.postProcessing == 'fullFrame_sum_flux':
+            # global normalization
+            # subArea     = (self.telescope.D / self.nSubap)**2
+            # self.norma       = np.float64(self.telescope.src.nPhoton*self.telescope.samplingTime*subArea)/4
+
+            self.norma       = np.float64(self.cam.frame.sum())
 
             # 2D full-frame
             fullFrameMaps  = (cameraFrame / self.norma )  - self.referenceSignal_2D

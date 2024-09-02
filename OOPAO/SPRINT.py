@@ -14,7 +14,7 @@ from .mis_registration_identification_algorithm.estimateMisRegistration import e
 
 
 class SPRINT:
-    def __init__(self, obj, basis, nameFolder = None, nameSystem = None, mis_registration_zero_point = None, wfs_mis_registered= None, fast_algorithm = False, n_mis_reg = 3, recompute_sensitivity = False):
+    def __init__(self, obj, basis, nameFolder = None, nameSystem = None, mis_registration_zero_point = None, wfs_mis_registered= None, fast_algorithm = False, n_mis_reg = 3, recompute_sensitivity = False,dm_input = None):
         print('Setting up SPRINT..')
         # modal basis considered
         self.basis              = basis
@@ -68,7 +68,8 @@ class SPRINT:
                                                          wfs_mis_registrated        = wfs_mis_registered,\
                                                          n_mis_reg                  = self.n_mis_reg,\
                                                          fast                       = self.fast_algorithm,\
-                                                         recompute_sensitivity      = self.recompute_sensitivity    )
+                                                         recompute_sensitivity      = self.recompute_sensitivity,
+                                                         dm_input                   = dm_input)
 
             
         self.metaMatrix_init = CalibrationVault(self.metaMatrix.D)
@@ -76,7 +77,7 @@ class SPRINT:
         
         print('Done!')
 
-    def estimate(self,obj,on_sky_slopes, n_iteration = 3, n_update_zero_point = 0 ,precision = 3, gain_estimation = 1):
+    def estimate(self,obj,on_sky_slopes, n_iteration = 3, n_update_zero_point = 0 ,precision = 3, gain_estimation = 1,dm_input=None):
         """
         Method of SPRINT to estimate the mis-registrations parameters
             - obj           : a class containing the different objects, tel, dm, atm, ngs and wfs
@@ -124,7 +125,8 @@ class SPRINT:
                                                                  save_sensitivity_matrices  = False,\
                                                                  n_mis_reg                  = self.n_mis_reg,\
                                                                  fast                       = self.fast_algorithm,\
-                                                                 recompute_sensitivity      = self.recompute_sensitivity    )
+                                                                 recompute_sensitivity      = self.recompute_sensitivity,
+                                                                 dm_input                   = dm_input )
 
                 print('Done!')
 
@@ -147,7 +149,8 @@ class SPRINT:
                                                              wfs_mis_registrated        = self.wfs_mis_registered,\
                                                              sensitivity_matrices       = self.metaMatrix,\
                                                              precision                  = precision,\
-                                                             gainEstimation             = gain_estimation)
+                                                             gainEstimation             = gain_estimation,
+                                                             dm_input                   = dm_input)
                 
                 
         print('----------------------------------')
