@@ -50,10 +50,10 @@ class Zernike:
                 Z = np.sqrt(n+1) * ao.zernike.zernikeRadialFunc(n, 0, R)
             else:
                 if m > 0: # j is even
-                    Z = np.sqrt(2*(n+1)) * ao.zernike.zernikeRadialFunc(n, m, R) * np.cos(m * theta)
+                    Z = np.sqrt(2*(n+1)) * self.zernikeRadialFunc(n, m, R) * np.cos(m * theta)
                 else:   #i is odd
                     m = abs(m)
-                    Z = np.sqrt(2*(n+1)) * ao.zernike.zernikeRadialFunc(n, m, R) * np.sin(m * theta)
+                    Z = np.sqrt(2*(n+1)) * self.zernikeRadialFunc(n, m, R) * np.sin(m * theta)
             
             Z -= Z.mean()
             Z *= (1/np.std(Z))
@@ -86,6 +86,38 @@ class Zernike:
             return('Z', index+2)
         else:
             return(modes_names[index])
+    
+    def zernikeRadialFunc(self,n, m, r):
+        """
+        ADAPTED FROM AOTOOLS PACKAGE
+        Function to calculate the Zernike radial function
+    
+        Parameters:
+            n (int): Zernike radial order
+            m (int): Zernike azimuthal order
+            r (ndarray): 2-d array of radii from the centre the array
+    
+        Returns:
+            ndarray: The Zernike radial function
+        """
+        try:
+            factorial = np.math.factorial
+        except:
+            import scipy 
+            
+            factorial = scipy.special.factorial
+    
+        R = np.zeros(r.shape)
+        # Can cast the below to "int", n,m are always *both* either even or odd
+        for i in range(0, int((n - m) / 2) + 1):
+    
+            R += np.array(r**(n - 2 * i) * (((-1)**(i)) *
+                             factorial(n - i)) /
+                             (factorial(i) *
+                              factorial(int(0.5 * (n + m) - i)) *
+                              factorial(int(0.5 * (n - m) - i))),
+                             dtype='float')
+        return R
 
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% END %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
