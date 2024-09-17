@@ -18,8 +18,10 @@ from .tools.tools import bsxfunMinus, createFolder
 
 
 def gamma(x):
-    return np.math.gamma(x)
-
+    try:
+        return np.math.gamma(x)
+    except:
+        return sp.special.gamma(x) 
 def variance(atm):
     # compute the phase variance from an atmosphere object
     L0r0Ratio   = (atm.L0/atm.r0)**(5./3)
@@ -73,9 +75,9 @@ def makeCovarianceMatrix(rho1,rho2,atm):
 
     L0r0ratio   =  (atm.L0/atm.r0_def)**(5./3)
     
-    cst = (24.*np.math.gamma(6./5)/5)**(5./6) * (np.math.gamma(11./6)/((2.**(5./6))*np.pi**(8./3)))*L0r0ratio
+    cst = (24.*gamma(6./5)/5)**(5./6) * (gamma(11./6)/((2.**(5./6))*np.pi**(8./3)))*L0r0ratio
 
-    out = np.ones(rho.shape)*((24.*np.math.gamma(6./5)/5)**(5./6))*(np.math.gamma(11./6)*np.math.gamma(5./6)/(2*np.pi**(8./3))) * L0r0ratio
+    out = np.ones(rho.shape)*((24.*gamma(6./5)/5)**(5./6))*(gamma(11./6)*gamma(5./6)/(2*np.pi**(8./3))) * L0r0ratio
 
     index = np.where(rho!=0)
 
