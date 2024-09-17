@@ -10,7 +10,7 @@ import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.offsetbox import AnnotationBbox, OffsetImage, TextArea
-
+import math
 
 
 from .tools import emptyClass
@@ -37,7 +37,7 @@ def displayMap(A,norma=False,axis=2,mask=0,returnOutput = False):
             return -1
 
         else:
-            if np.log(n1,np.sqrt(n1)) == 2.0:
+            if math.log(n1,np.sqrt(n1)) == 2.0:
                 nImage = n2
                 nPix1 = int(np.sqrt(n1))
                 nPix2 = nPix1
