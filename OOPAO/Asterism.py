@@ -51,6 +51,12 @@ class Asterism:
 
         self.altitude = []
         self.nPhoton = 0
+        self.chromatic_shift = None
+        
+        self.print_properties()
+
+
+    def print_properties(self):
         for i in range(self.n_source):
             self.coordinates.append(self.src[i].coordinates)
             self.altitude.append(self.src[i].altitude)

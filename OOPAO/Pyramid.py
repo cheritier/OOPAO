@@ -1,5 +1,12 @@
 # -*- coding: utf-8 -*-
 """
+Created on Wed Sep  4 10:23:42 2024
+
+@author: cheritier
+"""
+
+# -*- coding: utf-8 -*-
+"""
 Created on Sun Feb 23 19:35:18 2020
 
 @author: cheritie
@@ -29,23 +36,6 @@ except:
     print('WARNING: The joblib module is not installed. This would speed up considerably the operations.')
     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
-
-# import ctypes
-# try : 
-#     mkl_rt = ctypes.CDLL('libmkl_rt.so')
-#     mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
-#     mkl_set_num_threads(6)
-# except:
-#     try:
-#         mkl_rt = ctypes.CDLL('./mkl_rt.dll')
-#         mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
-#         mkl_set_num_threads(6)
-#     except:
-#         try:
-#             import mkl
-#             mkl_set_num_threads = mkl.set_num_threads
-#         except:
-#             mkl_set_num_threads = None
 class Pyramid:
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def __init__(self,
@@ -152,11 +142,14 @@ class Pyramid:
             _ binning of the Pyramid signals
             _ addition of eventual photon noise and readout noise
             _ computation of the Pyramid signals
+            
+        If the tel.src object is an asterism of sources with the same wavelength, each source is propagated to the Pyramid. 
+        The resulting intensities are summed incoherently before being integrated by the Pyramid camera. 
         
     
         ************************** PROPERTIES **************************
         
-        The main properties of a Telescope object are listed here: 
+        The main properties of a Pyramid object are listed here: 
         _ wfs.nSignal                    : the length of the signal measured by the Pyramid
         _ wfs.signal                     : signal measured by the Pyramid of length wfs.nSignal
         _ wfs.signal_2D                  : 2D map of the signal measured by the Pyramid
@@ -165,6 +158,8 @@ class Pyramid:
         _ wfs.random_state_readout_noise : a random state cycle can be defined to reproduces random sequences of noise -- default is based on the current clock time   
         _ wfs.random_state_background    : a random state cycle can be defined to reproduces random sequences of noise -- default is based on the current clock time   
         _ wfs.fov                        : Field of View of the Pyramid in arcsec
+        _ wfs.raw_data                   : Intensity pattern on the detector before its integration by a detector ("pure" WFS signal)
+        _ wfs.pyramidFrame               : DEPRECIATED. copy of wfs.raw_data kept for backward compatibility
 
         The main properties of the object can be displayed using :
             wfs.print_properties()
@@ -250,7 +245,7 @@ class Pyramid:
         self.zeroPadding        = (self.nRes - self.telescope.resolution)//2                             # zero-Padding Factor
         self.tag                        = 'pyramid'                                                          # Tag of the object 
         self.cam                        = Detector(round(nSubap*self.zeroPaddingFactor))                     # WFS detector object (see Detector class)
-        self.focal_plane_camera         = Detector(int((modulation+12)*self.zeroPaddingFactor),psf_sampling=self.zeroPaddingFactor)                                                # WFS focal plane detector object (see Detector class)
+        self.focal_plane_camera         = Detector(int((modulation*4+12)*self.zeroPaddingFactor),psf_sampling=self.zeroPaddingFactor)                                                # WFS focal plane detector object (see Detector class)
         self.focal_plane_camera.is_focal_plane_camera = True
         self.lightRatio                 = lightRatio
         if calibModulation>= self.telescope.resolution/2:
@@ -459,7 +454,7 @@ class Pyramid:
         self.referenceSignal_2D,self.referenceSignal = self.signalProcessing()
       
         # 2D reference Frame before binning with detector
-        self.referencePyramidFrame         = np.copy(self.pyramidFrame)
+        self.referencePyramidFrame         = np.copy(self.raw_data)
         if self.isCalibrated is False:
             print('WFS calibrated!')
         self.isCalibrated= True
@@ -470,7 +465,7 @@ class Pyramid:
         # copy of the support for the zero-padding
         support = self.supportPadded.copy()
         # em field corresponding to phase_in
-        if np.ndim(self.telescope.OPD)==2:  
+        if np.ndim(self.telescope.OPD)==2 or type(self.telescope.OPD) is list:  
             if self.modulation==0:
                 em_field     = self.maskAmplitude*np.exp(1j*(phase_in))
             else:
@@ -513,7 +508,16 @@ class Pyramid:
         self.wfs_measure(phase_in=telescope.src.phase)
         return
     
-    def wfs_measure(self,phase_in=None):
+    def wfs_integrate(self):
+        #propagate to the detector to apply the noise
+        self*self.cam
+        if self.isInitialized and self.isCalibrated:
+            signal_2D,signal=self.signalProcessing()
+            return signal_2D,signal
+        else:
+            return None,None
+            
+    def wfs_measure(self,phase_in=None,integrate= True):
         if phase_in is not None:
             self.telescope.src.phase = phase_in
         # mask amplitude for the light propagation
@@ -532,10 +536,9 @@ class Pyramid:
 
         if self.modulation==0:
             if np.ndim(phase_in)==2:
-                self.pyramidFrame = self.convert_for_numpy(self.pyramid_transform(self.convert_for_gpu(self.telescope.src.phase)))              
-                self*self.cam
-                if self.isInitialized and self.isCalibrated:
-                    self.pyramidSignal_2D,self.pyramidSignal=self.signalProcessing()
+                self.raw_data = self.convert_for_numpy(self.pyramid_transform(self.convert_for_gpu(self.telescope.src.phase)))
+                if integrate:
+                        self.pyramidSignal_2D,self.pyramidSignal = self.wfs_integrate() 
             else:
                 nModes = phase_in.shape[2]
                 # move axis to get the number of modes first
@@ -552,10 +555,9 @@ class Pyramid:
                 self.pyramidSignal       = np.zeros([self.nSignal,nModes])
                 
                 for i in range(nModes):
-                    self.pyramidFrame = maps[i,:,:]
-                    self*self.cam
-                    if self.isInitialized:
-                        self.pyramidSignal_2D[:,:,i],self.pyramidSignal[:,i] = self.signalProcessing()             
+                    self.raw_data = maps[i,:,:]
+                    if integrate:
+                            self.pyramidSignal_2D[:,:,i],self.pyramidSignal[:,i] = self.wfs_integrate()           
                 del maps
 
         else:
@@ -584,9 +586,9 @@ class Pyramid:
                                 return Q 
                             maps+=self.convert_for_numpy(np_cp.sum(np_cp.asarray(job_loop_single_mode_modulated()),axis=0))
                     self.maps = maps.copy()
-                    self.pyramidFrame=maps
+                    self.raw_data=maps
                     del maps
-                else:
+                else:                    
                     #define the parallel jobs
                     def job_loop_single_mode_modulated():
                         Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.phaseBuffModulationLowres)
@@ -595,16 +597,13 @@ class Pyramid:
                     self.maps=np_cp.asarray(job_loop_single_mode_modulated())
                     # compute the sum of the pyramid frames for each modulation points
                     if self.weight_vector is None:
-                        self.pyramidFrame=self.convert_for_numpy(np_cp.sum((self.maps),axis=0))
+                        self.raw_data=self.convert_for_numpy(np_cp.sum((self.maps),axis=0))
                     else:
                         weighted_map = np.reshape(self.maps,[self.nTheta,self.nRes**2])
                         self.weighted_map = np.diag(self.weight_vector)@weighted_map
-                        self.pyramidFrame= np.reshape(self.convert_for_numpy(np_cp.sum((self.weighted_map),axis=0))/self.nTheta,[self.nRes,self.nRes])
-                #propagate to the detector to apply the noise
-                self*self.cam
-                
-                if self.isInitialized and self.isCalibrated:
-                    self.pyramidSignal_2D,self.pyramidSignal=self.signalProcessing()
+                        self.raw_data= np.reshape(self.convert_for_numpy(np_cp.sum((self.weighted_map),axis=0))/self.nTheta,[self.nRes,self.nRes])
+                if integrate:
+                        self.pyramidSignal_2D,self.pyramidSignal = self.wfs_integrate()  
             else:
                 if np.ndim(phase_in)==3:
                     nModes = phase_in.shape[2]
@@ -659,10 +658,9 @@ class Pyramid:
                     self.pyramidSignal        = np.zeros([self.nSignal,nModes])
                     
                     for i in range(nModes):
-                        self.pyramidFrame = np_cp.sum(self.bufferPyramidFrames[i*(self.nTheta):(self.nTheta)+i*(self.nTheta)],axis=0)
-                        self*self.cam
-                        if self.isInitialized:
-                            self.pyramidSignal_2D[:,:,i],self.pyramidSignal[:,i] = self.signalProcessing()                   
+                        self.raw_data = np_cp.sum(self.bufferPyramidFrames[i*(self.nTheta):(self.nTheta)+i*(self.nTheta)],axis=0)
+                        if integrate:
+                            self.pyramidSignal_2D[:,:,i],self.pyramidSignal[:,i] = self.wfs_integrate()                   
                     del self.bufferPyramidFrames      
                 else:
                     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
@@ -676,6 +674,8 @@ class Pyramid:
                         self.mempool.free_all_blocks()
                     except:
                         print('could not free the memory')
+
+
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS SIGNAL PROCESSING %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
             
@@ -706,51 +706,35 @@ class Pyramid:
             I2              = self.grabQuadrant(2,cameraFrame=None)*self.validI4Q
             I3              = self.grabQuadrant(3,cameraFrame=None)*self.validI4Q
             I4              = self.grabQuadrant(4,cameraFrame=None)*self.validI4Q
-
             # global normalisation
-            I4Q         = I1+I2+I3+I4
-            subArea     = (self.telescope.D / self.nSubap)**2
-            # self.norma       = np.float64(self.telescope.src.nPhoton*self.telescope.samplingTime*subArea)
             self.norma       = np.float64(self.cam.frame.mean())
-
             # slopesMaps computation cropped to the valid pixels
             Sx         = (I1-I2+I4-I3)            
             Sy         = (I1-I4+I2-I3)   
-            
             # 2D slopes maps      
             slopesMaps = (np.concatenate((Sx,Sy)/self.norma) - self.referenceSignal_2D) *self.slopesUnits
-            
             # slopes vector
             slopes     = slopesMaps[np.where(self.validSignal==1)]
             return slopesMaps,slopes
         
         if self.postProcessing == 'fullFrame_incidence_flux':
             # global normalization
-            # subArea     = (self.telescope.D / self.nSubap)**2
-            # self.norma       = np.float64(self.telescope.src.nPhoton*self.telescope.samplingTime*subArea)/4
-
             self.norma       = np.float64(self.cam.frame.mean())
-
             # 2D full-frame
             fullFrameMaps  = (cameraFrame / self.norma )  - self.referenceSignal_2D
             # full-frame vector
             fullFrame  = fullFrameMaps[np.where(self.validSignal==1)]
-            
             return fullFrameMaps,fullFrame
         
         if self.postProcessing == 'fullFrame_sum_flux':
             # global normalization
-            # subArea     = (self.telescope.D / self.nSubap)**2
-            # self.norma       = np.float64(self.telescope.src.nPhoton*self.telescope.samplingTime*subArea)/4
-
             self.norma       = np.float64(self.cam.frame.sum())
-
             # 2D full-frame
             fullFrameMaps  = (cameraFrame / self.norma )  - self.referenceSignal_2D
             # full-frame vector
             fullFrame  = fullFrameMaps[np.where(self.validSignal==1)]
-            
             return fullFrameMaps,fullFrame
+        
         if self.postProcessing == 'fullFrame':
             # global normalization
             self.norma = np.sum(cameraFrame[self.validSignal])
@@ -758,25 +742,17 @@ class Pyramid:
             fullFrameMaps  = (cameraFrame / self.norma )  - self.referenceSignal_2D
             # full-frame vector
             fullFrame  = fullFrameMaps[np.where(self.validSignal==1)]
-            
             return fullFrameMaps,fullFrame
         
     def get_modulation_frame(self, radius = 6, norma = True):
         if radius<=0:
             Warning('radius for the field of view must be a strictly positive number. Ignoring the input value.')
-            radius =  self.telescope.resolution//2
-            
-        # self*self.focal_plane_camera
+            radius =  self.telescope.resolution//2            
         self.modulation_camera_frame = self.focal_plane_camera.frame.astype(float)
-        
-        # self.modulation_camera_frame = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)
-       
-        
         N_trunc = int(self.nRes/2 - radius*self.zeroPaddingFactor )
         if N_trunc<=0:
             print('radius Value is too high as the field of view is limited to '+str(int(self.fov_l_d/2)) +' lambda/D -- ignoring')
             modulation_camera_frame_zoom = self.modulation_camera_frame.copy()
-
         else:
             modulation_camera_frame_zoom = self.modulation_camera_frame[N_trunc:-N_trunc,N_trunc:-N_trunc]
         
@@ -859,6 +835,16 @@ class Pyramid:
     def pyramidSignal_2D(self,val):
         self._pyramidSignal_2D = val
         self.signal_2D = val
+        
+    # #properties required for backward compatibility (20/10/2024)
+    # @property
+    # def raw_data(self):
+    #     return self._raw_data
+        
+    # @raw_data.setter
+    # def raw_data(self,val):
+    #     self._raw_data = val
+    #     self.pyramidFrame = val
         
     @property
     def lightRatio(self):
@@ -1003,25 +989,25 @@ class Pyramid:
             obj._integrated_time+=self.telescope.samplingTime
             try:
                 if obj.is_focal_plane_camera:
-                    I = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)   
-                    n_crop = (I.shape[0]-obj.resolution)//2
-                    frame = I[n_crop:-n_crop,n_crop:-n_crop]
+                    I = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)
+                    if obj.resolution >= self.nRes:
+                        frame = I
+                        print('Maximum resolution for focal plane camera is %i, cropping field to this dimension'%self.nRes)
+                    else:
+                        frame = I[I.shape[0]//2-obj.resolution//2:I.shape[0]//2+obj.resolution//2,I.shape[0]//2-obj.resolution//2:I.shape[0]//2+obj.resolution//2]
                 else:
                     raise AttributeError    
             except:
-                I = self.pyramidFrame
+                I = self.raw_data
                 frame = (obj.set_binning(I,self.nRes/obj.resolution))
-
             if self.binning != 1:
                 try:
                     frame = (obj.rebin(obj.frame,(obj.resolution//self.binning,obj.resolution//self.binning)))    
                 except:
-                    print('ERROR: the shape of the detector ('+str(obj.frame.shape)+') is not valid with the binning value requested:'+str(self.binning)+'!')
+                    raise Warning('The shape of the detector ('+str(obj.frame.shape)+') is not valid with the binning value requested:'+str(self.binning)+'! -- Ignoring the binning.')
             obj.integrate(frame)
-
         else:
-            print('Error light propagated to the wrong type of object')
-        return -1
+            raise AttributeError('Error light propagated to the wrong type of object')
         
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% END %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
  

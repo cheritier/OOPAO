@@ -9,6 +9,7 @@ import inspect
 
 import matplotlib.pyplot as plt
 import numpy as np
+import copy
 try:
     import cupy as cp
     from cupyx.scipy import signal as csg
@@ -97,7 +98,14 @@ class Telescope:
         Once generated, the telescope should be coupled with a Source object "src" that contains the wavelength and flux properties of a target. 
         _ This is achieved using the * operator     : src*tel
         _ It can be accessed using                  : tel.src
-        _ By default, a Source object in the visible with a magnitude 0 is coupled to the telescope object
+
+        ************************** COUPLING TO MULTIPLE SOURCES **************************
+        
+        The telescope can be coupled with an Asterism object "ast" that contains different sources objects.
+        _ This is achieved using the * operator     : ast*tel
+        _ It can be accessed using "tel.src" . See the Asterism object documentation.
+        
+        
         
         ************************** COUPLING WITH AN ATMOSPHERE OBJECT **************************
         
@@ -107,10 +115,17 @@ class Telescope:
         
         ************************** COMPUTING THE PSF **************************
         
-        1) PSF computation
+        1) PSF computation directly using the Telescope property
         tel.computePSF(zeroPaddingFactor)  : computes the square module of the Fourier transform of the tel.src.phase using the zeropadding factor for the FFT
         
-    
+        2) PSF computation using a Detector object
+            - create a detector (see Detector class documentation to set the different parameters for the camera frame: integration time, binning of the image, sampling of the PSF, etc.)
+                cam = Detector() 
+            - propagate the light from the source through the telescope to the detector
+                src*tel*cam 
+            - the PSF is accessible in tel.PSF (no detector effect) and in cam.frame (that includes the detector effects such as noise, binning, etc)
+               
+        
         ************************** MAIN PROPERTIES **************************
         
         The main properties of a Telescope object are listed here: 
@@ -133,30 +148,28 @@ class Telescope:
         
         """
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
-        self.isInitialized               = False                # Resolution of the telescope
-        
-        self.resolution                  = resolution                # Resolution of the telescope
-        self.D                           = diameter                  # Diameter in m
-        self.pixelSize                   = self.D/self.resolution    # size of the pixels in m
-        self.centralObstruction          = centralObstruction        # central obstruction
-        self.fov                         = fov      # Field of View in arcsec converted in radian
-        self.fov_rad                     = fov/206265      # Field of View in arcsec converted in radian
-        self.samplingTime                = samplingTime              # AO loop speed
-        self.isPetalFree                 = False                     # Flag to remove the petalling effect with ane ELT system. 
-        self.index_pixel_petals          = None                      # indexes of the pixels corresponfong to the M1 petals. They need to be set externally
-        self.optical_path                = None                      # indexes of the pixels corresponfong to the M1 petals. They need to be set externally
-        self.user_defined_pupil          = pupil
-        self.pupilReflectivity           = pupilReflectivity
-        self.set_pupil()
-        self.src                         = None                                               # temporary source object associated to the telescope object
-        self.OPD                         = self.pupil.astype(float)                                     # set the initial OPD
-        self.OPD_no_pupil                = 1+self.pupil.astype(float)*0                                     # set the initial OPD
-        # self.em_field                    = self.pupilReflectivity*np.exp(1j*self.src.phase)
-        self.tag                         = 'telescope'                                                  # tag of the object
-        self.isPaired                    = False                                                        # indicate if telescope object is paired with an atmosphere object
-        self.spatialFilter               = None
-        self.display_optical_path        = display_optical_path
-        self.coronagraph_diameter        = None
+        self.isInitialized               = False                        # Resolution of the telescope
+        self.resolution                  = resolution                   # Resolution of the telescope
+        self.D                           = diameter                     # Diameter in m
+        self.pixelSize                   = self.D/self.resolution       # size of the pixels in m
+        self.centralObstruction          = centralObstruction           # central obstruction
+        self.fov                         = fov                          # Field of View in arcsec converted in radian
+        self.fov_rad                     = fov/206265                   # Field of View in arcsec converted in radian
+        self.samplingTime                = samplingTime                 # AO loop speed
+        self.isPetalFree                 = False                        # Flag to remove the petalling effect with ane ELT system. 
+        self.index_pixel_petals          = None                         # indexes of the pixels corresponfong to the M1 petals. They need to be set externally
+        self.optical_path                = None                         # indexes of the pixels corresponfong to the M1 petals. They need to be set externally
+        self.user_defined_pupil          = pupil                        # input user-defined pupil
+        self.pupilReflectivity           = pupilReflectivity            # Pupil Reflectivity <=> amplitude map
+        self.set_pupil()                                                # set the pupil
+        self.src                         = None                         # temporary source object associated to the telescope object
+        self.OPD                         = self.pupil.astype(float)     # set the initial OPD
+        self.OPD_no_pupil                = 1+self.pupil.astype(float)*0 # set the initial OPD
+        self.tag                         = 'telescope'                  # tag of the object
+        self.isPaired                    = False                        # indicate if telescope object is paired with an atmosphere object
+        self.spatialFilter               = None                         # property to take into account a spatial filter
+        self.display_optical_path        = display_optical_path         # flag to display the optical path at each iteration
+        self.coronagraph_diameter        = None                         # perfect coronograph diameter (circular)
         self.print_properties()
 
         self.isInitialized= True
@@ -190,46 +203,62 @@ class Telescope:
 
     def computePSF(self,zeroPaddingFactor=2,detector = None,img_resolution=None):
         conversion_constant = (180/np.pi)*3600
-
         if detector is not None:
             zeroPaddingFactor = detector.psf_sampling
             img_resolution    = detector.resolution
 
         if img_resolution is None:
             img_resolution = zeroPaddingFactor*self.resolution
-
+        
         if self.src is None:
             raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')   
-        
-        if self.spatialFilter is None:            
-            amp_mask = 1
-            phase    = self.src.phase
-
+            
+        elif self.src.tag == 'asterism':
+            input_source = self.src.src
         else:
-            amp_mask = self.amplitude_filtered               
-            phase    = self.phase_filtered
-
-        amp      = amp_mask*self.pupil*self.pupilReflectivity*np.sqrt(self.src.fluxMap)
+            input_source = [self.src]
+        input_wavelenght = input_source[0].wavelength    
+        output_PSF = np.zeros([img_resolution,img_resolution])
+        output_PSF_norma = np.zeros([img_resolution,img_resolution])
         
-        # add a Tip/Tilt for off-axis sources
-        [Tip,Tilt]            = np.meshgrid(np.linspace(-np.pi,np.pi,self.resolution),np.linspace(-np.pi,np.pi,self.resolution))               
-        self.delta_TT = self.src.coordinates[0]*(1/conversion_constant)*(self.D/self.src.wavelength)*(np.cos(self.src.coordinates[1])*Tip+np.sin(self.src.coordinates[1])*Tilt)*self.pupil
+        for i_src in range(len(input_source)):
+            if input_wavelenght == input_source[i_src].wavelength:
+                input_wavelenght = input_source[i_src].wavelength
+            else:
+                raise AttributeError('The asterism contains sources with different wavelengths. Summing up PSFs with different wavelength is not implemented.')                    
+            
+            if self.spatialFilter is None:            
+                amp_mask = 1
+                phase    = input_source[i_src].phase
+            else:
+                amp_mask = self.amplitude_filtered               
+                phase    = self.phase_filtered
+    
+            amp      = amp_mask*self.pupil*self.pupilReflectivity*np.sqrt(input_source[i_src].fluxMap)
+            
+            # add a Tip/Tilt for off-axis sources
+            [Tip,Tilt]            = np.meshgrid(np.linspace(-np.pi,np.pi,self.resolution),np.linspace(-np.pi,np.pi,self.resolution))               
+            self.delta_TT = input_source[i_src].coordinates[0]*(1/conversion_constant)*(self.D/input_source[i_src].wavelength)*(np.cos(input_source[i_src].coordinates[1])*Tip+np.sin(input_source[i_src].coordinates[1])*Tilt)*self.pupil
+            
+            # function to compute the em-field and PSF        
+            self.PropagateField(amplitude = amp , phase = phase+self.delta_TT, zeroPaddingFactor = zeroPaddingFactor,img_resolution=img_resolution)
+    
+            # axis in arcsec
+            self.xPSF_arcsec       = [-conversion_constant*(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor), conversion_constant*(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
+            self.yPSF_arcsec       = [-conversion_constant*(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor), conversion_constant*(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
+            
+            # axis in radians
+            self.xPSF_rad   = [-(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor),(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
+            self.yPSF_rad   = [-(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor),(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
+            
+            # normalized PSF           
+            self.PSF_norma  = self.PSF/self.PSF.max()  
+            output_PSF += self.PSF.copy()
+            output_PSF_norma += self.PSF.copy()
         
-        
-        
-        # function to compute the em-field and PSF        
-        self.PropagateField(amplitude = amp , phase = phase+self.delta_TT, zeroPaddingFactor = zeroPaddingFactor,img_resolution=img_resolution)
-
-        # axis in arcsec
-        self.xPSF_arcsec       = [-conversion_constant*(self.src.wavelength/self.D) * (img_resolution/2/zeroPaddingFactor), conversion_constant*(self.src.wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
-        self.yPSF_arcsec       = [-conversion_constant*(self.src.wavelength/self.D) * (img_resolution/2/zeroPaddingFactor), conversion_constant*(self.src.wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
-        
-        # axis in radians
-        self.xPSF_rad   = [-(self.src.wavelength/self.D) * (img_resolution/2/zeroPaddingFactor),(self.src.wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
-        self.yPSF_rad   = [-(self.src.wavelength/self.D) * (img_resolution/2/zeroPaddingFactor),(self.src.wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
-        
-        # normalized PSF           
-        self.PSF_norma  = self.PSF/self.PSF.max()  
+        self.PSF        = output_PSF.copy()
+        self.PSF_norma  = output_PSF_norma.copy()                 
+  
  
     
     def PropagateField(self, amplitude, phase, zeroPaddingFactor, img_resolution = None):
@@ -429,7 +458,7 @@ class Telescope:
                         tel_tmp.OPD = self.OPD[i_obj]
                         tel_tmp.OPD_no_pupil = self.OPD_no_pupil[i_obj]
                         setattr(obj[i_obj],'telescope',tel_tmp)
-                        obj[i_obj].wfs_measure(phase_in = tel_tmp.src.phase)               # propagation of the telescope-source phase screen to the pyramid-detector
+                        obj[i_obj].wfs_measure(phase_in = tel_tmp.src.phase)               
                 else:
                     raise ValueError('Error! There is a mis-match between the number of Sources ('+str(len(self.OPD))+') and the number of WFS ('+str(len(obj))+')')
             else:
@@ -442,11 +471,30 @@ class Telescope:
                 if self.display_optical_path is True:
                     self.print_optical_path()
                 self.optical_path = self.optical_path[:-1]
-                if type(self.OPD) is list:
-                    raise ValueError('Error! There is a mis-match between the number of Sources ('+str(len(self.OPD))+') and the number of WFS (1)')
+                
+
+                if self.src.tag == 'asterism':
+                    input_source        = copy.deepcopy(self.src.src)
+                    output_raw_data     = np.zeros([obj.raw_data.shape[0],obj.raw_data.shape[0]])
+                    output_raw_em       = np.zeros(obj.focal_plane_camera.frame.shape)
+                    obj.telescope       = copy.deepcopy(self)
+                    
+                    for i_src in range(len(input_source)):
+                        obj.telescope.src         = input_source[i_src]
+                        [Tip,Tilt]                = np.meshgrid(np.linspace(-np.pi,np.pi,self.resolution),np.linspace(-np.pi,np.pi,self.resolution))               
+                        delta_TT                  = input_source[i_src].coordinates[0]*(1/((180/np.pi)*3600))*(self.D/input_source[i_src].wavelength)*(np.cos(input_source[i_src].coordinates[1])*Tip+np.sin(input_source[i_src].coordinates[1])*Tilt)*self.pupil
+                        obj.wfs_measure(phase_in  = input_source[i_src].phase + delta_TT ,integrate = False )
+                        output_raw_data += obj.raw_data.copy()
+                        obj*obj.focal_plane_camera
+                        output_raw_em   += obj.focal_plane_camera.frame
+
+                    obj.focal_plane_camera.frame = output_raw_em
+                    obj.raw_data = output_raw_data.copy()
+                    obj.signal_2D,obj.signal = obj.wfs_integrate()    
+                        
                 else:
-                    obj.telescope=self              # assign the telescope object to the pyramid-telescope object
-                    obj.wfs_measure(phase_in = self.src.phase)               # propagation of the telescope-source phase screen to the pyramid-detector
+                    obj.telescope=self              
+                    obj.wfs_measure(phase_in = self.src.phase)               
 
             if obj.tag=='detector':
                 if self.optical_path[-1] != obj.tag: 
@@ -610,7 +658,6 @@ class Telescope:
                         # Case with N petals
                         for i in range(N):
                             meanValue = np.mean(petalFreeOPD[np.where(np.squeeze(self.index_pixel_petals[:,:,i])==1)])
-    #                        residualValue = meanValue % (self.src.wavelength )
                             residualValue = 0
                             petalFreeOPD[np.where(np.squeeze(self.index_pixel_petals[:,:,i])==1)]    += residualValue- meanValue
                     except:
@@ -668,16 +715,7 @@ class Telescope:
     # Combining with an atmosphere object
     def __add__(self,obj):
         if obj.tag == 'atmosphere':
-            # obj.set_pupil_footprint()
-            # self.optical_path =[[self.src.type + '('+self.src.optBand+')',id(self.src)]]
-            # self.optical_path.append([obj.tag,id(obj)])
-            # self.optical_path.append([self.tag,id(self)])
-            # self.isPaired   = True
             obj*self
-
-            # self.OPD  = obj.OPD.copy()
-            # self.OPD_no_pupil  = obj.OPD_no_pupil.copy()
-
             if self.isPetalFree:
                     self.removePetalling()  
             print('Telescope and Atmosphere combined!')

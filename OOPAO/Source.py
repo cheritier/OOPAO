@@ -130,33 +130,38 @@ class Source:
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOURCE INTERACTION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
         
-    def __mul__(self,telescope):
-        telescope.src   = self
-        if type(telescope.OPD) is list:
-            telescope.resetOPD()
-        
-        if np.ndim(telescope.OPD) ==3:
-            telescope.resetOPD()
-
-        telescope.OPD = telescope.OPD*telescope.pupil # here to ensure that a new pupil is taken into account
-
-        # update the phase of the source
-        self.phase      = telescope.OPD*2*np.pi/self.wavelength
-        self.phase_no_pupil      = telescope.OPD_no_pupil*2*np.pi/self.wavelength
-
-        # compute the variance in the pupil
-        self.var        = np.var(self.phase[np.where(telescope.pupil==1)])
-        # assign the source object to the telescope object
-
-        self.fluxMap    = telescope.pupilReflectivity*self.nPhoton*telescope.samplingTime*(telescope.D/telescope.resolution)**2
-        if telescope.optical_path is None:
-            telescope.optical_path = []
-            telescope.optical_path.append([self.type + '('+self.optBand+')',id(self)])
-            telescope.optical_path.append([telescope.tag,id(telescope)])
-        else:
-            telescope.optical_path[0] =[self.type + '('+self.optBand+')',id(self)]
+    def __mul__(self,obj):
+        if obj.tag =='telescope':
+            obj.src   = self
+            if type(obj.OPD) is list:
+                obj.resetOPD()
             
-        return telescope
+            if np.ndim(obj.OPD) ==3:
+                obj.resetOPD()
+    
+            obj.OPD = obj.OPD*obj.pupil # here to ensure that a new pupil is taken into account
+    
+            # update the phase of the source
+            self.phase      = obj.OPD*2*np.pi/self.wavelength
+            self.phase_no_pupil      = obj.OPD_no_pupil*2*np.pi/self.wavelength
+    
+            # compute the variance in the pupil
+            self.var        = np.var(self.phase[np.where(obj.pupil==1)])
+            # assign the source object to the obj object
+    
+            self.fluxMap    = obj.pupilReflectivity*self.nPhoton*obj.samplingTime*(obj.D/obj.resolution)**2
+            if obj.optical_path is None:
+                obj.optical_path = []
+                obj.optical_path.append([self.type + '('+self.optBand+')',id(self)])
+                obj.optical_path.append([obj.tag,id(obj)])
+            else:
+                obj.optical_path[0] =[self.type + '('+self.optBand+')',id(self)]
+                
+            return obj
+        else:
+            raise AttributeError('The Source can only be paired to a Telescope!')
+            
+        
      
     
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOURCE PHOTOMETRY %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 

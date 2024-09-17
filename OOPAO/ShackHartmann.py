@@ -166,7 +166,7 @@ class ShackHartmann:
         self.outerMask[1:-1,1:-1]       = 0
         
         # Compute camera frame in case of multiple measurements
-        self.get_camera_frame_multi     = False
+        self.get_raw_data_multi     = False
         # detector camera
         self.cam                        = Detector(round(nSubap*self.n_pix_subap))                     # WFS detector object
         self.cam.photonNoise            = 0
@@ -195,8 +195,7 @@ class ShackHartmann:
         self.joblib_prefer          = 'processes'
         
         # camera frame 
-        self.camera_frame           = np.zeros([self.n_pix_subap*(self.nSubap)//self.binning_factor,self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype =float)
-
+        self.raw_data           = np.zeros([self.n_pix_subap*(self.nSubap)//self.binning_factor,self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype =float)
         # cube of lenslet zero padded
         self.cube                   = np.zeros([self.nSubap**2,self.n_pix_lenslet_init,self.n_pix_lenslet_init])
         self.cube_flux              = np.zeros([self.nSubap**2,self.n_pix_subap_init,self.n_pix_subap_init],dtype=(complex))
@@ -267,7 +266,7 @@ class ShackHartmann:
         self.slopes_units           = 1
         print('Acquiring reference slopes..')        
         self.telescope.resetOPD()    
-        self.wfs_measure()        
+        self.wfs_measure(self.telescope.src.phase)        
         self.reference_slopes_maps = np.copy(self.signal_2D) 
         self.isInitialized = True
         print('Done!')
@@ -289,7 +288,7 @@ class ShackHartmann:
             self.telescope.OPD          = self.telescope.pupil*Tip*(i-2)*amp
             self.telescope.OPD_no_pupil = Tip*(i-2)*amp
 
-            self.wfs_measure()        
+            self.wfs_measure(self.telescope.src.phase)        
             mean_slope[i] = np.mean(self.signal[:self.nValidSubaperture])
             input_std[i] = np.std(self.telescope.OPD[self.telescope.pupil])*2*np.pi/self.telescope.src.wavelength
             
@@ -337,22 +336,22 @@ class ShackHartmann:
         self.cube_em*=np.sqrt(self.cube_flux)*self.phasor_tiled
         return self.cube_em 
   
-    def fill_camera_frame(self,ind_x,ind_y,I,index_frame=None):
+    def fill_raw_data(self,ind_x,ind_y,I,index_frame=None):
         if index_frame is None:
-            self.camera_frame[ind_x*self.n_pix_subap//self.binning_factor:(ind_x+1)*self.n_pix_subap//self.binning_factor,ind_y*self.n_pix_subap//self.binning_factor:(ind_y+1)*self.n_pix_subap//self.binning_factor] = I        
+            self.raw_data[ind_x*self.n_pix_subap//self.binning_factor:(ind_x+1)*self.n_pix_subap//self.binning_factor,ind_y*self.n_pix_subap//self.binning_factor:(ind_y+1)*self.n_pix_subap//self.binning_factor] = I        
         else:
-            self.camera_frame[index_frame,ind_x*self.n_pix_subap//self.binning_factor:(ind_x+1)*self.n_pix_subap//self.binning_factor,ind_y*self.n_pix_subap//self.binning_factor:(ind_y+1)*self.n_pix_subap//self.binning_factor] = I
+            self.raw_data[index_frame,ind_x*self.n_pix_subap//self.binning_factor:(ind_x+1)*self.n_pix_subap//self.binning_factor,ind_y*self.n_pix_subap//self.binning_factor:(ind_y+1)*self.n_pix_subap//self.binning_factor] = I
 
-    def split_camera_frame(self):
-        camera_frame_h_split = np.vsplit((self.cam.frame),self.nSubap)
+    def split_raw_data(self):
+        raw_data_h_split = np.vsplit((self.cam.frame),self.nSubap)
         self.maps_intensity = np.zeros([self.nSubap**2,self.n_pix_subap,self.n_pix_subap],dtype=float)
         center = self.n_pix_subap//2
         for i in range(self.nSubap):
-            camera_frame_v_split = np.hsplit(camera_frame_h_split[i],self.nSubap)
-            self.maps_intensity[i*self.nSubap:(i+1)*self.nSubap,center - self.n_pix_subap//self.binning_factor//2:center+self.n_pix_subap//self.binning_factor//2,center - self.n_pix_subap//self.binning_factor//2:center+self.n_pix_subap//self.binning_factor//2] = np.asarray(camera_frame_v_split)
+            raw_data_v_split = np.hsplit(raw_data_h_split[i],self.nSubap)
+            self.maps_intensity[i*self.nSubap:(i+1)*self.nSubap,center - self.n_pix_subap//self.binning_factor//2:center+self.n_pix_subap//self.binning_factor//2,center - self.n_pix_subap//self.binning_factor//2:center+self.n_pix_subap//self.binning_factor//2] = np.asarray(raw_data_v_split)
         self.maps_intensity = self.maps_intensity[self.valid_subapertures_1D,:,:]
  
-    def compute_camera_frame_multi(self,maps_intensity):   
+    def compute_raw_data_multi(self,maps_intensity):   
         self.ind_frame =np.zeros(maps_intensity.shape[0],dtype=(int))
         self.maps_intensity = maps_intensity
         index_x = np.tile(self.index_x[self.valid_subapertures_1D],self.phase_buffer.shape[0])
@@ -361,11 +360,11 @@ class ShackHartmann:
         for i in range(self.phase_buffer.shape[0]):
             self.ind_frame[i*self.nValidSubaperture:(i+1)*self.nValidSubaperture]=i
         
-        def joblib_fill_camera_frame():
-            Q=Parallel(n_jobs=1,prefer='processes')(delayed(self.fill_camera_frame)(i,j,k,l) for i,j,k,l in zip(index_x,index_y,self.maps_intensity,self.ind_frame))
+        def joblib_fill_raw_data():
+            Q=Parallel(n_jobs=1,prefer='processes')(delayed(self.fill_raw_data)(i,j,k,l) for i,j,k,l in zip(index_x,index_y,self.maps_intensity,self.ind_frame))
             return Q
         
-        joblib_fill_camera_frame()
+        joblib_fill_raw_data()
         return
         
     #%% GEOMETRIC    
@@ -498,8 +497,40 @@ class ShackHartmann:
         # backward compatibility with previous version
         self.wfs_measure(phase_in=phase_in)
         return
+    def wfs_integrate(self):
+        # propagate to detector to add noise and detector effects
+        self*self.cam
+        self.split_raw_data()
+
+        # compute the centroid on valid subaperture
+        self.centroid_lenslets = self.centroid(self.maps_intensity,self.threshold_cog)
+        
+        # discard nan and inf values
+        val_inf = np.where(np.isinf(self.centroid_lenslets))
+        val_nan = np.where(np.isnan(self.centroid_lenslets)) 
+        
+        if np.shape(val_inf)[1] !=0:
+            print('Warning! some subapertures are giving inf values!')
+            self.centroid_lenslets[np.where(np.isinf(self.centroid_lenslets))] = 0
+        
+        if np.shape(val_nan)[1] !=0:
+            print('Warning! some subapertures are giving nan values!')
+            self.centroid_lenslets[np.where(np.isnan(self.centroid_lenslets))] = 0
+            
+        # compute slopes-maps
+        self.SX[self.validLenslets_x,self.validLenslets_y] = self.centroid_lenslets[:,0]
+        self.SY[self.validLenslets_x,self.validLenslets_y] = self.centroid_lenslets[:,1]
+        
+        signal_2D                           = np.concatenate((self.SX,self.SY)) - self.reference_slopes_maps
+        signal_2D[~self.valid_slopes_maps]  = 0
+        
+        signal_2D                      = signal_2D/self.slopes_units
+        signal                         = signal_2D[self.valid_slopes_maps]
+        
+        return signal_2D,signal
     
-    def wfs_measure(self,phase_in = None):
+    
+    def wfs_measure(self,phase_in = None,integrate = True):
         if phase_in is not None:
             self.telescope.src.phase = phase_in
         
@@ -510,11 +541,10 @@ class ShackHartmann:
             
         if self.is_geometric is False:
             ##%%%%%%%%%%%%  DIFFRACTIVE SH WFS %%%%%%%%%%%%
-            if np.ndim(self.telescope.OPD)==2:
+            if np.ndim(phase_in)==2:
                 #-- case with a single wave-front to sense--
-                
                 # reset camera frame to be filled up
-                self.camera_frame   = np.zeros([self.n_pix_subap*(self.nSubap)//self.binning_factor,self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype =float)
+                self.raw_data   = np.zeros([self.n_pix_subap*(self.nSubap)//self.binning_factor,self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype =float)
 
                 # normalization for FFT
                 norma = self.cube.shape[1]
@@ -526,7 +556,7 @@ class ShackHartmann:
 
                 else:
                     phase = self.telescope.phase_filtered   
-                    self.initialize_flux(((self.telescope.amplitude_filtered)**2).T*self.telescope.src.fluxMap.T)                    
+                    self.initialize_flux(((self.telescope.amplitude_filtered)**2).T*self.telescope.src.fluxMap.T)              
                 I = (np.abs(np.fft.fft2(np.asarray(self.get_lenslet_em_field(phase)),axes=[1,2])/norma)**2)
                 # reduce to valid subaperture
                 I = I[self.valid_subapertures_1D,:,:]
@@ -559,37 +589,14 @@ class ShackHartmann:
                     self.maps_intensity =  bin_ndarray(self.maps_intensity,[self.maps_intensity.shape[0], self.n_pix_subap//self.binning_factor,self.n_pix_subap//self.binning_factor], operation='sum')
                
                 # fill camera frame with computed intensity (only valid subapertures)
-                def joblib_fill_camera_frame():
-                    Q=Parallel(n_jobs=1,prefer='processes')(delayed(self.fill_camera_frame)(i,j,k) for i,j,k in zip(self.index_x[self.valid_subapertures_1D],self.index_y[self.valid_subapertures_1D],self.maps_intensity))
+                def joblib_fill_raw_data():
+                    Q=Parallel(n_jobs=1,prefer='processes')(delayed(self.fill_raw_data)(i,j,k) for i,j,k in zip(self.index_x[self.valid_subapertures_1D],self.index_y[self.valid_subapertures_1D],self.maps_intensity))
                     return Q
-                joblib_fill_camera_frame()
-                # propagate to detector to add noise and detector effects
-                self*self.cam
-                self.split_camera_frame()
+                joblib_fill_raw_data()
 
-                # compute the centroid on valid subaperture
-                self.centroid_lenslets = self.centroid(self.maps_intensity,self.threshold_cog)
-                
-                # discard nan and inf values
-                val_inf = np.where(np.isinf(self.centroid_lenslets))
-                val_nan = np.where(np.isnan(self.centroid_lenslets)) 
-                
-                if np.shape(val_inf)[1] !=0:
-                    print('Warning! some subapertures are giving inf values!')
-                    self.centroid_lenslets[np.where(np.isinf(self.centroid_lenslets))] = 0
-                
-                if np.shape(val_nan)[1] !=0:
-                    print('Warning! some subapertures are giving nan values!')
-                    self.centroid_lenslets[np.where(np.isnan(self.centroid_lenslets))] = 0
-                    
-                # compute slopes-maps
-                self.SX[self.validLenslets_x,self.validLenslets_y] = self.centroid_lenslets[:,0]
-                self.SY[self.validLenslets_x,self.validLenslets_y] = self.centroid_lenslets[:,1]
-                
-                signal_2D                           = np.concatenate((self.SX,self.SY)) - self.reference_slopes_maps
-                signal_2D[~self.valid_slopes_maps]  = 0
-                self.signal_2D                      = signal_2D/self.slopes_units
-                self.signal                         = self.signal_2D[self.valid_slopes_maps]
+                if integrate:
+                    self.signal_2D,self.signal = self.wfs_integrate()                
+
 
             else:
                 #-- case with multiple wave-fronts to sense--
@@ -605,14 +612,13 @@ class ShackHartmann:
                     self.lgs_exp =  np.tile(self.C,[self.phase_buffer.shape[0],1,1])
                     
                 # reset camera frame
-                self.camera_frame   = np.zeros([self.phase_buffer.shape[0],self.n_pix_subap*(self.nSubap)//self.binning_factor,self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype =float)
+                self.raw_data   = np.zeros([self.phase_buffer.shape[0],self.n_pix_subap*(self.nSubap)//self.binning_factor,self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype =float)
                 
                 # compute 2D intensity for multiple input wavefronts
                 def compute_diffractive_signals_multi():
                     Q=Parallel(n_jobs=1,prefer='processes')(delayed(self.get_lenslet_em_field)(i) for i in self.phase_buffer)
                     return Q                 
                 emf_buffer = np.reshape(np.asarray(compute_diffractive_signals_multi()),[self.phase_buffer.shape[0]*self.nSubap**2,self.n_pix_lenslet_init,self.n_pix_lenslet_init])
-                
                 
                 # reduce to valid subaperture
                 emf_buffer = emf_buffer[valid_subap_1D_tiled,:,:]
@@ -639,8 +645,8 @@ class ShackHartmann:
                     self.maps_intensity += np.int64(np.round(self.random_state_readout_noise.randn(self.maps_intensity.shape[0],self.maps_intensity.shape[1],self.maps_intensity.shape[2])*self.cam.readoutNoise))
                 
                 # fill up camera frame if requested (default is False)
-                if self.get_camera_frame_multi is True:
-                    self.compute_camera_frame_multi(self.maps_intensity)
+                if self.get_raw_data_multi is True:
+                    self.compute_raw_data_multi(self.maps_intensity)
                                     
                 # normalization for centroid computation
                 norma = np.sum(np.sum(self.maps_intensity,axis=1),axis=1)
@@ -665,7 +671,7 @@ class ShackHartmann:
         else:
             ##%%%%%%%%%%%%  GEOMETRIC SH WFS %%%%%%%%%%%%
             if np.ndim(self.telescope.src.phase)==2:
-                self.camera_frame   = np.zeros([self.n_pix_subap*(self.nSubap)//self.binning_factor,self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype =float)
+                self.raw_data   = np.zeros([self.n_pix_subap*(self.nSubap)//self.binning_factor,self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype =float)
 
                 self.signal_2D = self.lenslet_propagation_geometric(self.telescope.src.phase_no_pupil)*self.valid_slopes_maps/self.slopes_units
                     
@@ -758,8 +764,8 @@ class ShackHartmann:
     def __mul__(self,obj): 
         if obj.tag=='detector':
             obj._integrated_time+=self.telescope.samplingTime
-            obj.integrate(self.camera_frame)
-            self.camera_frame = obj.frame
+            obj.integrate(self.raw_data)
+            # self.raw_data = obj.frame
         else:
             print('Error light propagated to the wrong type of object')
         return -1

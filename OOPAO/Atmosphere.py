@@ -320,7 +320,6 @@ class Atmosphere:
                         chromatic_shift = self.telescope.src.chromatic_shift[i_layer]
                     else:
                         raise ValueError('The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')    
-                    
                 else:
                     chromatic_shift = 0
                 [x_z,y_z] = pol2cart(layer.altitude*np.tan((self.telescope.src.coordinates[0]+chromatic_shift)/206265) * layer.resolution / layer.D,np.deg2rad(self.telescope.src.coordinates[1]))
@@ -335,18 +334,14 @@ class Atmosphere:
             else:
                 layer.pupil_footprint= []
                 for i in range(self.asterism.n_source):
-                    [x_z,y_z] = pol2cart(self.asterism.coordinates[i][0]*np.tan(self.telescope.src.coordinates[0]/206265) * layer.resolution / layer.D,np.deg2rad(self.asterism.coordinates[i][1]))
-                    
+                    [x_z,y_z] = pol2cart(layer.altitude*np.tan(self.asterism.coordinates[i][0]/206265) * layer.resolution / layer.D,np.deg2rad(self.asterism.coordinates[i][1]))
                     center_x = int(y_z)+layer.resolution//2
                     center_y = int(x_z)+layer.resolution//2
                     
                     pupil_footprint = np.zeros([layer.resolution,layer.resolution])
                     pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution//2,center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2 ] = 1
                     layer.pupil_footprint.append(pupil_footprint)   
-            
-        
-        
-        
+  
     def updateLayer(self,layer,shift = None):
         self.ps_loop    = layer.D / (layer.resolution)
         ps_turb_x       = layer.vX*self.telescope.samplingTime 
@@ -630,7 +625,7 @@ class Atmosphere:
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         
     def __mul__(self,obj):
-        if obj.tag == 'telescope' or obj.tag == 'source':
+        if obj.tag == 'telescope' or obj.tag == 'source' or obj.tag =='asterism':
             if obj.tag == 'telescope':
                 if self.fov == obj.fov:   
                     self.telescope = obj
@@ -638,20 +633,26 @@ class Atmosphere:
                     print('Re-initializing the atmosphere to match the new telescope fov')
                     self.hasNotBeenInitialized = True
                     self.initializeAtmosphere(obj)
-
-            else:
+            elif obj.tag == 'source':                
                 if obj.coordinates[0] <= self.fov/2:
-                    self.telescope.src = obj
-                    obj = self.telescope
+                    self.telescope.src  = obj
+                    obj                 = self.telescope
+                    self.asterism       = None
                 else:
                     raise ValueError('The source object zenith ('+str(obj.coordinates[0])+'") is outside of the telescope fov ('+str(self.fov//2)+'")! You can:\n - Reduce the zenith of the source \n - Re-initialize the atmosphere object using a telescope with a larger fov')
-            
+            elif obj.tag =='asterism':
+                c_ = np.asarray(obj.coordinates)
+                if np.max(c_[:,0]) <= self.fov/2:
+                    self.telescope.src  = obj
+                    self.asterism       = obj
+                    obj                 = self.telescope
+                else:
+                    raise ValueError('One of the source is outside of the telescope fov ('+str(self.fov//2)+'")! You can:\n - Reduce the zenith of the source \n - Re-initialize the atmosphere object using a telescope with a larger fov')
             if self.user_defined_opd is False:
                 self.set_pupil_footprint()    
                 phase_support = self.initialize_phase_support()
                 for i_layer in range(self.nLayer):
                     tmpLayer = getattr(self,'layer_'+str(i_layer+1))
-                    # self.updateLayer(tmpLayer,shift = [tmpLayer.extra_sx,tmpLayer.extra_sy])
                     phase_support = self.fill_phase_support(tmpLayer, phase_support, i_layer)
                 self.set_OPD(phase_support)
             
@@ -659,7 +660,6 @@ class Atmosphere:
                 obj.optical_path =[[obj.src.type + '('+obj.src.optBand+')',id(obj.src)]]
             else:
                 obj.optical_path =[[obj.src.type,id(obj.src)]]
-                
             obj.optical_path.append([self.tag,id(self)])
             obj.optical_path.append([obj.tag,id(obj)])
             obj.OPD          = self.OPD.copy()
