@@ -37,7 +37,7 @@ def displayMap(A,norma=False,axis=2,mask=0,returnOutput = False):
             return -1
 
         else:
-            if np.math.log(n1,np.sqrt(n1)) == 2.0:
+            if np.log(n1,np.sqrt(n1)) == 2.0:
                 nImage = n2
                 nPix1 = int(np.sqrt(n1))
                 nPix2 = nPix1
@@ -51,14 +51,17 @@ def displayMap(A,norma=False,axis=2,mask=0,returnOutput = False):
         else:
             print('Error wrong size for the image cube')
             return -1
+    r = 1         
+    nPix1_ = nPix1+2*r
+    nPix2_ = nPix1+2*r
     
-#    Create a meta Map
-    
+    # Create a meta Map
     nSide = int(np.ceil(np.sqrt(nImage)))
-        
-    S=np.zeros([nPix1*nSide-1,nPix2*nSide-1])
+    S=np.zeros([nPix1_*nSide-1+nSide,nPix2_*nSide-1+nSide])
+    S[:] = np.inf
     
     count=0
+
     for i in range(nSide):
         for j in range(nSide):
             count+=1
@@ -69,11 +72,13 @@ def displayMap(A,norma=False,axis=2,mask=0,returnOutput = False):
                     tmp = A[:,:,count-1] 
                 if norma:
                     tmp = tmp/np.max(np.abs(tmp))
-                S[ i*(nPix1-1) : nPix1 +i*(nPix1-1) , j*(nPix2-1) : nPix2 +j*(nPix2-1)] = tmp
+                tmp = np.pad(tmp,(r,r),'constant',constant_values=(np.inf,np.inf))
+                S[ i*(nPix1_-1) : nPix1_ +i*(nPix1_-1) , j*(nPix2_-1) : nPix2_ +j*(nPix2_-1)] = tmp
     
     
     plt.figure()
     plt.imshow(S)
+    plt.axis('off')
     if returnOutput:
         return S
 
@@ -321,7 +326,7 @@ def compute_gif(cube, name, vect = None, vect2 = None, vlim = None, fps = 2):
         # animation function. This is called sequentially
     def animate(i):
         tmp = np.copy(data[i,:,:])
-        tmp[np.where(tmp==0)] = np.inf
+        #tmp[np.where(tmp==0)] = np.inf
         line.set_data(np.fliplr(np.flip(tmp.T)))
         # SR.set_text(str(np.round(vect[i],1))+' %')
         # FWHM.set_text(str(np.round(vect2[i],1))+' mas')
@@ -338,7 +343,7 @@ def compute_gif(cube, name, vect = None, vect2 = None, vlim = None, fps = 2):
     anim = animation.FuncAnimation(fig, animate, init_func=init,
                                     frames=data.shape[0], interval=100)
     
-    folder = 'C:/Users/cheritier/Documents/gif_from_python/'
+    folder = ''
     anim.save(folder+name+'.gif', writer='imagemagick', fps=fps)
     return
 
