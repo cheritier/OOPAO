@@ -233,7 +233,7 @@ class Atmosphere:
         else:
             layer.pupil_footprint= []
             for i in range(self.asterism.n_source):
-                 [x_z,y_z] = pol2cart(self.asterism.coordinates[i][0]**np.tan(self.telescope.src.coordinates[0]/206265) * layer.resolution / layer.D,np.deg2rad(self.asterism.coordinates[i][1]))
+                 [x_z,y_z] = pol2cart(layer.altitude*np.tan(self.telescope.src.coordinates[i][0]/206265) * layer.resolution / layer.D,np.deg2rad(self.asterism.coordinates[i][1]))
      
                  center_x = int(y_z)+layer.resolution//2
                  center_y = int(x_z)+layer.resolution//2
