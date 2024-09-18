@@ -240,9 +240,6 @@ class Telescope:
             [Tip,Tilt]            = np.meshgrid(np.linspace(-np.pi,np.pi,self.resolution),np.linspace(-np.pi,np.pi,self.resolution))               
             self.delta_TT = input_source[i_src].coordinates[0]*(1/conversion_constant)*(self.D/input_source[i_src].wavelength)*(np.cos(input_source[i_src].coordinates[1])*Tip+np.sin(input_source[i_src].coordinates[1])*Tilt)*self.pupil
             
-            # function to compute the em-field and PSF        
-            self.PropagateField(amplitude = amp , phase = phase+self.delta_TT, zeroPaddingFactor = zeroPaddingFactor,img_resolution=img_resolution)
-    
             # axis in arcsec
             self.xPSF_arcsec       = [-conversion_constant*(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor), conversion_constant*(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
             self.yPSF_arcsec       = [-conversion_constant*(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor), conversion_constant*(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
@@ -251,6 +248,11 @@ class Telescope:
             self.xPSF_rad   = [-(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor),(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
             self.yPSF_rad   = [-(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor),(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
             
+            if input_source[i_src].coordinates[0] > max(self.xPSF_arcsec):
+                raise ValueError('The Source is outside of the field of view of the detector. Try using a pupil mask with more pixels')
+    
+            self.PropagateField(amplitude = amp , phase = phase+self.delta_TT, zeroPaddingFactor = zeroPaddingFactor,img_resolution=img_resolution)
+                
             # normalized PSF           
             self.PSF_norma  = self.PSF/self.PSF.max()  
             output_PSF += self.PSF.copy()
