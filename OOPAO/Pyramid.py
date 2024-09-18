@@ -707,6 +707,24 @@ class Pyramid:
             I3              = self.grabQuadrant(3,cameraFrame=None)*self.validI4Q
             I4              = self.grabQuadrant(4,cameraFrame=None)*self.validI4Q
             # global normalisation
+            subArea     = (self.telescope.D / self.nSubap)**2
+            self.norma       = np.float64(self.telescope.src.nPhoton*self.telescope.samplingTime*subArea)
+            # slopesMaps computation cropped to the valid pixels
+            Sx         = (I1-I2+I4-I3)            
+            Sy         = (I1-I4+I2-I3)   
+            # 2D slopes maps      
+            slopesMaps = (np.concatenate((Sx,Sy)/self.norma) - self.referenceSignal_2D) *self.slopesUnits
+            # slopes vector
+            slopes     = slopesMaps[np.where(self.validSignal==1)]
+            return slopesMaps,slopes
+        
+        if self.postProcessing == 'slopesMaps_camera_flux':
+            # slopes-maps computation
+            I1              = self.grabQuadrant(1,cameraFrame=None)*self.validI4Q
+            I2              = self.grabQuadrant(2,cameraFrame=None)*self.validI4Q
+            I3              = self.grabQuadrant(3,cameraFrame=None)*self.validI4Q
+            I4              = self.grabQuadrant(4,cameraFrame=None)*self.validI4Q
+            # global normalisation
             self.norma       = np.float64(self.cam.frame.mean())
             # slopesMaps computation cropped to the valid pixels
             Sx         = (I1-I2+I4-I3)            
@@ -717,9 +735,19 @@ class Pyramid:
             slopes     = slopesMaps[np.where(self.validSignal==1)]
             return slopesMaps,slopes
         
-        if self.postProcessing == 'fullFrame_incidence_flux':
+        if self.postProcessing == 'fullFrame_camera_flux':
             # global normalization
             self.norma       = np.float64(self.cam.frame.mean())
+            # 2D full-frame
+            fullFrameMaps  = (cameraFrame / self.norma )  - self.referenceSignal_2D
+            # full-frame vector
+            fullFrame  = fullFrameMaps[np.where(self.validSignal==1)]
+            return fullFrameMaps,fullFrame
+        
+        if self.postProcessing == 'fullFrame_incidence_flux':
+            # global normalization
+            subArea     = (self.telescope.D / self.nSubap)**2
+            self.norma       = np.float64(self.telescope.src.nPhoton*self.telescope.samplingTime*subArea)/4
             # 2D full-frame
             fullFrameMaps  = (cameraFrame / self.norma )  - self.referenceSignal_2D
             # full-frame vector
@@ -836,15 +864,15 @@ class Pyramid:
         self._pyramidSignal_2D = val
         self.signal_2D = val
         
-    # #properties required for backward compatibility (20/10/2024)
-    # @property
-    # def raw_data(self):
-    #     return self._raw_data
+    # #properties required for backward compatibility (20/09/2024)
+    @property
+    def raw_data(self):
+        return self._raw_data
         
-    # @raw_data.setter
-    # def raw_data(self,val):
-    #     self._raw_data = val
-    #     self.pyramidFrame = val
+    @raw_data.setter
+    def raw_data(self,val):
+        self._raw_data = val
+        self.pyramidFrame = val
         
     @property
     def lightRatio(self):
@@ -861,14 +889,14 @@ class Pyramid:
                 self.validPix           = (self.initFrame>=self.lightRatio*self.initFrame.max())   
                 
                 # save the number of signals depending on the case    
-                if self.postProcessing == 'slopesMaps' or self.postProcessing == 'slopesMaps_incidence_flux':
+                if self.postProcessing[:10] == 'slopesMaps':
                     self.nSignal        = np.sum(self.validSignal)
                     # display
                     xPix,yPix = np.where(self.validI4Q==1)
                     plt.figure()
                     plt.imshow(self.I4Q.T)
                     plt.plot(xPix,yPix,'+')
-                if self.postProcessing == 'fullFrame' or self.postProcessing == 'fullFrame_incidence_flux':
+                if self.postProcessing[:9] == 'fullFrame':
                     self.nSignal        = np.sum(self.validPix)  
                 print('Done!')
 
