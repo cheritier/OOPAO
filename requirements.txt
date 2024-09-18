@@ -1,4 +1,3 @@
-aotools==1.0.6
 astropy==5.1
 astropy==5.2.1
 cupy==13.3.0
@@ -20,6 +19,7 @@ numexpr==2.8.3
 numexpr==2.8.4
 numpy==1.21.5
 numpy==1.23.5
+numpy==1.21.0
 psutil==5.9.4
 psutil==5.9.0
 pyFFTW==0.13.1
@@ -30,4 +30,3 @@ scipy==1.9.1
 scipy==1.10.1
 tqdm==4.64.1
 tqdm==4.65.0
-
