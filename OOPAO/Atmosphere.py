@@ -561,11 +561,10 @@ class Atmosphere:
             tmpLayer=getattr(self,'layer_'+str(i_layer+1))
             
             if self.mode ==1:
-                import aotools as ao
-                phaseScreen   = ao.turbulence.infinitephasescreen.PhaseScreenVonKarman(tmpLayer.resolution,tmpLayer.D/(tmpLayer.resolution),self.r0,self.L0,random_seed=seed+i_layer)
-                phase         = phaseScreen.scrn
+                raise DeprecationWarning("The dependency to the aotools package has been depreciated.")
             else:
                 if self.mode == 2:
+                    # with subharmonics
                     phase = ft_sh_phase_screen(self,tmpLayer.resolution,tmpLayer.D/tmpLayer.resolution,seed=seed+i_layer)
                 else: 
                     phase         = ft_phase_screen(self,tmpLayer.resolution,tmpLayer.D/tmpLayer.resolution,seed=seed+i_layer)

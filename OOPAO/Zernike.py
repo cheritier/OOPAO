@@ -6,14 +6,7 @@ Created on Wed Feb 19 10:31:33 2020
 """
 
 import inspect
-
-import aotools as ao
 import numpy as np
-
-
-# =============================================================================
-#                               CLASS DEFINITION
-# =============================================================================
 
 class Zernike:
     def __init__(self, telObject, J=1):
@@ -24,6 +17,8 @@ class Zernike:
     
     def zernike_tel(self, tel, j):
         """
+         ADAPTED FROM AOTOOLS PACKAGE:https://github.com/AOtools/aotools
+
          Creates the Zernike polynomial with radial index, n, and azimuthal index, m.
     
          Args:
@@ -45,9 +40,9 @@ class Zernike:
         outFullRes = np.zeros([tel.resolution**2, j])
 
         for i in range(1, j+1):
-            n, m = ao.zernike.zernIndex(i+1)
+            n, m = self.zernIndex(i+1)
             if m == 0:
-                Z = np.sqrt(n+1) * ao.zernike.zernikeRadialFunc(n, 0, R)
+                Z = np.sqrt(n+1) * self.zernikeRadialFunc(n, 0, R)
             else:
                 if m > 0: # j is even
                     Z = np.sqrt(2*(n+1)) * self.zernikeRadialFunc(n, m, R) * np.cos(m * theta)
@@ -89,7 +84,7 @@ class Zernike:
     
     def zernikeRadialFunc(self,n, m, r):
         """
-        ADAPTED FROM AOTOOLS PACKAGE
+        ADAPTED FROM AOTOOLS PACKAGE:https://github.com/AOtools/aotools
         Function to calculate the Zernike radial function
     
         Parameters:
@@ -119,7 +114,32 @@ class Zernike:
                              dtype='float')
         return R
 
+    def zernIndex(self,j):
+        """
+        ADAPTED FROM AOTOOLS PACKAGE:https://github.com/AOtools/aotools
 
+        Find the [n,m] list giving the radial order n and azimuthal order
+        of the Zernike polynomial of Noll index j.
+    
+        Parameters:
+            j (int): The Noll index for Zernike polynomials
+    
+        Returns:
+            list: n, m values
+        """
+        n = int((-1.+np.sqrt(8*(j-1)+1))/2.)
+        p = (j-(n*(n+1))/2.)
+        k = n%2
+        m = int((p+k)/2.)*2 - k
+    
+        if m!=0:
+            if j%2==0:
+                s=1
+            else:
+                s=-1
+            m *= s
+    
+        return [n, m]
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% END %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def show(self):
         attributes = inspect.getmembers(self, lambda a:not(inspect.isroutine(a)))
