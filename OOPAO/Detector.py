@@ -25,7 +25,8 @@ class Detector:
                  readoutNoise:float=0,
                  photonNoise:bool=False,
                  backgroundNoise:bool=False,
-                 backgroundNoiseMap:float=None):
+                 backgroundFlux:float=None,
+                 backgroundMap:float = None):
         '''
         The Detector allows to simulate the effects ot a real detector (noise, quantification...).
         
@@ -80,8 +81,11 @@ class Detector:
         backgroundNoise : bool, optional
             Flag to apply the background Noise to the detector frames.
             The default is False.
-        backgroundNoiseMap : float, optional
+        backgroundFlux : float, optional
             Background 2D map to consider to apply the background noise.
+            The default is None.
+        backgroundFlux : float, optional
+            Background 2D map to consider to be substracted to each frame.
             The default is None.
 
         -------
@@ -104,7 +108,8 @@ class Detector:
         self.readoutNoise       = readoutNoise
         self.photonNoise        = photonNoise        
         self.backgroundNoise    = backgroundNoise   
-        self.backgroundNoiseMap = backgroundNoiseMap
+        self.backgroundFlux     = backgroundFlux
+        self.backgroundMap      = backgroundMap
         if self.resolution is not None:
             self.frame              = np.zeros([self.resolution,self.resolution])
         else:
@@ -129,6 +134,7 @@ class Detector:
         self.random_state_background_noise  = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
         self.random_state_dark_shot_noise   = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
         self.print_properties()
+        
 
 
     def rebin(self,arr, new_shape):
@@ -203,10 +209,10 @@ class Detector:
 
 
     def set_background_noise(self,frame):
-        if hasattr(self,'backgroundNoiseMap') is False or self.backgroundNoiseMap is None:
-            raise ValueError('The background map backgroundNoiseMap is not properly set. A map of shape '+str(frame.shape)+' is expected')
+        if hasattr(self,'backgroundFlux') is False or self.backgroundFlux is None:
+            raise ValueError('The background map backgroundFlux is not properly set. A map of shape '+str(frame.shape)+' is expected')
         else:
-            self.backgroundNoiseAdded = self.random_state_background.poisson(self.backgroundNoiseMap)
+            self.backgroundNoiseAdded = self.random_state_background.poisson(self.backgroundFlux)
             frame += self.backgroundNoiseAdded
             return frame
         
@@ -223,6 +229,13 @@ class Detector:
         dark_shot_noise_map = self.random_state_dark_shot_noise.poisson(dark_current_map)
         frame += dark_shot_noise_map
         return frame 
+    
+    def remove_bakground(self,frame):
+        try:
+            frame -= self.backgroundMap        
+            return frame
+        except:
+            raise AttributeError('The shape of the backgroun map does not match the ')
     
     
     def readout(self):
@@ -257,7 +270,10 @@ class Detector:
             # Apply the digital quantification of the detector
             if self.bits is not None:
                 frame = self.digitalization(frame)
-            
+        
+            # Remove the dark fromthe detector
+            if self.backgroundMap is not None:
+                frame = self.remove_bakground(frame)
             # Save the integrated frame and buffer
             self.frame  = frame.copy()
             self.buffer = self.buffer_frame.copy()
@@ -331,13 +347,13 @@ class Detector:
     def backgroundNoise(self,val):
         self._backgroundNoise = val
         if val == True:
-            if hasattr(self,'backgroundNoiseMap') is False or self.backgroundNoiseMap is None:
+            if hasattr(self,'backgroundFlux') is False or self.backgroundFlux is None:
                 print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-                print('Warning: The background noise is enabled but no property backgroundNoiseMap is set.\nA map of shape '+str(self.frame.shape)+' is expected')
+                print('Warning: The background noise is enabled but no property backgroundFlux is set.\nA map of shape '+str(self.frame.shape)+' is expected')
                 print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
             else:
-                print('Background Noise enabled! Using the following backgroundNoiseMap:')
-                print(self.backgroundNoiseMap)
+                print('Background Noise enabled! Using the following backgroundFlux:')
+                print(self.backgroundFlux)
     @property
     def integrationTime(self):
         return self._integrationTime
