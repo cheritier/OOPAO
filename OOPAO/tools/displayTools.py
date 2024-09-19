@@ -513,3 +513,36 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = 
                 count+=1
     plt.draw()
 
+
+def interactive_show(im_array, im_array_ref, event_name ='button_press_event', n_fig = None, title = ['','']):   
+    # create figure and plot scatter
+    if n_fig is None:
+        fig = plt.figure()
+        ax = plt.subplot(111)
+
+    else:
+        fig = plt.figure(n_fig)        
+        ax = plt.subplot(111)
+            
+    im = ax.imshow(im_array) 
+    
+    def hover(event):
+        # if the mouse is over the scatter points
+        if ax.contains(event)[0]:
+            # set the image corresponding to that point
+            if event.button == 1:
+                data = im_array
+                im.set_data(data)
+                plt.title(title[0])
+                im.set_clim(vmin=data.min(), vmax=data.max())
+
+            if event.button == 3:
+                data = im_array_ref
+                im.set_data(data)
+                plt.title(title[1])
+                im.set_clim(vmin=data.min(), vmax=data.max())
+        fig.canvas.draw_idle()
+    
+    # add callback for mouse moves
+    fig.canvas.mpl_connect(event_name, hover)           
+    plt.show()
