@@ -60,7 +60,7 @@ ngs*tel
 # create the Scientific Target object located at 10 arcsec from the  ngs
 src = Source(optBand     = 'K',           # Optical band (see photometry.py)
              magnitude   = 8,              # Source Magnitude
-             coordinates = [5,0])        # Source coordinated [arcsec,deg]
+             coordinates = [2,0])        # Source coordinated [arcsec,deg]
 
 # combine the SRC to the telescope using '*'
 src*tel
@@ -467,19 +467,3 @@ for i in range(nLoop):
     print('Loop'+str(i)+'/'+str(nLoop)+' NGS: '+str(residual_NGS[i])+' -- SRC:' +str(residual_SRC[i])+ '\n')
 
 #%%
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

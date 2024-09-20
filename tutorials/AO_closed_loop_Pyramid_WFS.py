@@ -471,6 +471,3 @@ for i in range(nLoop):
         if plot_obj.keep_going is False:
             break
     print('Loop'+str(i)+'/'+str(nLoop)+' NGS: '+str(residual_NGS[i])+' -- SRC:' +str(residual_SRC[i])+ '\n')
-
-
-
