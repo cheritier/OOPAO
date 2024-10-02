@@ -199,8 +199,6 @@ class Telescope:
 
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF COMPUTATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
-
-
     def computePSF(self,zeroPaddingFactor=2,detector = None,img_resolution=None):
         conversion_constant = (180/np.pi)*3600
         if detector is not None:
@@ -218,8 +216,8 @@ class Telescope:
         else:
             input_source = [self.src]
         input_wavelenght = input_source[0].wavelength    
-        output_PSF = np.zeros([img_resolution,img_resolution])
-        output_PSF_norma = np.zeros([img_resolution,img_resolution])
+        output_PSF = []
+        output_PSF_norma = []
         
         for i_src in range(len(input_source)):
             if input_wavelenght == input_source[i_src].wavelength:
@@ -249,15 +247,19 @@ class Telescope:
             self.yPSF_rad   = [-(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor),(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
             
             if input_source[i_src].coordinates[0] > max(self.xPSF_arcsec):
-                raise ValueError('The Source is outside of the field of view of the detector. Try using a pupil mask with more pixels')
+                print('Warning : The Source is outside of the field of view of the detector -- wrapping effect will occur. Try using a pupil mask with more pixels')
     
             self.PropagateField(amplitude = amp , phase = phase+self.delta_TT, zeroPaddingFactor = zeroPaddingFactor,img_resolution=img_resolution)
                 
             # normalized PSF           
             self.PSF_norma  = self.PSF/self.PSF.max()  
-            output_PSF += self.PSF.copy()
-            output_PSF_norma += self.PSF.copy()
-        
+            output_PSF.append(self.PSF.copy())
+            output_PSF_norma.append(self.PSF.copy())
+
+        if len(output_PSF)==1:
+            output_PSF = output_PSF[0]
+            output_PSF_norma = output_PSF_norma[0]
+
         self.PSF        = output_PSF.copy()
         self.PSF_norma  = output_PSF_norma.copy()                 
   
@@ -452,15 +454,16 @@ class Telescope:
     def __mul__(self,obj): 
         # case where multiple objects are considered
         if type(obj) is list:
+            wfs_signal =[]
             if type(self.OPD) is list:
                 if len(self.OPD) == len(obj):
                     for i_obj in range(len(self.OPD)):
-                        tel_tmp = getattr(obj[i_obj], 'telescope')
-                        self.src.src[i_obj]*tel_tmp
+                        tel_tmp = copy.deepcopy(getattr(obj[i_obj], 'telescope'))
                         tel_tmp.OPD = self.OPD[i_obj]
                         tel_tmp.OPD_no_pupil = self.OPD_no_pupil[i_obj]
-                        setattr(obj[i_obj],'telescope',tel_tmp)
-                        obj[i_obj].wfs_measure(phase_in = tel_tmp.src.phase)               
+                        self.src.src[i_obj]*tel_tmp*obj[i_obj]
+                        wfs_signal.append(obj[i_obj].signal)
+                    obj[i_obj].signal = np.mean(wfs_signal,axis=0)
                 else:
                     raise ValueError('Error! There is a mis-match between the number of Sources ('+str(len(self.OPD))+') and the number of WFS ('+str(len(obj))+')')
             else:
@@ -474,11 +477,11 @@ class Telescope:
                     self.print_optical_path()
                 self.optical_path = self.optical_path[:-1]
                 
-
                 if self.src.tag == 'asterism':
                     input_source        = copy.deepcopy(self.src.src)
                     output_raw_data     = np.zeros([obj.raw_data.shape[0],obj.raw_data.shape[0]])
-                    output_raw_em       = np.zeros(obj.focal_plane_camera.frame.shape)
+                    if obj.tag=='pyramid':
+                        output_raw_em       = np.zeros(obj.focal_plane_camera.frame.shape)
                     obj.telescope       = copy.deepcopy(self)
                     
                     for i_src in range(len(input_source)):
@@ -487,10 +490,11 @@ class Telescope:
                         delta_TT                  = input_source[i_src].coordinates[0]*(1/((180/np.pi)*3600))*(self.D/input_source[i_src].wavelength)*(np.cos(input_source[i_src].coordinates[1])*Tip+np.sin(input_source[i_src].coordinates[1])*Tilt)*self.pupil
                         obj.wfs_measure(phase_in  = input_source[i_src].phase + delta_TT ,integrate = False )
                         output_raw_data += obj.raw_data.copy()
-                        obj*obj.focal_plane_camera
-                        output_raw_em   += obj.focal_plane_camera.frame
-
-                    obj.focal_plane_camera.frame = output_raw_em
+                        if obj.tag=='pyramid':
+                            obj*obj.focal_plane_camera
+                            output_raw_em   += obj.focal_plane_camera.frame
+                    if obj.tag=='pyramid':
+                        obj.focal_plane_camera.frame = output_raw_em
                     obj.raw_data = output_raw_data.copy()
                     obj.signal_2D,obj.signal = obj.wfs_integrate()    
                         
@@ -509,7 +513,11 @@ class Telescope:
                     if obj.integrationTime < self.samplingTime:
                         raise ValueError('The Detector integration time is smaller than the AO loop sampling Time. ')
                 obj._integrated_time += self.samplingTime 
-                obj.integrate(self.PSF)
+                if np.ndim(self.PSF)==3:
+                    print('here')
+                    obj.integrate(np.sum(self.PSF,axis=0))
+                else:
+                    obj.integrate(self.PSF)
                 
                 self.PSF = obj.frame
          
