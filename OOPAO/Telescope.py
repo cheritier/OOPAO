@@ -247,7 +247,8 @@ class Telescope:
             self.yPSF_rad   = [-(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor),(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
             
             if input_source[i_src].coordinates[0] > max(self.xPSF_arcsec):
-                print('Warning : The Source is outside of the field of view of the detector -- wrapping effect will occur. Try using a pupil mask with more pixels')
+                print('Warning : The Source is outside of the field of view of the detector -- Removing the Tip/Tilt offset to avoid wrapping effects')
+                self.delta_TT = 0
     
             self.PropagateField(amplitude = amp , phase = phase+self.delta_TT, zeroPaddingFactor = zeroPaddingFactor,img_resolution=img_resolution)
                 
