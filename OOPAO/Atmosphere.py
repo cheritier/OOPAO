@@ -333,8 +333,12 @@ class Atmosphere:
                 layer.pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution//2,center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2 ] = 1
             else:
                 layer.pupil_footprint= []
+                layer.extra_sx = []
+                layer.extra_sy = []
                 for i in range(self.asterism.n_source):
                     [x_z,y_z] = pol2cart(layer.altitude*np.tan(self.asterism.coordinates[i][0]/206265) * layer.resolution / layer.D,np.deg2rad(self.asterism.coordinates[i][1]))
+                    layer.extra_sx.append(int(x_z)-x_z)
+                    layer.extra_sy.append( int(y_z)-y_z)
                     center_x = int(y_z)+layer.resolution//2
                     center_y = int(x_z)+layer.resolution//2
                     
@@ -445,8 +449,17 @@ class Atmosphere:
             phase_support+= np.reshape(_im[np.where(tmpLayer.pupil_footprint==1)],[self.telescope.resolution,self.telescope.resolution])* np.sqrt(self.fractionalR0[i_layer])
         else:
             for i in range(self.asterism.n_source):
+                _im = tmpLayer.phase.copy()
+
+                if tmpLayer.extra_sx[i] !=0 or tmpLayer.extra_sy[i] != 0:
+                                    
+                    pixel_size_in   = 1
+                    pixel_size_out  = 1
+                    resolution_out  = _im.shape[0]
+                    _im = np.squeeze(interpolate_image(_im, pixel_size_in, pixel_size_out, resolution_out,shift_x =tmpLayer.extra_sx[i], shift_y= tmpLayer.extra_sy[i]  ))
+                    
                 if self.asterism.src[i].type == 'LGS':
-                    sub_im = np.reshape(tmpLayer.phase[np.where(tmpLayer.pupil_footprint[i]==1)],[self.telescope.resolution,self.telescope.resolution])
+                    sub_im = np.reshape(_im[np.where(tmpLayer.pupil_footprint[i]==1)],[self.telescope.resolution,self.telescope.resolution])
                     alpha_cone = np.arctan(self.telescope.D/2/self.asterism.altitude[i])
                     h = self.asterism.altitude[i]-tmpLayer.altitude
                     if np.isinf(h):
@@ -463,7 +476,7 @@ class Atmosphere:
                     phase_support[i]+= np.squeeze(interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out)).T* np.sqrt(self.fractionalR0[i_layer])
 
                 else:
-                    phase_support[i]+= np.reshape(tmpLayer.phase[np.where(tmpLayer.pupil_footprint[i]==1)],[self.telescope.resolution,self.telescope.resolution])* np.sqrt(self.fractionalR0[i_layer])
+                    phase_support[i]+= np.reshape(_im[np.where(tmpLayer.pupil_footprint[i]==1)],[self.telescope.resolution,self.telescope.resolution])* np.sqrt(self.fractionalR0[i_layer])
         return phase_support
     
     def set_OPD(self,phase_support):
