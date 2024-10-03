@@ -213,21 +213,6 @@ cam_binned = Detector( integrationTime = tel.samplingTime,      # integration ti
 tel+atm
 
 # computation of a PSF on the detector using the '*' operator
-ngs*tel*cam*cam_binned
-
-plt.figure()
-plt.imshow(cam.frame,extent=[-cam.fov_arcsec/2,cam.fov_arcsec/2,-cam.fov_arcsec/2,cam.fov_arcsec/2])
-plt.xlabel('Angular separation [arcsec]')
-plt.ylabel('Angular separation [arcsec]')
-plt.title('Pixel size: '+str(np.round(cam.pixel_size_arcsec,3))+'"')
-
-plt.figure()
-plt.imshow(cam_binned.frame,extent=[-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2,-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2])
-plt.xlabel('Angular separation [arcsec]')
-plt.ylabel('Angular separation [arcsec]')
-plt.title('Pixel size: '+str(np.round(cam_binned.pixel_size_arcsec,3))+'"')
-
-# computation of a PSF on the detector using the '*' operator
 atm*ngs*tel*cam*cam_binned
 
 plt.figure()
@@ -241,6 +226,7 @@ plt.imshow(cam_binned.frame,extent=[-cam_binned.fov_arcsec/2,cam_binned.fov_arcs
 plt.xlabel('Angular separation [arcsec]')
 plt.ylabel('Angular separation [arcsec]')
 plt.title('Pixel size: '+str(np.round(cam_binned.pixel_size_arcsec,3))+'"')
+
 
 #%%# 2 --- Separate to have diffraction limited images
 
@@ -411,7 +397,7 @@ stroke=ngs.wavelength/16
 M2C_zonal = np.eye(dm.nValidAct)
 
 # modal Interaction Matrix for 300 modes
-M2C_modal = M2C_KL[:,:300]
+M2C_modal = M2C_KL
 
 tel-atm
 # zonal interaction matrix
