@@ -201,6 +201,8 @@ class Telescope:
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PSF COMPUTATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def computePSF(self,zeroPaddingFactor=2,detector = None,img_resolution=None):
         conversion_constant = (180/np.pi)*3600
+        factor = 1 
+
         if detector is not None:
             zeroPaddingFactor = detector.psf_sampling
             img_resolution    = detector.resolution
@@ -213,11 +215,23 @@ class Telescope:
             
         elif self.src.tag == 'asterism':
             input_source = self.src.src
+            r = np.squeeze(np.asarray(self.src.coordinates))[:,0]
+            theta = np.squeeze(np.asarray(self.src.coordinates))[:,1]
+            
+            x_max = max(np.abs(r * np.cos(theta)))
+            y_max = max(np.abs(r * np.sin(theta)))
+            
+            if max(x_max,y_max) > max(self.xPSF_arcsec):
+                factor = 0
+            else:
+                factor = 1 
         else:
             input_source = [self.src]
+
         input_wavelenght = input_source[0].wavelength    
         output_PSF = []
         output_PSF_norma = []
+        warning_src = False
         
         for i_src in range(len(input_source)):
             if input_wavelenght == input_source[i_src].wavelength:
@@ -247,10 +261,11 @@ class Telescope:
             self.yPSF_rad   = [-(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor),(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
             
             if input_source[i_src].coordinates[0] > max(self.xPSF_arcsec):
-                print('Warning : The Source is outside of the field of view of the detector -- Removing the Tip/Tilt offset to avoid wrapping effects')
-                self.delta_TT = 0
+                if warning_src is False:
+                    print('Warning : Some Sources are outside of the field of view of the detector ('+str( self.xPSF_arcsec[1])+' arcsec) -- Wrapping effects will appear')
+                    warning_src = True
     
-            self.PropagateField(amplitude = amp , phase = phase+self.delta_TT, zeroPaddingFactor = zeroPaddingFactor,img_resolution=img_resolution)
+            self.PropagateField(amplitude = amp , phase = phase+self.delta_TT*factor, zeroPaddingFactor = zeroPaddingFactor,img_resolution=img_resolution)
                 
             # normalized PSF           
             self.PSF_norma  = self.PSF/self.PSF.max()  
@@ -515,7 +530,6 @@ class Telescope:
                         raise ValueError('The Detector integration time is smaller than the AO loop sampling Time. ')
                 obj._integrated_time += self.samplingTime 
                 if np.ndim(self.PSF)==3:
-                    print('here')
                     obj.integrate(np.sum(self.PSF,axis=0))
                 else:
                     obj.integrate(self.PSF)
