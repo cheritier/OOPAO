@@ -208,8 +208,8 @@ class Atmosphere:
         # compute the X and Y wind speed
         layer.vY            = layer.windSpeed*np.cos(np.deg2rad(layer.direction))
         layer.vX            = layer.windSpeed*np.sin(np.deg2rad(layer.direction))      
-        layer.extra_sx = 0
-        layer.extra_sy = 0
+        layer.extra_sx      = 0
+        layer.extra_sy      = 0
         
         # Diameter and resolution of the layer including the Field Of View and the number of extra pixels
         
@@ -232,9 +232,12 @@ class Atmosphere:
             layer.pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution//2,center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2 ] = 1
         else:
             layer.pupil_footprint= []
+            layer.extra_sx      = []
+            layer.extra_sy      = []
             for i in range(self.asterism.n_source):
                  [x_z,y_z] = pol2cart(layer.altitude*np.tan(self.telescope.src.coordinates[i][0]/206265) * layer.resolution / layer.D,np.deg2rad(self.asterism.coordinates[i][1]))
-     
+                 layer.extra_sx.append(int(x_z)-x_z)
+                 layer.extra_sy.append( int(y_z)-y_z)
                  center_x = int(y_z)+layer.resolution//2
                  center_y = int(x_z)+layer.resolution//2
             
