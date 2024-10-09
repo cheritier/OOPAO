@@ -142,7 +142,8 @@ class Atmosphere:
         self.param                  = param
         
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATM INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
-    def initializeAtmosphere(self,telescope):
+    def initializeAtmosphere(self,telescope,compute_covariance =True):
+        self.compute_covariance = compute_covariance
         phase_support = self.initialize_phase_support()
         self.fov      = telescope.fov
         self.fov_rad  = telescope.fov_rad
@@ -151,7 +152,7 @@ class Atmosphere:
             for i_layer in range(self.nLayer):       
                 # create the layer
                 print('Creation of layer' + str(i_layer+1) + '/' + str(self.nLayer) + ' ...' )
-                tmpLayer=self.buildLayer(telescope,self.r0_def,self.L0,i_layer = i_layer)
+                tmpLayer=self.buildLayer(telescope,self.r0_def,self.L0,i_layer = i_layer,compute_covariance=self.compute_covariance)
                 setattr(self,'layer_'+str(i_layer+1),tmpLayer)
                 
                 phase_support = self.fill_phase_support(tmpLayer,phase_support,i_layer)
@@ -183,13 +184,14 @@ class Atmosphere:
                 tmpLayer.phase *= self.wavelength/2/np.pi
         self.generateNewPhaseScreen(seed=0)             
         self.hasNotBeenInitialized  = False        
-        # move of one time step to create the atm variables 
-        self.update()   
+        if self.compute_covariance:
+            # move of one time step to create the atm variables 
+            self.update()   
         # save the resulting phase screen in OPD  
         self.set_OPD(phase_support)
         self.print_properties()
             
-    def buildLayer(self,telescope,r0,L0,i_layer,compute_turbulence = True):
+    def buildLayer(self,telescope,r0,L0,i_layer,compute_covariance = True):
         """
             Generation of phase screens using the method introduced in Assemat et al (2006)
         """
@@ -250,33 +252,33 @@ class Atmosphere:
         # number of pixel for the phase screens computation
         layer.nExtra        = self.nExtra
         layer.nPixel        = int(1+np.round(layer.D/layer.d0))
-        if compute_turbulence:
-            print('-> Computing the initial phase screen...')  
-            a=time.time()
-            if self.mode == 2:
-                layer.phase        = ft_sh_phase_screen(self,layer.resolution,layer.D/layer.resolution,seed=i_layer)
-            else: 
-                    layer.phase         = ft_phase_screen(self,layer.resolution,layer.D/layer.resolution,seed=i_layer)                    
-            layer.initialPhase = layer.phase.copy()
-            layer.seed = i_layer
-            b=time.time()
-            print('initial phase screen : ' +str(b-a) +' s')
-            
-            # Outer ring of pixel for the phase screens update 
-            layer.outerMask             = np.ones([layer.resolution+layer.nExtra,layer.resolution+layer.nExtra])
-            layer.outerMask[1:-1,1:-1]  = 0
-            
-            # inner pixels that contains the phase screens
-            layer.innerMask             = np.ones([layer.resolution+layer.nExtra,layer.resolution+layer.nExtra])
-            layer.innerMask -= layer.outerMask
-            layer.innerMask[1+layer.nExtra:-1-layer.nExtra,1+layer.nExtra:-1-layer.nExtra] = 0
-            
-            l = np.linspace(0,layer.resolution+1,layer.resolution+2) * layer.D/(layer.resolution-1)
-            u,v = np.meshgrid(l,l)
-            
-            layer.innerZ = u[layer.innerMask!=0] + 1j*v[layer.innerMask!=0]
-            layer.outerZ = u[layer.outerMask!=0] + 1j*v[layer.outerMask!=0]
-            
+        print('-> Computing the initial phase screen...')  
+        a=time.time()
+        if self.mode == 2:
+            layer.phase        = ft_sh_phase_screen(self,layer.resolution,layer.D/layer.resolution,seed=i_layer)
+        else: 
+                layer.phase         = ft_phase_screen(self,layer.resolution,layer.D/layer.resolution,seed=i_layer)                    
+        layer.initialPhase = layer.phase.copy()
+        layer.seed = i_layer
+        b=time.time()
+        print('initial phase screen : ' +str(b-a) +' s')
+        
+        # Outer ring of pixel for the phase screens update 
+        layer.outerMask             = np.ones([layer.resolution+layer.nExtra,layer.resolution+layer.nExtra])
+        layer.outerMask[1:-1,1:-1]  = 0
+        
+        # inner pixels that contains the phase screens
+        layer.innerMask             = np.ones([layer.resolution+layer.nExtra,layer.resolution+layer.nExtra])
+        layer.innerMask -= layer.outerMask
+        layer.innerMask[1+layer.nExtra:-1-layer.nExtra,1+layer.nExtra:-1-layer.nExtra] = 0
+        
+        l = np.linspace(0,layer.resolution+1,layer.resolution+2) * layer.D/(layer.resolution-1)
+        u,v = np.meshgrid(l,l)
+        
+        layer.innerZ = u[layer.innerMask!=0] + 1j*v[layer.innerMask!=0]
+        layer.outerZ = u[layer.outerMask!=0] + 1j*v[layer.outerMask!=0]
+        if self.compute_covariance:
+
             layer.ZZt, layer.ZXt, layer.XXt, layer.ZZt_inv =  self.get_covariance_matrices(layer)                            
 
             layer.ZZt_r0 = self.ZZt_r0.copy()     
@@ -350,6 +352,8 @@ class Atmosphere:
                     layer.pupil_footprint.append(pupil_footprint)   
   
     def updateLayer(self,layer,shift = None):
+        if self.compute_covariance is False:
+            raise AttributeError('The computation of the covariance matrices was set to False in the atmosphere initialisation. Set it to True to provide moving layers.')
         self.ps_loop    = layer.D / (layer.resolution)
         ps_turb_x       = layer.vX*self.telescope.samplingTime 
         ps_turb_y       = layer.vY*self.telescope.samplingTime 
@@ -587,13 +591,13 @@ class Atmosphere:
             
             tmpLayer.phase = phase
             tmpLayer.randomState    = RandomState(seed+i_layer*1000)
+            if self.compute_covariance:
+                Z = tmpLayer.phase[tmpLayer.innerMask[1:-1,1:-1]!=0]
+                X = np.matmul(tmpLayer.A,Z) + np.matmul(tmpLayer.B,tmpLayer.randomState.normal( size=tmpLayer.B.shape[1]))
             
-            Z = tmpLayer.phase[tmpLayer.innerMask[1:-1,1:-1]!=0]
-            X = np.matmul(tmpLayer.A,Z) + np.matmul(tmpLayer.B,tmpLayer.randomState.normal( size=tmpLayer.B.shape[1]))
-            
-            tmpLayer.mapShift[tmpLayer.outerMask!=0] = X
-            tmpLayer.mapShift[tmpLayer.outerMask==0] = np.reshape(tmpLayer.phase,tmpLayer.resolution*tmpLayer.resolution)
-            tmpLayer.notDoneOnce = True
+                tmpLayer.mapShift[tmpLayer.outerMask!=0] = X
+                tmpLayer.mapShift[tmpLayer.outerMask==0] = np.reshape(tmpLayer.phase,tmpLayer.resolution*tmpLayer.resolution)
+                tmpLayer.notDoneOnce = True
 
             setattr(self,'layer_'+str(i_layer+1),tmpLayer )
             phase_support = self.fill_phase_support(tmpLayer,phase_support,i_layer)
