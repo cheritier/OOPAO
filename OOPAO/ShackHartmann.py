@@ -144,7 +144,7 @@ class ShackHartmann:
         self.shannon_sampling               = shannon_sampling
         self.unit_P2V                       = unit_P2V
         # case where the spots are zeropadded to provide larger fOV
-        if padding_extension_factor>2:
+        if padding_extension_factor>=2:
             self.n_pix_subap            = int(padding_extension_factor*self.telescope.resolution// self.nSubap)            
             self.is_extended            = True
             self.binning_factor         = padding_extension_factor
