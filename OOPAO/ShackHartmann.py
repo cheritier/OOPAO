@@ -449,8 +449,8 @@ class ShackHartmann:
                         delta_dy[1,i]   = coordinates_3D_ref[2,i]*(np.sqrt(3)*(4/self.telescope.D)**2)*y_subap[j_subap]
                         
                         # resulting shift + conversion from radians to pixels in m
-                        shift_X[i]          = 206265*self.fov_pixel_arcsec*(delta_dx[0,i] + delta_dx[1,i])
-                        shift_Y[i]          = 206265*self.fov_pixel_arcsec*(delta_dy[0,i] + delta_dy[1,i])
+                        shift_X[i]          = (1/206265)*self.fov_pixel_arcsec*(delta_dx[0,i] + delta_dx[1,i])
+                        shift_Y[i]          = (1/206265)*self.fov_pixel_arcsec*(delta_dy[0,i] + delta_dy[1,i])
      
         
                         I_tmp               = (self.telescope.src.Na_profile[1,:][i]/(self.telescope.src.Na_profile[0,:][i]**2))*np.exp(- ((alpha_x-shift_X[i])**2 + (alpha_y-shift_Y[i])**2)/(2*sigma_spot**2))
