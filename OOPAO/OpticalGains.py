@@ -78,7 +78,7 @@ class OpticalGains:
         self.ifft_basis   = np.asarray(ifftn(self.basis)).T
         
     def influence_function_grid(self):
-        pitch = self.D / (self.nAct+1)
+        pitch = self.D / (self.nAct-1)#)+1)
         x = np.linspace(-self.D/2,self.D/2,self.nAct)
         X,Y = np.meshgrid(x,x)            
         xIF0 = np.reshape(X,[self.nAct**2])

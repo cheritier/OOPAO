@@ -1003,9 +1003,12 @@ class Pyramid:
             obj._integrated_time+=self.telescope.samplingTime
             try:
                 if obj.is_focal_plane_camera:
-                    I = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)   
-                    n_crop = (I.shape[0]-obj.resolution)//2
-                    frame = I[n_crop:-n_crop,n_crop:-n_crop]
+                    I = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)
+                    if obj.resolution > self.nRes:
+                        frame = I
+                        print('Maximum resolution for focal plane camera is %i, cropping field to this dimension'%self.nRes)
+                    else:
+                        frame = I[I.shape[0]//2-obj.resolution//2:I.shape[0]//2+obj.resolution//2,I.shape[0]//2-obj.resolution//2:I.shape[0]//2+obj.resolution//2]
                 else:
                     raise AttributeError    
             except:
