@@ -157,24 +157,22 @@ class Detector:
         return array_padded
     
     def set_output_precision(self):
-        if self.output_precision is not None:         
-            value = self.output_precision
-        else:
+        if self.output_precision is None:         
             value = self.bits
             
-        if value ==8:
-            self.output_precision = np.uint8
+            if value ==8:
+                self.output_precision = np.uint8
+                
+            elif value ==16:
+                self.output_precision = np.uint16
+    
+            elif value ==32:
+                self.output_precision = np.uint32
             
-        elif value ==16:
-            self.output_precision = np.uint16
-
-        elif value ==32:
-            self.output_precision = np.uint32
-        
-        elif value ==64:
-            self.output_precision = np.uint64
-        else:
-           self.output_precision = int     
+            elif value ==64:
+                self.output_precision = np.uint64
+            else:
+               self.output_precision = int     
            
         return 
     
