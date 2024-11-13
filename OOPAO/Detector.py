@@ -278,8 +278,8 @@ class Detector:
             if self.resolution is None:
                 self.resolution       = self.frame.shape[0]*self.binning 
             if self.fov_arcsec is not None:
-                self.pixel_size_rad     = self.fov_rad/self.resolution 
-                self.pixel_size_arcsec  = self.fov_arcsec/self.resolution
+                self.pixel_size_rad     = self.fov_rad/self.resolution*self.binning 
+                self.pixel_size_arcsec  = self.fov_arcsec/self.resolution*self.binning 
             
             # reset the buffer and _integrated_time property
             self.buffer_frame     = []
