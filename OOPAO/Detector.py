@@ -133,8 +133,6 @@ class Detector:
         self.random_state_readout_noise     = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
         self.random_state_background_noise  = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
         self.random_state_dark_shot_noise   = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
-        self.print_properties()
-        
 
 
     def rebin(self,arr, new_shape):
@@ -336,6 +334,15 @@ class Detector:
         print('-------------------------------------')
         pass
     
+    def __mul__(self, obj) -> None:
+        if obj.tag == 'GSC':
+            if obj.calibration_ready is False:
+                obj.calibration(self.frame)
+                obj.detector_properties = self.properties()
+            else:
+                obj.compute_optical_gains(self.frame)
+        else:
+            raise AttributeError(f'Coupled object should be a "GSC" but is {obj.tag}')
     
     @property
     def backgroundNoise(self):
@@ -365,26 +372,35 @@ class Detector:
         
              
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% END %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
-    def print_properties(self):
-        print()
-        print('------------ Detector ------------')
-        print('{:^25s}|{:^9s}'.format('Sensor type',self.sensor))
+    def properties(self) -> dict:
+        self.prop = dict()
+        self.prop['sensor'] = f"{'Sensor type':<25s}|{self.sensor:^9s}"
         if self.resolution is not None:
-            print('{:^25s}|{:^9d}'.format('Resolution [px]',self.resolution//self.binning))
+            self.prop['resolution'] = f"{'Resolution [px]':<25s}|{int(self.resolution//self.binning):^9d}"
         if self.integrationTime is not None:
-            print('{:^25s}|{:^9.4f}'.format('Exposure time [s]',self.integrationTime))
+            self.prop['exposure'] = f"{'Exposure time [ms]':<25s}|{self.integrationTime*1000:^9.2f}"
         if self.bits is not None:
-            print('{:^25s}|{:^9d}'.format('Quantization [bits]',self.bits))
+            self.prop['quantization'] = f"{'Quantization [bits]':<25s}|{self.bits:^9d}"
         if self.FWC is not None:
-            print('{:^25s}|{:^9d}'.format('Full well capacity [e-]',self.FWC))
-        print('{:^25s}|{:^9d}'.format('Gain',self.gain))
-        print('{:^25s}|{:^9d}'.format('Quantum efficiency [%]',int(self.QE*100)))
-        print('{:^25s}|{:^9s}'.format('Binning',str(self.binning)+'x'+str(self.binning)))
-        print('{:^25s}|{:^9d}'.format('Dark current [e-/pixel/s]',self.darkCurrent))
-        print('{:^25s}|{:^9s}'.format('Photon noise',str(self.photonNoise)))
-        print('{:^25s}|{:^9s}'.format('Bkg noise [e-]',str(self.backgroundNoise)))
-        print('{:^25s}|{:^9.1f}'.format('Readout noise [e-/pixel]',self.readoutNoise))
-        print('----------------------------------')
-    def __repr__(self):
-        self.print_properties()
-        return ' '
+            self.prop['FWC'] = f"{'Full well capacity [e-]':<25s}|{self.FWC:^9d}"
+        self.prop['gain'] = f"{'Gain':<25s}|{self.gain:^9d}"
+        self.prop['QE'] = f"{'Quantum efficiency [%]':<25s}|{int(self.QE*100):^9d}"
+        self.prop['binning'] = f"{'Binning':<25s}|{str(self.binning)+'x'+str(self.binning):^9s}"
+        self.prop['dark_current'] = f"{'Dark current [e-/px/s]':<25s}|{self.darkCurrent:^9d}"
+        self.prop['photon_noise'] = f"{'Photon noise':<25s}|{str(self.photonNoise):^9s}"
+        self.prop['bkg_noise'] = f"{'Bkg noise [e-]':<25s}|{str(self.backgroundNoise):^9s}"
+        self.prop['readout_noise'] = f"{'Readout noise [e-/px]':<25s}|{self.readoutNoise:^9.1f}"
+        return self.prop
+
+    
+    def __repr__(self) -> str:
+        self.properties()
+        str_prop = str()
+        n_char = len(max(self.prop.values()))
+        for i in range(len(self.prop.values())):
+            str_prop += list(self.prop.values())[i] + '\n'
+
+        title = f'{"Detector":-^{n_char}}\n'
+        end_line = f'{"":-^{n_char}}\n' 
+        table = title + str_prop + end_line
+        return table
