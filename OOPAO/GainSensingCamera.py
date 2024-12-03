@@ -88,9 +88,8 @@ class GainSensingCamera:
         self.basis_product = split_basis_product(padder(self.basis, self.mask.shape[0]), self.n_jobs)
         self.IR_calib = impulse_response(self.mask, frame)
         self.sensi_calib = sensitivity(self.IR_calib, self.IR_calib, self.basis_product)
-        print('GSC is calibrated \n')
+        print('GSC is calibrated')
         self.calibration_ready = True
-        self.__repr__()
         
     def reset_calibration(self) -> None:
         """
