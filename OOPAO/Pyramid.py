@@ -1018,7 +1018,7 @@ class Pyramid:
             try:
                 if obj.is_focal_plane_camera:
                     I = np.sum(np.abs(self.modulation_camera_em)**2,axis=0)
-                    if obj.resolution >= self.nRes:
+                    if obj.resolution > self.nRes:
                         frame = I
                         print('Maximum resolution for focal plane camera is %i, cropping field to this dimension'%self.nRes)
                     else:
