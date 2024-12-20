@@ -6,7 +6,7 @@ Created on Fri Apr  3 10:56:59 2020
 """
 import os
 try:
-    if os.get_terminal_size()[0]>=80:
+    if os.get_terminal_size()[0]>=79:
         print('\n')
         print('================================================================================')
         print('   ✸       *          °          *      *                                      ')
@@ -50,20 +50,20 @@ except:
         print('\n')
         
 
-# check the version of numpy libraries
-try:
-    import numpy as np
-    config = np.__config__.blas_mkl_info['libraries'][0]
-    if config != 'mkl_rt':
-        print(
-            '**************************************************************************************************************************************************************')
-        print(
-            'NUMPY WARNING: OOPAO multi-threading requires to use numpy built with mkl library! If you are using AMD or Apple processors the code could be single threaded!')
-        print(
-            '**************************************************************************************************************************************************************')
-except:
-    print(
-        '**************************************************************************************************************************************************************')
-    print('NUMPY WARNING: mkl blas not found! Multi-threading may not work as expected.')
-    print(
-        '**************************************************************************************************************************************************************')
+# # check the version of numpy libraries
+# try:
+#     import numpy as np
+#     config = np.__config__.blas_mkl_info['libraries'][0]
+#     if config != 'mkl_rt':
+#         print(
+#             '**************************************************************************************************************************************************************')
+#         print(
+#             'NUMPY WARNING: OOPAO multi-threading requires to use numpy built with mkl library! If you are using AMD or Apple processors the code could be single threaded!')
+#         print(
+#             '**************************************************************************************************************************************************************')
+# except:
+#     print(
+#         '**************************************************************************************************************************************************************')
+#     print('NUMPY WARNING: mkl blas not found! Multi-threading may not work as expected.')
+#     print(
+#         '**************************************************************************************************************************************************************')
