@@ -11,6 +11,7 @@ import numpy as np
 try:
     import cupy as xp
     global_gpu_flag = True
+    xp = np #for now
 except ImportError or ModuleNotFoundError:
     xp = np
 from joblib import Parallel, delayed

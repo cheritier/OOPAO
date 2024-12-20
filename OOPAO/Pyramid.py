@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.ndimage as sp
 import scipy
+from joblib import Parallel, delayed
+
 from .Detector import Detector
 try:
     import cupy as xp
@@ -17,12 +19,6 @@ try:
 except:
     import numpy as xp
     fft2 = scipy.fft.fft2
-try:
-    from joblib import Parallel, delayed
-except:
-    print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-    print('WARNING: The joblib module is not installed. This would speed up considerably the operations.')
-    print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
 class Pyramid:
     def __init__(self,
@@ -176,7 +172,6 @@ class Pyramid:
                       str(self.mem_gpu[i]/1024) + 'GB memory')
         except:
             import numpy as xp
-
             def no_function(input_matrix):
                 return input_matrix
             self.gpu_available = False

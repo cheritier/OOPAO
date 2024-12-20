@@ -19,6 +19,7 @@ from .tools.tools import createFolder, emptyClass, globalTransformation, pol2car
 try:
     import cupy as xp
     global_gpu_flag = True
+    xp = np #for now
 except ImportError or ModuleNotFoundError:
     xp = np
 

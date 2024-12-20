@@ -10,6 +10,7 @@ import copy
 try:
     import cupy as xp
     global_gpu_flag = True
+    xp = np #for now
 except ImportError or ModuleNotFoundError:
     xp = np
 
@@ -707,7 +708,7 @@ class Telescope:
         if obj.tag == 'spatialFilter':
             self.spatialFilter = None
             print('Telescope and Spatial Filter separated!')
-            
+
     def print_optical_path(self):
         if self.optical_path is not None:
             tmp_path = ''
