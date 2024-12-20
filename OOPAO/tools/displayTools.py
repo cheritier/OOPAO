@@ -82,11 +82,13 @@ def displayMap(A,norma=False,axis=2,mask=0,returnOutput = False):
     if returnOutput:
         return S
 
-def makeSquareAxes(ax):
+def makeSquareAxes(ax=None):
     """Make an axes square in screen units.
 
     Should be called after plotting.
     """
+    if ax is None:
+        ax = plt.gca()
     ax.set_aspect(1 / ax.get_data_ratio())
 
 
