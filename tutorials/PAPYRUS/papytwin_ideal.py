@@ -2,34 +2,30 @@
 """
 Created on Tue Nov 21 09:34:26 2023
 
-@author: astriffl
+IDEAL version of PAPYRUS AO System used for exploration:
+    - 20x20 subapertures instead of 74x74
+    - mis-registrations ignored
+
+@author: cheritie - astriffl
 """
 
-import time
 import matplotlib.pyplot as plt
-import matplotlib.colors as colors
 import numpy as np
-import os
 import sys
-from tqdm import tqdm
-from pymatreader import read_mat 
-from OOPAO.Atmosphere       import Atmosphere
+from OOPAO.Atmosphere import Atmosphere
 from OOPAO.DeformableMirror import DeformableMirror
-from OOPAO.MisRegistration  import MisRegistration
-from OOPAO.Pyramid          import Pyramid
-from OOPAO.Detector         import Detector
-from OOPAO.Source           import Source
-from OOPAO.Telescope        import Telescope
-from OOPAO.Zernike          import Zernike
-from OOPAO.NCPA             import NCPA
-from OOPAO.calibration.CalibrationVault  import CalibrationVault
+from OOPAO.MisRegistration import MisRegistration
+from OOPAO.Pyramid import Pyramid
+from OOPAO.Detector import Detector
+from OOPAO.Source import Source
+from OOPAO.Telescope import Telescope
 from OOPAO.calibration.InteractionMatrix import InteractionMatrix
-from OOPAO.tools.displayTools            import cl_plot, displayMap
+from OOPAO.tools.displayTools import cl_plot
 from papyrus_tools import actuators_position
 
 #%% -----------------------     read parameter file   ----------------------------------
 
-from parameter_files.parameterFile_Papytwin import initializeParameterFile
+from parameter_files.parameterFile_Papytwin_ideal import initializeParameterFile
 from parameter_files.OCAM2K  import OCAM_param
 from parameter_files.CRED2   import CRED2_param
 from parameter_files.CS165CU import CS165CU_param
