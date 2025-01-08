@@ -290,8 +290,6 @@ class Atmosphere:
 
             layer.A = xp.matmul(layer.ZXt_r0.T, layer.ZZt_inv_r0)
             layer.BBt = layer.XXt_r0 - xp.matmul(layer.A, layer.ZXt_r0)
-            plt.figure()
-            plt.imshow(layer.BBt.astype(np.float64()))
             layer.B = xp.linalg.cholesky(layer.BBt)
             layer.mapShift = xp.zeros([layer.nPixel+1, layer.nPixel+1], dtype=self.precision())
             Z = layer.phase[layer.innerMask[1:-1, 1:-1] != 0]
