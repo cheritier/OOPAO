@@ -53,7 +53,7 @@ def displayMap(A,norma=False,axis=2,mask=0,returnOutput = False):
             return -1
     r = 1         
     nPix1_ = nPix1+2*r
-    nPix2_ = nPix1+2*r
+    nPix2_ = nPix2+2*r
     
     # Create a meta Map
     nSide = int(np.ceil(np.sqrt(nImage)))
@@ -115,14 +115,15 @@ def display_wfs_signals(wfs,signals,returnOutput=False, norma = False):
             B[:]=np.inf
             if wfs.validSignal.shape[0] == wfs.validSignal.shape[1]:
                 B[wfs.validSignal,:]=signals
-                out = displayMap(B,returnOutput=True)
+                out = displayMap(B,axis=2,returnOutput=True)
             else:
                 for i in range(signals.shape[1]):
                     A[np.where(wfs.validSignal==1)]=signals[:,i]
                     if norma:
                         A/= np.max(np.abs(signals[:,i]))
                     B[:,:,i] = A
-                out = displayMap(B,returnOutput=True)
+                print(B.shape)
+                out = displayMap(B,axis=2,returnOutput=True)
         if returnOutput:
             return out
     if wfs.tag == 'shackHartmann':
