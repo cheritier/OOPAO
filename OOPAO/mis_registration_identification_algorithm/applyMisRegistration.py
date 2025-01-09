@@ -53,9 +53,8 @@ def applyMisRegistration(tel,misRegistration_tmp,param = None, wfs = None, extra
                         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
                         print('Mis-Registrations Applied on M4!')
             
-                else:
-                    from users.cheritie.model_LBT.lbt_tools import get_influence_functions
-
+                elif param['isLBT'] is True:
+                    from lbt_tools import get_influence_functions
                     modes, coord, M2C, validAct =  get_influence_functions(telescope             = tel,\
                                                                             misReg               = misRegistration_tmp + extra_dm_mis_registration,\
                                                                             filename_IF          = param['filename_if'],\
