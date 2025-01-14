@@ -5,8 +5,11 @@ Created on Fri Apr  3 10:56:59 2020
 @author: cheritie
 """
 import os
+import sys
+import numpy as np
+
 try:
-    if os.get_terminal_size()[0]>=79:
+    if os.get_terminal_size()[0] >= 79:
         print('\n')
         print('================================================================================')
         print('   ✸       *          °          *      *                                      ')
@@ -35,35 +38,23 @@ try:
         print('==================================')
         print('\n')
 except:
-        print('\n')
-        print('==================================')
-        print('     °          *      *      ')
-        print(' ▄██▄   ▄██▄  ▄███▄   ▄██▄ * ▄██▄ ')
-        print('██* ██ ██  ██ ██  ██ ██  ██ ██  ██')
-        print('██  ██ ██° ██ ██  ██ ██* ██ ██  ██')
-        print('██  ██ ██  ██ ████▀  ██▄▄██ ██  ██')
-        print('██* ██ ██  ██ ██     ██▀▀██ ██  ██')
-        print('██  ██ ██  ██ ██ *   ██  ██ ██* ██')
-        print(' ▀██▀   ▀██▀  ██   ° ██  ██  ▀██▀ ')
-        print('      *         *             ')
-        print('==================================')
-        print('\n')
-        
+    print('\n')
+    print('==================================')
+    print('     °          *      *      ')
+    print(' ▄██▄   ▄██▄  ▄███▄   ▄██▄ * ▄██▄ ')
+    print('██* ██ ██  ██ ██  ██ ██  ██ ██  ██')
+    print('██  ██ ██° ██ ██  ██ ██* ██ ██  ██')
+    print('██  ██ ██  ██ ████▀  ██▄▄██ ██  ██')
+    print('██* ██ ██  ██ ██     ██▀▀██ ██  ██')
+    print('██  ██ ██  ██ ██ *   ██  ██ ██* ██')
+    print(' ▀██▀   ▀██▀  ██   ° ██  ██  ▀██▀ ')
+    print('      *         *             ')
+    print('==================================')
+    print('\n')
 
-# # check the version of numpy libraries
-# try:
-#     import numpy as np
-#     config = np.__config__.blas_mkl_info['libraries'][0]
-#     if config != 'mkl_rt':
-#         print(
-#             '**************************************************************************************************************************************************************')
-#         print(
-#             'NUMPY WARNING: OOPAO multi-threading requires to use numpy built with mkl library! If you are using AMD or Apple processors the code could be single threaded!')
-#         print(
-#             '**************************************************************************************************************************************************************')
-# except:
-#     print(
-#         '**************************************************************************************************************************************************************')
-#     print('NUMPY WARNING: mkl blas not found! Multi-threading may not work as expected.')
-#     print(
-#         '**************************************************************************************************************************************************************')
+OOPAO_path = [s for s in sys.path if "OOPAO" in s]
+l = []
+for i in OOPAO_path:
+    l.append(len(i))
+path = OOPAO_path[np.argmin(l)]
+np.save(path+'/precision_oopao', 64)
