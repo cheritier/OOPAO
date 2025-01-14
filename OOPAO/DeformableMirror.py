@@ -11,7 +11,7 @@ import numpy as np
 try:
     import cupy as xp
     global_gpu_flag = True
-    xp = np #for now
+    xp = np  #for now
 except ImportError or ModuleNotFoundError:
     xp = np
 from joblib import Parallel, delayed
@@ -177,7 +177,16 @@ class DeformableMirror:
         tel.OPD contains a cube of 2D maps for each actuator
 
         """
-        self.precision = xp.float32
+        OOPAO_path = [s for s in sys.path if "OOPAO" in s]
+        l = []
+        for i in OOPAO_path:
+            l.append(len(i))
+        path = OOPAO_path[np.argmin(l)]
+        precision = np.load(path+'/precision_oopao.npy')
+        if precision ==64:
+            self.precision = np.float64
+        else:
+            self.precision = np.float32
         if self.precision is xp.float32:
             self.precision_complex = xp.complex64
         else:

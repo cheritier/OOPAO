@@ -10,6 +10,14 @@ import numpy as np
 from .Detector import Detector
 from .tools.tools import bin_ndarray
 from joblib import Parallel, delayed
+import sys
+try:
+    import cupy as xp
+    global_gpu_flag = True
+    xp = np #for now
+except ImportError or ModuleNotFoundError:
+    xp = np
+
 
 
 class ShackHartmann:
@@ -106,6 +114,21 @@ class ShackHartmann:
             _ wfs.lightRatio            : reset the valid subaperture selection considering the new value
 
         """
+        OOPAO_path = [s for s in sys.path if "OOPAO" in s]
+        l = []
+        for i in OOPAO_path:
+            l.append(len(i))
+        path = OOPAO_path[np.argmin(l)]
+        precision = np.load(path+'/precision_oopao.npy')
+        if precision == 64:
+            self.precision = np.float64
+        else:
+            self.precision = np.float32
+        if self.precision is xp.float32:
+            self.precision_complex = xp.complex64
+        else:
+            self.precision_complex = xp.complex128
+            
         self.tag = 'shackHartmann'
         self.telescope = telescope
         if self.telescope.src is None:
@@ -865,3 +888,4 @@ class ShackHartmann:
     def __repr__(self):
         self.print_properties()
         return ' '
+

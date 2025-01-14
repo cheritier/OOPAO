@@ -4,7 +4,7 @@ Created on Fri Aug 14 10:59:02 2020
 
 @author: cheritie
 """
-
+import sys
 import json
 import time
 import jsonpickle
@@ -122,7 +122,16 @@ class Atmosphere:
         _ display_atm_layers(layer_index)           : imshow the OPD of each layer with the intersection beam for each source
 
         """
-        self.precision = xp.float32
+        OOPAO_path = [s for s in sys.path if "OOPAO" in s]
+        l = []
+        for i in OOPAO_path:
+            l.append(len(i))
+        path = OOPAO_path[np.argmin(l)]
+        precision = np.load(path+'/precision_oopao.npy')
+        if precision == 64:
+            self.precision = np.float64
+        else:
+            self.precision = np.float32
         if self.precision is xp.float32:
             self.precision_complex = xp.complex64
         else:
