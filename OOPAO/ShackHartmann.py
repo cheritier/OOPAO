@@ -301,7 +301,12 @@ class ShackHartmann:
         self.print_properties()
 
     def centroid(self, image, threshold=0.01):
-        im = np.atleast_3d(image.copy())
+
+        if np.ndim(image) <= 2:
+            im = np.reshape(image.copy(),(1, np.shape(image)[0], np.shape(image)[1]))
+        else:
+            im = np.atleast_3d(image.copy())
+
         im[im < (threshold*im.max())] = 0
         centroid_out = np.zeros([im.shape[0], 2])
         X_map, Y_map = np.meshgrid(
@@ -313,6 +318,7 @@ class ShackHartmann:
             np.sum(im*X_coord_map, axis=1), axis=1)/norma
         centroid_out[:, 1] = np.sum(
             np.sum(im*Y_coord_map, axis=1), axis=1)/norma
+
         return centroid_out
 
     def initialize_flux(self, input_flux_map=None):
