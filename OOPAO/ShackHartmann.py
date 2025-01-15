@@ -291,22 +291,23 @@ class ShackHartmann:
         print('Done!')
 
         print('Setting slopes units..')
-        # normalize to 2 pi p2v
 
-        # [Tip,Tilt]                         = np.meshgrid(np.linspace(-np.pi,np.pi,self.telescope.resolution),np.linspace(-np.pi,np.pi,self.telescope.resolution))
-        [Tip, Tilt] = np.meshgrid(np.linspace(0, np.pi, self.telescope.resolution, endpoint=False), np.linspace(
+        # normalize to pi p2v
+
+        [Tilt, Tip] = np.meshgrid(np.linspace(0, np.pi, self.telescope.resolution, endpoint=False), np.linspace(
             0, np.pi, self.telescope.resolution, endpoint=False))
 
         if self.unit_P2V is False:
             # normalize to 1 m RMS in the pupil
-            Tip *= 1/np.std(Tip[self.telescope.pupil])
+            Tilt *= 1/np.std(Tilt[self.telescope.pupil])
 
         mean_slope = np.zeros(5)
         amp = 10e-9
         input_std = np.zeros(5)
+
         for i in range(5):
-            self.telescope.OPD = self.telescope.pupil*Tip*(i-2)*amp
-            self.telescope.OPD_no_pupil = Tip*(i-2)*amp
+            self.telescope.OPD = self.telescope.pupil*Tilt*(i-2)*amp
+            self.telescope.OPD_no_pupil = Tilt*(i-2)*amp
 
             self.wfs_measure(self.telescope.src.phase)
             mean_slope[i] = np.mean(self.signal[:self.nValidSubaperture])
