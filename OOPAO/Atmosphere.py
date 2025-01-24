@@ -137,19 +137,19 @@ class Atmosphere:
         else:
             self.precision_complex = xp.complex128
         self.hasNotBeenInitialized = True
-        self.r0_def = 0.15              # Fried Parameter in m
-        self.r0 = r0                # Fried Parameter in m
-        self.fractionalR0 = fractionalR0      # Cn2 square profile
-        self.cn2 = fractionalR0      # Cn2 square profile
-        self.L0 = L0                # Outer Scale in m
+        # Wavelengt used to define the properties of the atmosphere
+        self.wavelength = 500*1e-9
+        self.r0_def = 0.15              # DefaultFried Parameter in m at 500 nm to build covariance matrices
+        self.r0 = r0                # User input Fried Parameter in m at 500 nm
+        self.fractionalR0 = fractionalR0      # Fractional Cn2 profile in percentage 
         self.altitude = altitude          # altitude of the layers
+        self.cn2 = (self.r0**(-5. / 3) / (0.423 * (2*np.pi/self.wavelength)**2))/np.max([1, np.max(self.altitude)])      # Cn2 m^(-2/3)
+        self.L0 = L0                # Outer Scale in m
         self.nLayer = len(fractionalR0)     # number of layer
         self.windSpeed = windSpeed         # wind speed of the layers in m/s
         self.windDirection = windDirection     # wind direction in degrees
         self.tag = 'atmosphere'      # Tag of the object
         self.nExtra = 2                 # number of extra pixel to generate the phase screens
-        # Wavelengt used to define the properties of the atmosphere
-        self.wavelength = 500*1e-9
         self.telescope = telescope         # associated telescope object
         # default value to update phase screens at each iteration
         self.user_defined_opd = False
@@ -658,9 +658,9 @@ class Atmosphere:
     def print_properties(self):
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         print('{: ^12s}'.format('Layer') + '{: ^12s}'.format('Direction') + '{: ^12s}'.format('Speed') +
-              '{: ^12s}'.format('Altitude') + '{: ^12s}'.format('Cn2') + '{: ^12s}'.format('Diameter'))
+              '{: ^12s}'.format('Altitude') + '{: ^12s}'.format('Fractional Cn2') + '{: ^12s}'.format('Diameter'))
         print('{: ^12s}'.format('') + '{: ^12s}'.format('[deg]') + '{: ^12s}'.format(
-            '[m/s]') + '{: ^12s}'.format('[m]') + '{: ^12s}'.format('[m-2/3]') + '{: ^12s}'.format('[m]'))
+            '[m/s]') + '{: ^12s}'.format('[m]') + '{: ^12s}'.format('[%]') + '{: ^12s}'.format('[m]'))
 
         print('======================================================================')
 
@@ -881,6 +881,7 @@ class Atmosphere:
         if self.hasNotBeenInitialized is False:
             print('Updating the Atmosphere covariance matrices...')
             self.seeingArcsec = 206265*(self.wavelength/val)
+            self.cn2 = (self.r0**(-5. / 3) / (0.423 * (2*np.pi/self.wavelength)**2))/np.max([1, np.max(self.altitude)]) # Cn2 m^(-2/3)
             for i_layer in range(self.nLayer):
                 tmpLayer = getattr(self, 'layer_'+str(i_layer+1))
                 tmpLayer.ZZt_r0 = tmpLayer.ZZt*(self.r0_def/self.r0)**(5/3)
@@ -964,3 +965,4 @@ class Atmosphere:
     def __repr__(self):
         self.print_properties()
         return ''
+    
