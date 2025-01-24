@@ -509,6 +509,8 @@ class Pyramid:
         self.isInitialized = True
 
     def wfs_calibration(self, telescope):
+        # save current OPD to be re-applied after calibration:
+        tmp_OPD = telescope.OPD.copy()
         # reference slopes acquisition
         telescope.OPD = telescope.pupil.astype(float)
         # compute the refrence signals
@@ -520,7 +522,8 @@ class Pyramid:
         if self.isCalibrated is False:
             print('WFS calibrated!')
         self.isCalibrated = True
-        telescope.OPD = telescope.pupil.astype(float)
+        # re-applied the initial OPD
+        telescope.OPD = tmp_OPD
 
     def pyramid_transform(self, phase_in):
         # copy of the support for the zero-padding
