@@ -127,7 +127,7 @@ def InteractionMatrix(ngs,
         else:
             dm.coefs=-intMatCommands*stroke
             tel*dm
-            tel.src.phase -= phaseBuffer
+            tel.src.phase += phaseBuffer
             tel*wfs
             sm = wfs.signal
             factor = 1
