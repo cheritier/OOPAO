@@ -173,19 +173,20 @@ class Pyramid:
                       str(self.mem_gpu[i]/1024) + 'GB memory')
         except:
             import numpy as xp
+
             def no_function(input_matrix):
                 return input_matrix
             self.gpu_available = False
             self.convert_for_gpu = no_function
             self.convert_for_numpy = no_function
-    
+
         OOPAO_path = [s for s in sys.path if "OOPAO" in s]
         l = []
         for i in OOPAO_path:
             l.append(len(i))
         path = OOPAO_path[np.argmin(l)]
         precision = np.load(path+'/precision_oopao.npy')
-        if precision ==64:
+        if precision == 64:
             self.precision = np.float64
         else:
             self.precision = np.float32
@@ -370,8 +371,7 @@ class Pyramid:
         if units == 'pixels':
             factor = 1
         if units == 'm':
-            factor = 1/(self.telescope.pixelSize *
-                        (self.telescope.resolution/self.nSubap))
+            factor = 1/(self.telescope.pixelSize * (self.telescope.resolution/self.nSubap))
         # sx and sy are the units of displacements in pixels
         if np.isscalar(sx) and np.isscalar(sy):
             shift_x = [factor*sx, factor*sx, factor*sx, factor*sx]
@@ -403,23 +403,18 @@ class Pyramid:
 
     def get_phase_mask(self, resolution, n_subap, n_pix_separation, n_pix_edge, psf_centering=False, sx=[0, 0, 0, 0], sy=[0, 0, 0, 0]):
         # size of the mask in pixel
-        n_tot = int((n_subap*2+n_pix_separation+n_pix_edge*2)
-                    * self.telescope.resolution/self.nSubap)
+        n_tot = int((n_subap*2+n_pix_separation+n_pix_edge*2) * self.telescope.resolution/self.nSubap)
 
         # normalization factor for the Tip/Tilt
-        norma = (n_subap + n_pix_separation) * \
-            (self.telescope.resolution/self.nSubap)
+        norma = (n_subap + n_pix_separation) * (self.telescope.resolution/self.nSubap)/2
+
         # support for the mask
         m = np.zeros([n_tot, n_tot])
         if psf_centering:
             # mask centered on 4 pixel
-            lim = np.pi/4
-            d_pix = np.pi/4 / (n_tot//2)     # size of a pixel in angle
-            lim = lim - d_pix
-
+            lim = np.pi/2
             # create a Tip/Tilt combination for each quadrant
-            [Tip, Tilt] = np.meshgrid(
-                np.linspace(-lim, lim, n_tot//2), np.linspace(-lim, lim, n_tot//2))
+            [Tip, Tilt] = np.meshgrid(np.linspace(-lim, lim, n_tot//2), np.linspace(-lim, lim, n_tot//2))
             m[:n_tot//2, :n_tot//2] = Tip * (1 + sx[0]/(n_subap+n_pix_separation/2))*norma + Tilt * (
                 1 - sy[0]/(n_subap+n_pix_separation/2))*norma
             m[:n_tot//2, -n_tot//2:] = -Tip * (1 - sx[1]/(n_subap+n_pix_separation/2))*norma + Tilt * (
@@ -430,10 +425,12 @@ class Pyramid:
                 1 + sy[3]/(n_subap+n_pix_separation/2))*norma
 
         else:
-            # mask centered on 1 pixel
-            d_pix = (np.pi/4) / (n_tot/2)     # size of a pixel in angle
-            lim_p = np.pi/4
-            lim_m = np.pi/4 - 2*d_pix
+            # mask centered on 1 pixel => different normalization for each Tip/tilt
+            d_pix = (np.pi) / (n_tot)     # size of a pixel in angle
+            lim_p = np.pi/2
+            lim_m = np.pi/2
+
+            lim_m = np.pi/2 - 2*d_pix
 
             # create a Tip/Tilt combination for each quadrant
             [Tip_1, Tilt_1] = np.meshgrid(
