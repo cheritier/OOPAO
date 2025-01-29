@@ -13,39 +13,17 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.ndimage as sp
+from joblib import Parallel, delayed
 
 from OOPAO.Detector import Detector
 
 try:
     #error
-    import cupy as np_cp
+    import cupy as xp
 except:
-    import numpy as np_cp
+    import numpy as xp
     # print('NO GPU available!')
-try:
-    from joblib import Parallel, delayed
-except:
-    print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-    print('WARNING: The joblib module is not installed. This would speed up considerably the operations.')
-    print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
-
-# import ctypes
-# try : 
-#     mkl_rt = ctypes.CDLL('libmkl_rt.so')
-#     mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
-#     mkl_set_num_threads(6)
-# except:
-#     try:
-#         mkl_rt = ctypes.CDLL('./mkl_rt.dll')
-#         mkl_set_num_threads = mkl_rt.MKL_Set_Num_Threads
-#         mkl_set_num_threads(6)
-#     except:
-#         try:
-#             import mkl
-#             mkl_set_num_threads = mkl.set_num_threads
-#         except:
-#             mkl_set_num_threads = None
 class BioEdge:
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def __init__(self,nSubap,telescope,modulation,grey_width,lightRatio, postProcessing='slopesMaps',psfCentering=True, n_pix_separation = 2, calibModulation=50, n_pix_edge=None,extraModulationFactor=0,zeroPadding=None,pupilSeparationRatio=None,edgePixel = None,binning =1,nTheta_user_defined=None,userValidSignal=None,old_mask=False,rooftop = None,delta_theta = 0, user_modulation_path = None):
@@ -112,48 +90,73 @@ class BioEdge:
         
         """        
         try:
-            # try to find GPU
-            # error
-            import cupy as np_cp
+            import cupy as xp
             self.gpu_available = True
-            self.convert_for_gpu = np_cp.asarray
-            self.convert_for_numpy = np_cp.asnumpy
+            self.convert_for_gpu = xp.asarray
+            self.convert_for_numpy = xp.asnumpy
             self.nJobs = 1
-            self.mempool = np_cp.get_default_memory_pool()
+            self.mempool = xp.get_default_memory_pool()
             from .tools.tools import get_gpu_memory
             self.mem_gpu = get_gpu_memory()
-            
-            print('GPU available!')    
-            for i in range(len(self.mem_gpu)):   
-                print('GPU device '+str(i)+' : '+str(self.mem_gpu[i]/1024)+ 'GB memory')
 
+            print('GPU available!')
+            for i in range(len(self.mem_gpu)):
+                print('GPU device '+str(i)+' : ' +
+                      str(self.mem_gpu[i]/1024) + 'GB memory')
         except:
-            import numpy as np_cp
+            import numpy as xp
+
             def no_function(input_matrix):
                 return input_matrix
             self.gpu_available = False
             self.convert_for_gpu = no_function
             self.convert_for_numpy = no_function
-            
+
+        OOPAO_path = [s for s in sys.path if "OOPAO" in s]
+        l = []
+        for i in OOPAO_path:
+            l.append(len(i))
+        path = OOPAO_path[np.argmin(l)]
+        precision = np.load(path+'/precision_oopao.npy')
+        if precision == 64:
+            self.precision = np.float64
+        else:
+            self.precision = np.float32
+        if self.precision is xp.float32:
+            self.precision_complex = xp.complex64
+        else:
+            self.precision_complex = xp.complex128
+        
         # initialize the Bi-O Edge Object 
         self.telescope                  = telescope                                         # telescope attached to the wfs
-        if self.telescope.resolution/nSubap <4 or (self.telescope.resolution/nSubap)%2 !=0:
+        if self.telescope.resolution/nSubap <2 or (self.telescope.resolution/nSubap)%2 !=0:
             raise ValueError('The resolution should be an even number and be a multiple of 2**i where i>=2')
         if self.telescope.src is None:
             raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
-        self.delta_theta                = delta_theta                                       # delta theta in degree to change the position of the modulation point (default is 0 <=> modulation point on the edge of two sides of the Bi-O Edge)
-        self.nTheta_user_defined        = nTheta_user_defined                               # user defined number of modulation point
-        self.extraModulationFactor      = extraModulationFactor                             # Extra Factor to increase/reduce the number of modulation point (extraModulationFactor = 1 means 4 modulation points added, 1 for each quadrant)
-        self.nSubap                     = nSubap                                            # Number of subaperture
-        self.edgePixel                  = n_pix_edge                                        # Number of pixel on the edges of the PWFS pupils
-        self.centerPixel                = 0                                                 # Value used for the centering for the slopes-maps computation
-        self.postProcessing             = postProcessing                                    # type of processing of the signals (see self.postProcessing)
-        self.userValidSignal            = userValidSignal                                   # user defined mask for the valid pixel selection
-        self.psfCentering               = psfCentering                                      # tag for the PSF centering on  or 4 pixels
-        self.backgroundNoise            = False                                             # background noise in photon 
-        self.binning                    = binning                                           # binning factor for the detector
-        self.old_mask                   = old_mask
+        # delta theta in degree to change the position of the modulation point (default is 0 <=> modulation point on the edge of two sides of the pyramid)
+        self.delta_theta = delta_theta
+        # user defined number of modulation point
+        self.nTheta_user_defined = nTheta_user_defined
+        # Extra Factor to increase/reduce the number of modulation point (extraModulationFactor = 1 means 4 modulation points added, 1 for each quadrant)
+        self.extraModulationFactor = extraModulationFactor
+        # Number of subaperture
+        self.nSubap = nSubap
+        # Number of pixel on the edges of the PWFS pupils
+        self.edgePixel = n_pix_edge
+        # Value used for the centering for the slopes-maps computation
+        self.centerPixel = 0
+        # type of processing of the signals (see self.postProcessing)
+        self.postProcessing = postProcessing
+        # user defined mask for the valid pixel selection
+        self.userValidSignal = userValidSignal
+        # tag for the PSF centering on  or 4 pixels
+        self.psfCentering = psfCentering
+        # binning factor for the detector
+        self.binning = binning
+        self.old_mask = old_mask
+        # half width of the grey area of the mask in [l/D]
         self.grey_width                 = grey_width                                        # half width of the grey area of the mask
+        
         self.random_state_photon_noise  = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
         self.random_state_readout_noise = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
         self.random_state_background    = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
@@ -163,69 +166,73 @@ class BioEdge:
         self.nJobs_masks                = 1 
         self.weight_vector = None
         if edgePixel is not None:
-            print('WARNING: The use of the edgePixel property has been depreciated. Consider using the n_pix_edge instead')
+            raise AttributeError(
+                'The use of the edgePixel property has been depreciated. Consider using n_pix_edge instead')
         if pupilSeparationRatio is not None:
-            print('WARNING: The use of the pupilSeparationRatio property has been depreciated. Consider using the n_pix_separation instead')
-            # backward compatibility
-            if np.isscalar(self.pupilSeparationRatio):
-                self.n_pix_separation = (self.pupilSeparationRatio-1)*self.nSubap
-                self.sx               = [0,0,0,0]
-                self.sy               = [0,0,0,0]
-            else:
-                self.n_pix_separation = 0
-                self.sx               = []
-                self.sy               = []
-                for i in range(4):                    
-                    self.sx.append((self.pupilSeparationRatio[i][0]-1)*self.nSubap)
-                    self.sy.append((self.pupilSeparationRatio[i][1]-1)*self.nSubap)
+            raise AttributeError(
+                'The use of the pupilSeparationRatio property has been depreciated. Consider using n_pix_separation instead')
         else:
-            self.n_pix_separation       = n_pix_separation 
-            self.pupilSeparationRatio   = 1+self.n_pix_separation/self.nSubap
-            self.sx                     = [0,0,0,0]
-            self.sy                     = [0,0,0,0]
+            self.n_pix_separation = n_pix_separation
+            self.sx = [0, 0, 0, 0]
+            self.sy = [0, 0, 0, 0]
         if n_pix_edge is None:
-            self.n_pix_edge              = self.n_pix_separation//2
+            self.n_pix_edge = self.n_pix_separation//2
         else:
-            self.n_pix_edge              = n_pix_edge
+            self.n_pix_edge = n_pix_edge
             if n_pix_edge != self.n_pix_separation//2:
-                print('WARNING: The recommanded value for n_pix_edge is '+str(self.n_pix_separation//2) +' instead of '+ str(n_pix_edge))
+                print('WARNING: The recommanded value for n_pix_edge is ' +
+                      str(self.n_pix_separation//2) + ' instead of ' + str(n_pix_edge))
         if self.gpu_available:
-            self.joblib_setting             = 'processes'
+            self.joblib_setting = 'processes'
         else:
-            self.joblib_setting             = 'threads'
-        self.rooftop                    = rooftop      
+            self.joblib_setting = 'threads'
+        self.rooftop = rooftop    
 
-        if zeroPadding is None:
-            # Case where the zero-padding is not specificed => taking the smallest value ensuring to get edgePixel space from the edge.
-            self.nRes               = int((self.nSubap*2+self.n_pix_separation+self.n_pix_edge*2)*self.telescope.resolution/self.nSubap)
-            self.zeroPaddingFactor  = self.nRes/self.telescope.resolution                                    # zero-Padding Factor
-            self.zeroPadding        = (self.nRes - self.telescope.resolution)//2                             # zero-Padding Factor
+        if zeroPadding is not None:
+            raise AttributeError(
+                'The use of the zeroPadding property has been depreciated')
+        # Case where the zero-padding is not specificed => taking the smallest value ensuring to get edgePixel space from the edge.
+        self.nRes = int((self.nSubap*2+self.n_pix_separation +
+                        self.n_pix_edge*2)*self.telescope.resolution/self.nSubap)
+        # zero-Padding Factor
+        self.zeroPaddingFactor = self.nRes/self.telescope.resolution
+        # zero-Padding Factor
+        self.zeroPadding = (self.nRes - self.telescope.resolution)//2
+
+        # Tag of the object
+        self.tag                        = 'bioEdge'
+        
+        # WFS detector object (see Detector class)
+        self.cam = Detector(round(2*nSubap*self.zeroPaddingFactor))
+        # WFS focal plane detector object (see Detector class)
+        self.focal_plane_camera         = Detector(self.nRes)
+        self.focal_plane_camera.is_focal_plane_camera = True
+        # Light ratio for the valid pixels selection 
+        self.lightRatio = lightRatio
+        if calibModulation >= self.telescope.resolution/2:
+            self.calibModulation = self.telescope.resolution/2 - 1
         else:
-            # Case where the zero-padding is specificed => making sure that the value is large enough to display the PWFS pupils
-            self.zeroPadding = zeroPadding
-            if np.max(self.pupilSeparationRatio)<=2*self.zeroPadding/self.telescope.resolution:    
-                self.nRes = int(2*(self.zeroPadding)+self.telescope.resolution)                                 # Resolution of the zero-padded images
-                self.zeroPaddingFactor = self.nRes/self.telescope.resolution                                    # zero-Padding Factor
-            else:
-                raise ValueError('Error: The Separation of the pupils is too large for this value of zeroPadding!')
+            # Modulation used for the valid pixel selection
+            self.calibModulation = calibModulation
+        # Flag for the initialization of the WFS
+        self.isInitialized = False
+        # Flag for the initialization of the WFS
+        self.isCalibrated = False
+        # delta Tip for the modulation
+        self.delta_Tip = 0
+        # delta Tilt for the modulation
+        self.delta_Tilt = 0
+        # Center of the zero-Padded array
+        self.center = self.nRes//2
+        self.supportPadded = self.convert_for_gpu(np.pad(self.telescope.pupil.astype(self.precision_complex()),
+                                                         ((self.zeroPadding, self.zeroPadding),
+                                                          (self.zeroPadding, self.zeroPadding)), 'constant'))        
+        # case where a spatial filter is considered
+        self.spatialFilter = None
+        self.fov = 206265*self.nRes/self.zeroPaddingFactor * \
+            (self.telescope.src.wavelength/self.telescope.D)  # fov in arcsec
+        self.fov_l_d = self.nRes/self.zeroPaddingFactor  # fov in arcsec
 
-        self.tag                        = 'bioEdge'                                                          # Tag of the object 
-        self.cam                        = Detector(2*round(nSubap*self.zeroPaddingFactor))                     # WFS detector object
-        self.focal_plane_camera         = Detector(self.nRes)                     # WFS detector object
-
-        self.lightRatio                 = lightRatio + 0.001                                                 # Light ratio for the valid pixels selection 23/09/2022 cth: 0.001 added for backward compatibility
-        if calibModulation>= self.telescope.resolution/2:
-            self.calibModulation            = self.telescope.resolution/2 -1
-        else:                                             
-            self.calibModulation = calibModulation  # Modulation used for the valid pixel selection
-        self.isInitialized              = False                                                              # Flag for the initialization of the WFS
-        self.isCalibrated               = False                                                              # Flag for the initialization of the WFS
-        self.delta_Tip                  = 0                                                                  # delta Tip for the modulation
-        self.delta_Tilt                 = 0                                                                  # delta Tilt for the modulation
-        self.center                     = self.nRes//2                                                       # Center of the zero-Padded array
-        self.supportPadded              = self.convert_for_gpu(np.pad(self.telescope.pupil.astype(complex),((self.zeroPadding,self.zeroPadding),(self.zeroPadding,self.zeroPadding)),'constant'))
-        self.spatialFilter              = None                                                               # case where a spatial filter is considered
-        self.fov                        = 206265*self.telescope.resolution*(self.telescope.src.wavelength/self.telescope.D) # fov in arcsec 
         n_cpu = multiprocessing.cpu_count()
         # joblib settings for parallization
         if self.gpu_available is False:
@@ -241,17 +248,18 @@ class BioEdge:
             del A
 
         # Prepare the Tip Tilt for the modulation -- normalized to apply the modulation in terms of lambda/D
-        [self.Tip,self.Tilt]            = np.meshgrid(np.linspace(-np.pi,np.pi,self.telescope.resolution),np.linspace(-np.pi,np.pi,self.telescope.resolution))
+        [self.Tip, self.Tilt] = np.meshgrid(np.linspace(-np.pi, np.pi, self.telescope.resolution),
+                                            np.linspace(-np.pi, np.pi, self.telescope.resolution))
         self.Tilt *= self.telescope.pupil
-        self.Tip  *= self.telescope.pupil
+        self.Tip *= self.telescope.pupil
 
         # compute the phasor to center the PSF on 4 pixels
-        [xx,yy]                         = np.meshgrid(np.linspace(0,self.nRes-1,self.nRes),np.linspace(0,self.nRes-1,self.nRes))
-        self.phasor                     = self.convert_for_gpu(np.exp(-(1j*np.pi*(self.nRes+1)/self.nRes)*(xx+yy)))
+        [xx, yy] = np.meshgrid(np.linspace(0, self.nRes-1, self.nRes),
+                               np.linspace(0, self.nRes-1, self.nRes))
+        # phasor for the FFT centering
+        self.phasor = self.convert_for_gpu(np.exp(-(1j*np.pi*(self.nRes+1)/self.nRes)*(xx+yy)))
         
-
-        
-        # initialize the reference slopes and units 
+        # initialize the reference signal and units 
         self.slopesUnits                = 1     
         self.referenceSignal            = 0
         self.referenceSignal_2D         = 0
@@ -268,26 +276,25 @@ class BioEdge:
         self.wfs_calibration(self.telescope)
         self.telescope.resetOPD()
         self.wfs_measure(phase_in=self.telescope.src.phase)
-        
         self.print_properties()
 
 ## %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS INITIALIZATION PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
     def mask_computation(self,sx = [0,0,0,0],sy = [0,0,0,0]):
         print('Bio-Edge Mask initialization...')        
-        A = np.zeros([self.nRes,self.nRes],dtype=complex)
-        B = np.zeros([self.nRes,self.nRes],dtype=complex)
+        A = np.zeros([self.nRes,self.nRes],dtype=self.precision_complex)
+        B = np.zeros([self.nRes,self.nRes],dtype=self.precision_complex)
         C = np.copy(A.T)
         D = np.copy(B.T)
         
+        n_tot = int((self.nSubap*2+self.n_pix_separation+self.n_pix_edge*2) * self.telescope.resolution/self.nSubap)
+
         # mask centered on 4 pixel
-        lim     = np.pi/4
-        # d_pix   = np.pi/4 /(self.nRes)     # size of a pixel in angle
-        # lim     = lim - d_pix
-        norma = (self.nSubap + self.n_pix_separation)*(self.telescope.resolution/self.nSubap)
+        lim     = np.pi
+        norma = (self.nSubap *2)*(self.telescope.resolution/self.nSubap) * (1/(self.nSubap*2))
 
         # create a Tip/Tilt combination for each quadrant
-        [Tip,Tilt]                   = np.meshgrid(np.linspace(-lim,lim,self.nRes),np.linspace(-lim,lim,self.nRes))
-        
+        [Tip, Tilt] = np.meshgrid(np.linspace(-lim, lim, n_tot),
+                                  np.linspace(-lim, lim, n_tot))        
         
         if self.grey_width == 0:
             BW                                = np.zeros([self.nRes])
@@ -307,18 +314,26 @@ class BioEdge:
         D       = np.copy(B.T)
         
         if len(sx)==4 and len(sy)==4:
-            A = A*np.exp(1j*( sx[0]*Tip*norma + sy[0]*Tilt*norma))
-            B = B*np.exp(1j*( sx[1]*Tip*norma + sy[1]*Tilt*norma))
-            C = C*np.exp(1j*( sx[2]*Tip*norma + sy[2]*Tilt*norma))
-            D = D*np.exp(1j*( sx[3]*Tip*norma + sy[3]*Tilt*norma))
+            A_TT =( sx[0]*Tip*norma + sy[0]*Tilt*norma) 
+            B_TT =( sx[1]*Tip*norma + sy[1]*Tilt*norma)
+            C_TT =( sx[2]*Tip*norma + sy[2]*Tilt*norma) 
+            D_TT =( sx[3]*Tip*norma + sy[3]*Tilt*norma)
+            
+            
+            A = A*np.exp(1j*A_TT)
+            B = B*np.exp(1j*B_TT)
+            C = C*np.exp(1j*C_TT)
+            D = D*np.exp(1j*D_TT)
         
             self.mask = [A,B,C,D]   
+            self.mask_TT = [A_TT,B_TT,C_TT,D_TT]   
 
         else:
             self.mask = [A,B,C,D]   
         # convert for GPU
         self.mask = self.convert_for_gpu(self.mask)
-
+        # Save a copy of the initial mask
+        self.initial_mask = np.copy(self.mask)
         print('Done!')
              
     def apply_shift_wfs(self,sx =None,sy=None,mis_reg = None,units = 'pixels'):
@@ -360,46 +375,47 @@ class BioEdge:
         self.referenceSignal_2D         = 0
         self.wfs_calibration(self.telescope)
 
-    def get_phase_mask(self,resolution, n_subap, n_pix_separation, n_pix_edge, psf_centering = False, sx = [0,0,0,0], sy=[0,0,0,0]):
+    def get_phase_mask(self, resolution, n_subap, n_pix_separation, n_pix_edge, psf_centering=False, sx=[0, 0, 0, 0], sy=[0, 0, 0, 0]):
         # size of the mask in pixel
-        n_tot = int((n_subap*2+n_pix_separation+n_pix_edge*2)*self.telescope.resolution/self.nSubap)
-        
+        n_tot = int((n_subap*2+n_pix_separation+n_pix_edge*2) * self.telescope.resolution/self.nSubap)
+
         # normalization factor for the Tip/Tilt
-        norma = (n_subap + n_pix_separation)*(self.telescope.resolution/self.nSubap)
+        norma = (n_subap + n_pix_separation) * (self.telescope.resolution/self.nSubap)/2
+
         # support for the mask
-        m = np.zeros([n_tot,n_tot])
+        m = np.zeros([n_tot, n_tot])
         if psf_centering:
             # mask centered on 4 pixel
-            lim     = np.pi/4
-            d_pix   = np.pi/4 /(n_tot//2)     # size of a pixel in angle
-            lim     = lim - d_pix
-            
+            lim = np.pi/2
             # create a Tip/Tilt combination for each quadrant
-            [Tip,Tilt]                   = np.meshgrid(np.linspace(-lim,lim,n_tot//2),np.linspace(-lim,lim,n_tot//2))
-        
-            m[:n_tot//2 ,:n_tot//2  ]   =  Tip * (1- sx[0]/(n_subap+n_pix_separation/2))*norma   +  Tilt * (1- sy[0]/(n_subap+n_pix_separation/2))*norma
-            m[:n_tot//2 ,-n_tot//2: ]   = -Tip * (1+ sx[1]/(n_subap+n_pix_separation/2))*norma   +  Tilt * (1- sy[1]/(n_subap+n_pix_separation/2))*norma
-            m[-n_tot//2 :,-n_tot//2:]   = -Tip * (1+ sx[2]/(n_subap+n_pix_separation/2))*norma   + -Tilt * (1+ sy[2]/(n_subap+n_pix_separation/2))*norma
-            m[-n_tot//2 :,:n_tot//2 ]   =  Tip * (1- sx[3]/(n_subap+n_pix_separation/2))*norma   + -Tilt * (1+ sy[3]/(n_subap+n_pix_separation/2))*norma
-        
+            [Tip, Tilt] = np.meshgrid(np.linspace(-lim, lim, n_tot//2),
+                                      np.linspace(-lim, lim, n_tot//2))
+
+            m[:n_tot//2, :n_tot//2] = Tip * (1 + sx[0]/(n_subap+n_pix_separation/2))*norma + Tilt * (1 - sy[0]/(n_subap+n_pix_separation/2))*norma
+            m[:n_tot//2, -n_tot//2:] = -Tip * (1 - sx[1]/(n_subap+n_pix_separation/2))*norma + Tilt * (1 - sy[1]/(n_subap+n_pix_separation/2))*norma
+            m[-n_tot//2:, -n_tot//2:] = -Tip * (1 - sx[2]/(n_subap+n_pix_separation/2))*norma + -Tilt * (1 + sy[2]/(n_subap+n_pix_separation/2))*norma
+            m[-n_tot//2:, :n_tot//2] = Tip * (1 + sx[3]/(n_subap+n_pix_separation/2))*norma + -Tilt * (1 + sy[3]/(n_subap+n_pix_separation/2))*norma
+
         else:
-            # mask centered on 1 pixel
-            d_pix = (np.pi/4) /(n_tot/2)     # size of a pixel in angle
-            lim_p   = np.pi/4 
-            lim_m   = np.pi/4 -2*d_pix
-    
+            # mask centered on 1 pixel => different normalization for each Tip/tilt
+            d_pix = (np.pi) / (n_tot)     # size of a pixel in angle
+            lim_p = np.pi/2
+            lim_m = np.pi/2 - 2*d_pix
+
             # create a Tip/Tilt combination for each quadrant
-            [Tip_1,Tilt_1]                   = np.meshgrid(np.linspace(-lim_p,lim_p,n_tot//2 +1),np.linspace(-lim_p,lim_p,n_tot//2 +1))            
-            [Tip_2,Tilt_2]                   = np.meshgrid(np.linspace(-lim_p,lim_p,n_tot//2 +1),np.linspace(-lim_m,lim_m,n_tot//2 -1))        
-            [Tip_3,Tilt_3]                   = np.meshgrid(np.linspace(-lim_m,lim_m,n_tot//2 -1),np.linspace(-lim_m,lim_m,n_tot//2 -1))
-            [Tip_4,Tilt_4]                   = np.meshgrid(np.linspace(-lim_m,lim_m,n_tot//2 -1),np.linspace(-lim_p,lim_p,n_tot//2 +1))
-                
-            m[:n_tot//2 +1,:n_tot//2+1]     =  Tip_1 * (1- sx[0]/(n_subap+n_pix_separation/2))*norma   +  Tilt_1 * (1- sy[0]/(n_subap+n_pix_separation/2))*norma
-            m[:n_tot//2 +1,-n_tot//2+1:]    = -Tip_4 * (1+ sx[1]/(n_subap+n_pix_separation/2))*norma   +  Tilt_4 * (1- sy[1]/(n_subap+n_pix_separation/2))*norma
-            m[-n_tot//2 +1:,-n_tot//2 +1:]  = -Tip_3 * (1+ sx[2]/(n_subap+n_pix_separation/2))*norma   + -Tilt_3 * (1+ sy[2]/(n_subap+n_pix_separation/2))*norma
-            m[-n_tot//2 +1:,:n_tot//2 +1]   =  Tip_2 * (1- sx[3]/(n_subap+n_pix_separation/2))*norma   + -Tilt_2 * (1+ sy[3]/(n_subap+n_pix_separation/2))*norma
-        
-        return -m # sign convention for backward compatibility
+            [Tip_1, Tilt_1] = np.meshgrid(np.linspace(-lim_p, lim_p, n_tot//2 + 1),
+                                          np.linspace(-lim_p, lim_p, n_tot//2 + 1))
+            [Tip_2, Tilt_2] = np.meshgrid(np.linspace(-lim_p, lim_p, n_tot//2 + 1), np.linspace(-lim_m, lim_m, n_tot//2 - 1))
+            [Tip_3, Tilt_3] = np.meshgrid(np.linspace(-lim_m, lim_m, n_tot//2 - 1), np.linspace(-lim_m, lim_m, n_tot//2 - 1))
+            [Tip_4, Tilt_4] = np.meshgrid(np.linspace(-lim_m, lim_m, n_tot//2 - 1), np.linspace(-lim_p, lim_p, n_tot//2 + 1))
+
+            m[:n_tot//2 + 1, :n_tot//2+1] = Tip_1 * (1 + sx[0]/(n_subap+n_pix_separation/2))*norma + Tilt_1 * (1 - sy[0]/(n_subap+n_pix_separation/2))*norma
+            m[:n_tot//2 + 1, -n_tot//2+1:] = -Tip_4 * (1 - sx[1]/(n_subap+n_pix_separation/2))*norma + Tilt_4 * (1 - sy[1]/(n_subap+n_pix_separation/2))*norma
+            m[-n_tot//2 + 1:, -n_tot//2 + 1:] = -Tip_3 * (1 - sx[2]/(n_subap+n_pix_separation/2))*norma + -Tilt_3 * (1 + sy[2]/(n_subap+n_pix_separation/2))*norma
+            m[-n_tot//2 + 1:, :n_tot//2 + 1] = Tip_2 * (1 + sx[3]/(n_subap+n_pix_separation/2))*norma + -Tilt_2 * (1 + sy[3]/(n_subap+n_pix_separation/2))*norma
+
+        return -m  # sign convention for backward compatibility
+
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
      
     def initialization(self,telescope):
@@ -490,10 +506,10 @@ class BioEdge:
         del em_field
         # case with mask centered on 4 pixels
         if self.psfCentering:
-            em_field_ft     = np_cp.fft.fft2(support*self.phasor)
+            em_field_ft     = xp.fft.fft2(support*self.phasor)
         # case with mask centered on 1 pixel
         else:
-            em_field_ft     = np_cp.fft.fftshift(np_cp.fft.fft2(support)) 
+            em_field_ft     = xp.fft.fftshift(xp.fft.fft2(support)) 
 
         support_list = [em_field_ft,em_field_ft,em_field_ft,em_field_ft]
 
@@ -503,7 +519,7 @@ class BioEdge:
             Q = Parallel(n_jobs=self.nJobs_masks,prefer=self.joblib_prefer_masks)(delayed(self.convolution)(i,j) for i,j in zip(self.mask,support_list))
             return Q 
         
-        out  = self.convert_for_numpy(np_cp.asarray(job_loop_mask()))
+        out  = self.convert_for_numpy(xp.asarray(job_loop_mask()))
         
         
         count = 0
@@ -572,11 +588,11 @@ class BioEdge:
                     # break problem in pieces:                     
                     nCycle = int(np.ceil(self.nTheta/n_max_))
                     # print(self.nTheta)
-                    maps = self.convert_for_numpy(np_cp.zeros([self.nRes,self.nRes]))
+                    maps = self.convert_for_numpy(xp.zeros([self.nRes,self.nRes]))
                     for i in range(nCycle):
                         if self.gpu_available:
                             try:
-                                self.mempool = np_cp.get_default_memory_pool()
+                                self.mempool = xp.get_default_memory_pool()
                                 self.mempool.free_all_blocks()
                             except:
                                 print('could not free the memory')
@@ -584,12 +600,12 @@ class BioEdge:
                             def job_loop_single_mode_modulated():
                                 Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.convert_for_gpu(self.phaseBuffModulationLowres[i*n_max_:(i+1)*n_max_,:,:]))
                                 return Q 
-                            maps+=self.convert_for_numpy(np_cp.sum(np_cp.asarray(job_loop_single_mode_modulated()),axis=0))
+                            maps+=self.convert_for_numpy(xp.sum(xp.asarray(job_loop_single_mode_modulated()),axis=0))
                         else:
                             def job_loop_single_mode_modulated():
                                 Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.convert_for_gpu(self.phaseBuffModulationLowres[i*n_max_:,:,:]))
                                 return Q 
-                            maps+=self.convert_for_numpy(np_cp.sum(np_cp.asarray(job_loop_single_mode_modulated()),axis=0))
+                            maps+=self.convert_for_numpy(xp.sum(xp.asarray(job_loop_single_mode_modulated()),axis=0))
                     self.bioFrame=maps/self.nTheta
                     del maps
                 else:
@@ -598,14 +614,14 @@ class BioEdge:
                         Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.phaseBuffModulationLowres)
                         return Q 
                     # apply the bio transform in parallel
-                    self.maps=np_cp.asarray(job_loop_single_mode_modulated())
+                    self.maps=xp.asarray(job_loop_single_mode_modulated())
                     # compute the sum of the bio frames for each modulation points
                     if self.weight_vector is None:
-                        self.bioFrame=self.convert_for_numpy(np_cp.sum((self.maps),axis=0))/self.nTheta
+                        self.bioFrame=self.convert_for_numpy(xp.sum((self.maps),axis=0))/self.nTheta
                     else:
                         weighted_map = np.reshape(self.maps,[self.nTheta,self.nRes**2])
                         self.weighted_map = np.diag(self.weight_vector)@weighted_map
-                        self.bioFrame= np.reshape(self.convert_for_numpy(np_cp.sum((self.weighted_map),axis=0))/self.nTheta,[self.nRes,self.nRes])
+                        self.bioFrame= np.reshape(self.convert_for_numpy(xp.sum((self.weighted_map),axis=0))/self.nTheta,[self.nRes,self.nRes])
                         
 
                 #propagate to the detector
@@ -627,14 +643,14 @@ class BioEdge:
                     n_measurements      = nModes*self.nTheta
                     n_max               = self.n_max
                     n_measurement_max   = int(np.floor(n_max/self.nTheta))
-                    maps                = np_cp.zeros([n_measurements,self.nRes,self.nRes])
+                    maps                = xp.zeros([n_measurements,self.nRes,self.nRes])
                     
                     if n_measurements >n_max:
                         nCycle = int(np.ceil(nModes/n_measurement_max))
                         for i in range(nCycle):
                             if self.gpu_available:
                                 try:
-                                    self.mempool = np_cp.get_default_memory_pool()
+                                    self.mempool = xp.get_default_memory_pool()
                                     self.mempool.free_all_blocks()
                                 except:
                                     print('could not free the memory')
@@ -642,18 +658,18 @@ class BioEdge:
                                 def job_loop_multiple_mode_modulated():
                                     Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.convert_for_gpu(self.phaseBuffer[i*n_measurement_max*self.nTheta:(i+1)*n_measurement_max*self.nTheta,:,:]))
                                     return Q 
-                                maps[i*n_measurement_max*self.nTheta:(i+1)*n_measurement_max*self.nTheta,:,:] = np_cp.asarray(job_loop_multiple_mode_modulated())
+                                maps[i*n_measurement_max*self.nTheta:(i+1)*n_measurement_max*self.nTheta,:,:] = xp.asarray(job_loop_multiple_mode_modulated())
                             else:
                                 def job_loop_multiple_mode_modulated():
                                     Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.convert_for_gpu(self.phaseBuffer[i*n_measurement_max*self.nTheta:,:,:]))
                                     return Q 
-                                maps[i*n_measurement_max*self.nTheta:,:,:] = np_cp.asarray(job_loop_multiple_mode_modulated())
+                                maps[i*n_measurement_max*self.nTheta:,:,:] = xp.asarray(job_loop_multiple_mode_modulated())
                         self.bufferBioFrames = self.convert_for_numpy(maps)
                         del self.phaseBuffer
                         del maps
                         if self.gpu_available:
                             try:
-                                self.mempool = np_cp.get_default_memory_pool()
+                                self.mempool = xp.get_default_memory_pool()
                                 self.mempool.free_all_blocks()
                             except:
                                 print('could not free the memory')
@@ -662,13 +678,13 @@ class BioEdge:
                             Q = Parallel(n_jobs=self.nJobs,prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.convert_for_gpu(self.phaseBuffer))
                             return Q 
                         
-                        self.bufferBioFrames  = self.convert_for_numpy(np_cp.asarray(job_loop_multiple_mode_modulated()))
+                        self.bufferBioFrames  = self.convert_for_numpy(xp.asarray(job_loop_multiple_mode_modulated()))
                         
                     self.bioSignal_2D     = np.zeros([self.validSignal.shape[0],self.validSignal.shape[1],nModes])
                     self.bioSignal        = np.zeros([self.nSignal,nModes])
                     
                     for i in range(nModes):
-                        self.bioFrame = np_cp.sum(self.bufferBioFrames[i*(self.nTheta):(self.nTheta)+i*(self.nTheta)],axis=0)/self.nTheta
+                        self.bioFrame = xp.sum(self.bufferBioFrames[i*(self.nTheta):(self.nTheta)+i*(self.nTheta)],axis=0)/self.nTheta
                         self*self.cam
                         if self.isInitialized:
                             self.bioSignal_2D[:,:,i],self.bioSignal[:,i] = self.signalProcessing()                   
@@ -681,7 +697,7 @@ class BioEdge:
                     sys.exit(0)
                 if self.gpu_available:
                     try:
-                        self.mempool = np_cp.get_default_memory_pool()
+                        self.mempool = xp.get_default_memory_pool()
                         self.mempool.free_all_blocks()
                     except:
                         print('could not free the memory')
@@ -919,8 +935,8 @@ class BioEdge:
                     dTheta                                  = self.thetaModulation[i]                
                     self.modulation_path.append([self.modulation*np.cos(dTheta)+self.delta_Tip, self.modulation*np.sin(dTheta)+self.delta_Tilt])
 
-            self.phaseBuffModulation        = np.zeros([self.nTheta,self.nRes,self.nRes]).astype(np_cp.float32)    
-            self.phaseBuffModulationLowres  = np.zeros([self.nTheta,self.telescope.resolution,self.telescope.resolution]).astype(np_cp.float32)          
+            self.phaseBuffModulation        = np.zeros([self.nTheta,self.nRes,self.nRes]).astype(xp.float32)    
+            self.phaseBuffModulationLowres  = np.zeros([self.nTheta,self.telescope.resolution,self.telescope.resolution]).astype(xp.float32)          
             
             for i in range(self.nTheta):
                 self.TT                                                                                                                                         = (self.modulation_path[i][0]*self.Tip+self.modulation_path[i][1]*self.Tilt)*self.telescope.pupil
