@@ -263,8 +263,10 @@ class ShackHartmann:
         self.initialize_wfs()
 
     def initialize_wfs(self):
-        self.isInitialized = False
+        tmp_opd = self.telescope.OPD.copy()
+        tmp_opd_no_pupil = self.telescope.OPD_no_pupil.copy()
 
+        self.isInitialized = False
         readoutNoise = np.copy(self.cam.readoutNoise)
         photonNoise = np.copy(self.cam.photonNoise)
 
@@ -320,8 +322,8 @@ class ShackHartmann:
         print('Done!')
         self.cam.photonNoise = readoutNoise
         self.cam.readoutNoise = photonNoise
-        self.telescope.resetOPD()
-
+        self.telescope.OPD = tmp_opd
+        self.telescope.OPD_no_pupil = tmp_opd_no_pupil
         self.print_properties()
 
     def centroid(self, image, threshold=0.01):
