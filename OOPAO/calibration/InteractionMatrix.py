@@ -117,6 +117,7 @@ def InteractionMatrix(ngs,
         dm.coefs = intMatCommands*stroke
         tel*dm
         tel.src.phase+=phaseBuffer
+        tel.src.phase_no_pupil+=phaseBuffer # this needed when using the geometric SH
         tel*wfs
         sp = wfs.signal
 
@@ -128,6 +129,7 @@ def InteractionMatrix(ngs,
             dm.coefs=-intMatCommands*stroke
             tel*dm
             tel.src.phase += phaseBuffer
+            tel.src.phase_no_pupil += phaseBuffer  # this needed when using the geometric SH
             tel*wfs
             sm = wfs.signal
             factor = 1
