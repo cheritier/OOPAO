@@ -24,10 +24,10 @@ mpmath          => arithmetic with arbitrary precision
 jsonpickle      => json files encoding
 aotools         => zernike modes and functionalities for atmosphere computation
 numba           => required in aotools
-numexpr 		=> optimized maths operations
-psutil			=> access system info
-mpmath			=> real and complex floating-point arithmetic with arbitrary precision
-tqdm 			=> loading bar
+numexpr 	=> optimized maths operations
+psutil		=> access system info
+mpmath		=> real and complex floating-point arithmetic with arbitrary precision
+tqdm 		=> loading bar
 ```
 If GPU computation is available:
 ```
@@ -106,7 +106,7 @@ numpy.show_config()
 ```
 
 ## CONTRIBUTORS
-Main develloper and maintainer: Cédric Taïssir Héritier
+Main developer and maintainer: Cédric Taïssir Héritier
 
 Main contributors: 
  - João Aveiro
@@ -115,6 +115,7 @@ Main contributors:
  - Rafael Machado Salgueiro
  - Arnaud Striffling
  - Christophe Vérinaud
+ - Jonathan Dray
 
 ## CITING OOPAO
 If you use OOPAO for your own research, we kindly ask you to cite the OOPAO AO4ELT7 proceeding (Heritier et al. 2023).
