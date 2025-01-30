@@ -688,7 +688,7 @@ class ShackHartmann:
 
                 # set phase buffer
                 self.phase_buffer = np.moveaxis(
-                    self.telescope.src.phase_no_pupil, -1, 0)
+                    self.telescope.src.phase, -1, 0)
 
                 # tile the valid subaperture vector to match the number of input phase
                 valid_subap_1D_tiled = np.tile(
