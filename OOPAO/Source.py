@@ -287,7 +287,7 @@ class Source:
         self.__updating_flux = True
         self._nPhoton = val
         self._magnitude = -2.5*np.log10(val/self.zeroPoint)
-        print('Flux updated, magnitude is %2i and flux is %.2e'%(self._nPhoton, self._magnitude))
+        print('Flux updated, magnitude is %2i and flux is %.2e'%(self._magnitude, self._nPhoton))
         self.__updating_flux = False
 
     @property
