@@ -203,6 +203,9 @@ class Atmosphere:
             self.update()
         # save the resulting phase screen in OPD
         self.set_OPD(phase_support)
+        # reset the r0 and generate a new phase screen to override the ro_def computation
+        self.r0 = self.r0
+        self.generateNewPhaseScreen(0)
         self.print_properties()
 
     def buildLayer(self, telescope, r0, L0, i_layer, compute_covariance=True):
