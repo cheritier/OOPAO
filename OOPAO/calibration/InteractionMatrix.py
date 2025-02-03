@@ -139,7 +139,10 @@ def InteractionMatrix(ngs,
                 if nMeasurements==1:
                     intMat[:,i] = np.squeeze(0.5*(sp-sm)/stroke)                
                 else:
-                    intMat[:, -nExtra:] = np.squeeze(0.5 * (sp - sm) / stroke)
+                    if nExtra ==1:
+                        intMat[:, -nExtra] = np.squeeze(0.5 * (sp - sm) / stroke)                        
+                    else:                        
+                        intMat[:, -nExtra:] = np.squeeze(0.5 * (sp - sm) / stroke)
             else:
                  if nMeasurements==1:
                     intMat[:,i] = np.squeeze(0.5*(sp-sm)/stroke)      
