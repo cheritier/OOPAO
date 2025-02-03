@@ -109,6 +109,7 @@ class Source:
         self.is_initialized = False
         self.display_properties = display_properties
         # get the photometry properties
+        self.__updating_flux = False
         tmp = self.photometry(optBand)
         self.optBand = optBand                               # optical band
         # wavelength in m
@@ -116,13 +117,13 @@ class Source:
         # optical bandwidth
         self.bandwidth = tmp[1]
         self.zeroPoint = tmp[2]/368                            # zero point
-        self.magnitude = magnitude                             # magnitude
+        self._magnitude = magnitude                            # magnitude
         self.phase = []                                    # phase of the source
         # phase of the source (no pupil)
         self.phase_no_pupil = []
         self.fluxMap = []                                    # 2D flux map of the source
         # number of photon per m2 per s
-        self.nPhoton = self.zeroPoint*10**(-0.4*magnitude)
+        self._nPhoton = self.zeroPoint*10**(-0.4*magnitude)
         self.tag = 'source'                              # tag of the object
         # altitude of the source object in m
         self.altitude = altitude
@@ -147,7 +148,7 @@ class Source:
             self.print_properties()
 
         self.is_initialized = True
-
+        
     def __mul__(self, obj):
         if obj.tag == 'telescope':
             obj.src = self
@@ -274,27 +275,35 @@ class Source:
         else:
             print('Error: The photometry object takes a scalar as an input')
             return -1
-
+    
     @property
     def nPhoton(self):
         return self._nPhoton
 
     @nPhoton.setter
     def nPhoton(self, val):
+        if self.__updating_flux:
+            return
+        self.__updating_flux = True
         self._nPhoton = val
-        self.magnitude = -2.5*np.log10(val/self.zeroPoint)
-        if self.is_initialized:
+        self._magnitude = -2.5*np.log10(val/self.zeroPoint)
+        print('Flux updated, magnitude is %2i and flux is %.2e'%(self._magnitude, self._nPhoton))
+        self.__updating_flux = False
 
-            print('NGS flux updated!')
-            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOURCE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-            print('Wavelength \t' +
-                  str(round(self.wavelength*1e6, 3)) + ' \t [microns]')
-            print('Optical Band \t'+self.optBand)
-            print('Magnitude \t' + str(self.magnitude))
-            print('Flux \t\t' + str(np.round(self.nPhoton)) +
-                  str('\t [photons/m2/s]'))
-            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+    @property
+    def magnitude(self):
+        return self._magnitude
 
+    @magnitude.setter
+    def magnitude(self, val):
+        if self.__updating_flux:
+            return
+        self.__updating_flux = True
+        self._magnitude = val
+        self._nPhoton = self.zeroPoint*10**(-0.4*self._magnitude)
+        print('Flux updated, magnitude is %2i and flux is %.2e'%(self._magnitude, self._nPhoton))
+        self.__updating_flux = False
+    
     def print_properties(self):
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOURCE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         print('{: ^8s}'.format('Source') + '{: ^10s}'.format('Wavelength') + '{: ^8s}'.format('Zenith') + '{: ^10s}'.format(
@@ -304,7 +313,7 @@ class Source:
 
         print('-------------------------------------------------------------------')
         print('{: ^8s}'.format(self.type) + '{: ^10s}'.format(str(self.wavelength)) + '{: ^8s}'.format(str(self.coordinates[0])) + '{: ^10s}'.format(str(
-            self.coordinates[1]))+'{: ^10s}'.format(str(np.round(self.altitude, 2))) + '{: ^10s}'.format(str(self.magnitude))+'{: ^10s}'.format(str(np.round(self.nPhoton, 1))))
+            self.coordinates[1]))+'{: ^10s}'.format(str(np.round(self.altitude, 2))) + '{: ^10s}'.format(str(self._magnitude))+'{: ^10s}'.format(str(np.round(self._nPhoton, 1))))
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
     def __repr__(self):
