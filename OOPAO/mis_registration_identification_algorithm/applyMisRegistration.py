@@ -72,7 +72,7 @@ def applyMisRegistration(tel,
                         nSubap       = param['nSubaperture'],\
                         mechCoupling = param['mechanicalCoupling'],\
                         coordinates  = coord,\
-                        pitch        = None,\
+                        pitch        = pitch,\
                         misReg       = misRegistration_tmp + extra_dm_mis_registration,\
                         modes        = np.reshape(modes,[tel.resolution**2,modes.shape[2]]),\
                         M4_param     = param,\
