@@ -201,6 +201,9 @@ def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pi
         
     metaSensitivityMatrix = CalibrationVault(meta_matrix)
     
+    # set back the system to its initial working point
+    dm_0 = applyMisRegistration(tel,misRegistrationZeroPoint,param, wfs = wfs_mis_registrated,print_dm_properties=False, floating_precision=dm_0.floating_precision, dm_input = dm_input)
+    
     return metaSensitivityMatrix, calib_0
 
 def apply_mis_reg(tel,map_2d, misReg):

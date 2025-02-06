@@ -19,8 +19,8 @@ from ..tools.interpolateGeometricalTransformation import (anamorphosisImageMatri
 """
 def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, basis, calib_in, misRegistrationZeroPoint, epsilonMisRegistration, param, precision = 3, gainEstimation = 1, return_all = False):
 
-    Compute the set of sensitivity matrices required to identify the mis-registrations. 
-    
+    Compute the set of sensitivity matrices required to identify the mis-registrations.
+
     %%%%%%%%%%%%%%%%   -- INPUTS -- %%%%%%%%%%%%%%%%
     _ nameFolder                : folder to store the sensitivity matrices.
     _ nameSystem                : name of the AO system considered. For instance 'ELT_96x96_R_band'
@@ -29,30 +29,28 @@ def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, ba
     _ ngs                       : source object
     _ dm_0                      : deformable mirror with reference configuration of mis-registrations
     _ pitch                     : pitch of the dm in [m]
-    _ wfs                       : wfs object   
-    _ basis                     : basis to use to compute the sensitivity matrices. Basis should be an object with the following fields: 
-            
+    _ wfs                       : wfs object
+    _ basis                     : basis to use to compute the sensitivity matrices. Basis should be an object with the following fields:
+
                     basis.modes      : [nActuator x nModes] matrix containing the commands to apply the modal basis on the dm
-                    basis.indexModes : indexes of the modes considered in the basis. This is used to name the sensitivity matrices 
+                    basis.indexModes : indexes of the modes considered in the basis. This is used to name the sensitivity matrices
                     basis.extra      :  extra name to name the sensitivity matrices for instance 'KL'
-                    
+
     _ precision                 : precision to round the parameter estimation. Equivalent to np.round(misReg_estimation,precision)
-    _ gainEstimation            : gain to apply after one estimation. eventually allows to avoid overshoots. 
-    _ return_all                : if true, returns all the estimations at every step of the algorithm                    
+    _ gainEstimation            : gain to apply after one estimation. eventually allows to avoid overshoots.
+    _ return_all                : if true, returns all the estimations at every step of the algorithm
     _ misRegistrationZeroPoint  : mis-registration around which you want to compute the sensitivity matrices
-    _ epsilonMisRegistration    : epsilon value to apply 
+    _ epsilonMisRegistration    : epsilon value to apply
     _ param                     : dictionnary used as parameter file
-    
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
-    The function returns the meta-sensitivity matrix that contains all the individual sensitivity matrices reshaped as a vector and concatenated. 
-    
+
+    The function returns the meta-sensitivity matrix that contains all the individual sensitivity matrices reshaped as a vector and concatenated.
+
     %%%%%%%%%%%%%%%%   -- OUTPUTS -- %%%%%%%%%%%%%%%%
     _ misRegistration_out       : mis-registration object corresponding to the convergence value
     _ scalingFactor_values      : scaling factor (for each mode of the modal basis) for each iteration to take into consideration eventual gains variation between data and model
     _ misRegistration_values    : mis-registration values for each iteration
-    
-    
 """
 
 
@@ -68,52 +66,52 @@ def estimateMisRegistration(nameFolder,
                             misRegistrationZeroPoint,
                             epsilonMisRegistration,
                             param,
-                            precision = 3,
-                            gainEstimation = 1,
-                            sensitivity_matrices = None,
-                            return_all = False,
-                            fast = False,
-                            wfs_mis_registrated = None,
-                            nIteration = 3,
-                            dm_input = None,
-                            display = True):
-    
-    #%%  ---------- LOAD/COMPUTE SENSITIVITY MATRICES --------------------
+                            precision=3,
+                            gainEstimation=1,
+                            sensitivity_matrices=None,
+                            return_all=False,
+                            fast=False,
+                            wfs_mis_registrated=None,
+                            nIteration=3,
+                            dm_input=None,
+                            display=True):
+
+    # ---------- LOAD/COMPUTE SENSITIVITY MATRICES --------------------
     # compute the sensitivity matrices. if the data already exits, the files will be loaded
-    
+
     # WARNING: The data are loaded only if the name of the requeste files matches the ones in argument of this function.
     # make sure that these files are well corresponding to the system you are working with.
-    
+
     if sensitivity_matrices is None:
-        [metaMatrix,calib_0] = computeMetaSensitivityMatrix(nameFolder                 = nameFolder,\
-                                         nameSystem                 = nameSystem,\
-                                         tel                        = tel,\
-                                         atm                        = atm,\
-                                         ngs                        = ngs,\
-                                         dm_0                       = dm_0,\
-                                         pitch                      = dm_0.pitch,\
-                                         wfs                        = wfs,\
-                                         basis                      = basis,\
-                                         misRegistrationZeroPoint   = misRegistrationZeroPoint,\
-                                         epsilonMisRegistration     = epsilonMisRegistration,\
-                                         param                      = param,\
-                                         wfs_mis_registrated        = wfs_mis_registrated)
+        [metaMatrix,calib_0] = computeMetaSensitivityMatrix(nameFolder=nameFolder,
+                                                            nameSystem=nameSystem,
+                                                            tel=tel,
+                                                            atm=atm,
+                                                            ngs=ngs,
+                                                            dm_0=dm_0,
+                                                            pitch=dm_0.pitch,
+                                                            wfs=wfs,
+                                                            basis=basis,
+                                                            misRegistrationZeroPoint=misRegistrationZeroPoint,
+                                                            epsilonMisRegistration=epsilonMisRegistration,
+                                                            param=param,
+                                                            wfs_mis_registrated=wfs_mis_registrated)
     else:
         metaMatrix = sensitivity_matrices
-        
-    
-    #%%  ---------- ITERATIVE ESTIMATION OF THE PARAMETERS --------------------
-    stroke                  = 1e-12
-    criteria                = 0
-    n_mis_reg               = metaMatrix.M.shape[0]
-    misRegEstBuffer         = np.zeros(n_mis_reg)
-    scalingFactor_values    = [1]
-    misRegistration_values  = [np.zeros(n_mis_reg)]
-    
+
+    #  ---------- ITERATIVE ESTIMATION OF THE PARAMETERS --------------------
+    stroke = 1e-12
+    criteria = 0
+    n_mis_reg = metaMatrix.M.shape[0]
+    misRegEstBuffer = np.zeros(n_mis_reg)
+    scalingFactor_values = [1]
+    misRegistration_values = [np.zeros(n_mis_reg)]
     epsilonMisRegistration_field = ['shiftX','shiftY','rotationAngle','radialScaling','tangentialScaling']
 
     i_iter=0
+    flag_paired = tel.isPaired
     tel.isPaired = False
+    
     misRegistration_out = MisRegistration(misRegistrationZeroPoint)
     
     if fast:
@@ -277,6 +275,10 @@ def estimateMisRegistration(nameFolder,
         misRegistration_out.rotationAngle       = 0*np.round(misRegistration_out.rotationAngle,precision)
         misRegistration_out.radialScaling       = 0*np.round(misRegistration_out.radialScaling,precision)
         misRegistration_out.tangentialScaling   = 0*np.round(misRegistration_out.tangentialScaling,precision)
+    
+    tel.isPaired = flag_paired
+    # set back the system to its initial working point
+    dm_0 = applyMisRegistration(tel,misRegistrationZeroPoint,param, wfs = wfs_mis_registrated,print_dm_properties=False, floating_precision=dm_0.floating_precision, dm_input = dm_input)
     
     if return_all:
         return misRegistration_out, scalingFactor_values, misRegistration_values,validity_flag
