@@ -28,7 +28,9 @@ class SPRINT:
 
         # zero point for the sensitivity matrices
         if mis_registration_zero_point is None:
-            self.mis_registration_zero_point = MisRegistration()
+            self.mis_registration_zero_point = obj.dm.misReg
+            raise Warning('No input mis_registration_zero_point. Using the DM current mis-registration as the zero-point:')
+            obj.dm.misReg.print_()
         else:
             self.mis_registration_zero_point = mis_registration_zero_point
 
@@ -74,8 +76,7 @@ class SPRINT:
                                                                        dm_input=dm_input)
 
         self.metaMatrix_init = CalibrationVault(self.metaMatrix.D)
-        self.mis_registration_zero_point_init = self.mis_registration_zero_point
-
+        self.mis_registration_zero_point_init = self.mis_registration_zero_point        
         print('Done!')
 
     def estimate(self, obj, on_sky_slopes, n_iteration=3, n_update_zero_point=0, precision=3, gain_estimation=1, dm_input=None):
@@ -97,6 +98,9 @@ class SPRINT:
         # reinitialize the  meta matrix
         self.metaMatrix = CalibrationVault(self.metaMatrix_init.D)
         self.mis_registration_zero_point = self.mis_registration_zero_point_init
+        print('SPRINT was setup around the following working point:')
+        self.mis_registration_zero_point.print_()
+
 
         for i_update in range(n_update_zero_point+1):
             if i_update > 0:
