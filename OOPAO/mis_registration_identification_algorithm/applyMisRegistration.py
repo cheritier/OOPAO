@@ -114,7 +114,8 @@ def applyMisRegistration(tel,
         if wfs.tag == 'pyramid':
             # mis-registration for the WFS
             misRegistration_wfs                 = MisRegistration()
-            misRegistration_wfs.shiftX          = misRegistration_tmp.shiftX
+            # sign change to match Pyramid pupil shift vs DM shift
+            misRegistration_wfs.shiftX          = -misRegistration_tmp.shiftX
             misRegistration_wfs.shiftY          = misRegistration_tmp.shiftY
             
             wfs.apply_shift_wfs( misRegistration_wfs.shiftX, misRegistration_wfs.shiftY,units = 'm') # units in m to be consistent with dm shift
