@@ -370,9 +370,9 @@ class Pyramid:
             sy = [mis_reg.dY_1, mis_reg.dY_2, mis_reg.dY_3, mis_reg.dY_4]
         # apply a TIP/TILT of the PWFS mask to shift the pupils
         if units == 'pixels':
-            factor = 1
-        if units == 'm':
-            factor = 1/(self.telescope.pixelSize * (self.telescope.resolution/self.nSubap))
+            factor = 2#(self.telescope.resolution/self.nSubap)
+        if units == 'm':            
+            factor = 2/(self.telescope.D/self.nSubap)
         # sx and sy are the units of displacements in pixels
         if np.isscalar(sx) and np.isscalar(sy):
             shift_x = [factor*sx, factor*sx, factor*sx, factor*sx]
@@ -407,39 +407,59 @@ class Pyramid:
         n_tot = int((n_subap*2+n_pix_separation+n_pix_edge*2) * self.telescope.resolution/self.nSubap)
 
         # normalization factor for the Tip/Tilt
-        norma = (n_subap + n_pix_separation) * (self.telescope.resolution/self.nSubap)/2
-
+        n_pix_per_subap = self.telescope.resolution/self.nSubap
+        norma = n_pix_per_subap/4
+        
         # support for the mask
         m = np.zeros([n_tot, n_tot])
         if psf_centering:
             # mask centered on 4 pixel
-            lim = np.pi/2
+            lim = np.pi
+            step = 2*lim / n_tot//2
             # create a Tip/Tilt combination for each quadrant
-            [Tip, Tilt] = np.meshgrid(np.linspace(-lim, lim, n_tot//2),
-                                      np.linspace(-lim, lim, n_tot//2))
-
-            m[:n_tot//2, :n_tot//2] = Tip * (1 + sx[0]/(n_subap+n_pix_separation/2))*norma + Tilt * (1 - sy[0]/(n_subap+n_pix_separation/2))*norma
-            m[:n_tot//2, -n_tot//2:] = -Tip * (1 - sx[1]/(n_subap+n_pix_separation/2))*norma + Tilt * (1 - sy[1]/(n_subap+n_pix_separation/2))*norma
-            m[-n_tot//2:, -n_tot//2:] = -Tip * (1 - sx[2]/(n_subap+n_pix_separation/2))*norma + -Tilt * (1 + sy[2]/(n_subap+n_pix_separation/2))*norma
-            m[-n_tot//2:, :n_tot//2] = Tip * (1 + sx[3]/(n_subap+n_pix_separation/2))*norma + -Tilt * (1 + sy[3]/(n_subap+n_pix_separation/2))*norma
-
+            [Tip, Tilt] = np.meshgrid(np.linspace(-lim, lim, n_tot//2,endpoint = False),
+                                      np.linspace(-lim, lim, n_tot//2,endpoint = False))
+            # make sur it is zero-mean
+            Tip -=np.mean(Tip)
+            Tilt -=np.mean(Tilt)
+            
+            m[:n_tot//2, :n_tot//2] = Tip * (n_subap + n_pix_separation +sx[0])*norma + Tilt * (n_subap+ n_pix_separation - sy[0])*norma
+            m[:n_tot//2, -n_tot//2:] = -Tip * (n_subap + n_pix_separation- sx[1])*norma + Tilt * (n_subap + n_pix_separation- sy[1])*norma
+            m[-n_tot//2:, -n_tot//2:] = -Tip * (n_subap+ n_pix_separation - sx[2])*norma + -Tilt * (n_subap+ n_pix_separation + sy[2])*norma
+            m[-n_tot//2:, :n_tot//2] = Tip * (n_subap+ n_pix_separation + sx[3])*norma + -Tilt * (n_subap+ n_pix_separation + sy[3])*norma
         else:
             # mask centered on 1 pixel => different normalization for each Tip/tilt
             d_pix = (np.pi) / (n_tot)     # size of a pixel in angle
-            lim_p = np.pi/2
-            lim_m = np.pi/2 - 2*d_pix
+            lim_p = np.pi
+            lim_m = np.pi - 2*d_pix
 
             # create a Tip/Tilt combination for each quadrant
-            [Tip_1, Tilt_1] = np.meshgrid(np.linspace(-lim_p, lim_p, n_tot//2 + 1),
-                                          np.linspace(-lim_p, lim_p, n_tot//2 + 1))
-            [Tip_2, Tilt_2] = np.meshgrid(np.linspace(-lim_p, lim_p, n_tot//2 + 1), np.linspace(-lim_m, lim_m, n_tot//2 - 1))
-            [Tip_3, Tilt_3] = np.meshgrid(np.linspace(-lim_m, lim_m, n_tot//2 - 1), np.linspace(-lim_m, lim_m, n_tot//2 - 1))
-            [Tip_4, Tilt_4] = np.meshgrid(np.linspace(-lim_m, lim_m, n_tot//2 - 1), np.linspace(-lim_p, lim_p, n_tot//2 + 1))
+            [Tip_1, Tilt_1] = np.meshgrid(np.linspace(-lim_p, lim_p, n_tot//2 + 1,endpoint = True), np.linspace(-lim_p, lim_p, n_tot//2 + 1,endpoint = True))
+            [Tip_2, Tilt_2] = np.meshgrid(np.linspace(-lim_p, lim_p, n_tot//2 + 1,endpoint = True), np.linspace(-lim_m, lim_m, n_tot//2 - 1,endpoint = False))
+            [Tip_3, Tilt_3] = np.meshgrid(np.linspace(-lim_m, lim_m, n_tot//2 - 1,endpoint = False), np.linspace(-lim_m, lim_m, n_tot//2 - 1,endpoint = False))
+            [Tip_4, Tilt_4] = np.meshgrid(np.linspace(-lim_m, lim_m, n_tot//2 - 1,endpoint = False), np.linspace(-lim_p, lim_p, n_tot//2 + 1,endpoint = True))
 
-            m[:n_tot//2 + 1, :n_tot//2+1] = Tip_1 * (1 + sx[0]/(n_subap+n_pix_separation/2))*norma + Tilt_1 * (1 - sy[0]/(n_subap+n_pix_separation/2))*norma
-            m[:n_tot//2 + 1, -n_tot//2+1:] = -Tip_4 * (1 - sx[1]/(n_subap+n_pix_separation/2))*norma + Tilt_4 * (1 - sy[1]/(n_subap+n_pix_separation/2))*norma
-            m[-n_tot//2 + 1:, -n_tot//2 + 1:] = -Tip_3 * (1 - sx[2]/(n_subap+n_pix_separation/2))*norma + -Tilt_3 * (1 + sy[2]/(n_subap+n_pix_separation/2))*norma
-            m[-n_tot//2 + 1:, :n_tot//2 + 1] = Tip_2 * (1 + sx[3]/(n_subap+n_pix_separation/2))*norma + -Tilt_2 * (1 + sy[3]/(n_subap+n_pix_separation/2))*norma
+          
+            # make sur it is zero-mean
+            Tip_1 -=np.mean(Tip_1)
+            Tilt_1 -=np.mean(Tilt_1)
+            
+            # make sur it is zero-mean
+            Tip_2 -=np.mean(Tip_2)
+            Tilt_2 -=np.mean(Tilt_2)
+
+            # make sur it is zero-mean
+            Tip_3 -=np.mean(Tip_3)
+            Tilt_3 -=np.mean(Tilt_3)
+
+            # make sur it is zero-mean
+            Tip_4 -=np.mean(Tip_4)
+            Tilt_4 -=np.mean(Tilt_4)
+            
+            m[:n_tot//2 + 1, :n_tot//2+1] = Tip_1 * (n_subap + n_pix_separation +sx[0])*norma + Tilt_1 * (n_subap+ n_pix_separation - sy[0])*norma
+            m[:n_tot//2 + 1, -n_tot//2+1:] = -Tip_4 * (n_subap + n_pix_separation- sx[1])*norma + Tilt_4 * (n_subap + n_pix_separation- sy[1])*norma
+            m[-n_tot//2 + 1:, -n_tot//2 + 1:] = -Tip_3 * (n_subap+ n_pix_separation - sx[2])*norma + -Tilt_3 * (n_subap+ n_pix_separation + sy[2])*norma
+            m[-n_tot//2 + 1:, :n_tot//2 + 1] = Tip_2 * (n_subap+ n_pix_separation + sx[3])*norma + -Tilt_2 * (n_subap+ n_pix_separation + sy[3])*norma
 
         return -m  # sign convention for backward compatibility
 
