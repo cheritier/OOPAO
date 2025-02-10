@@ -141,7 +141,7 @@ class Atmosphere:
         self.wavelength = 500*1e-9
         self.r0_def = 0.15              # DefaultFried Parameter in m at 500 nm to build covariance matrices
         self.r0 = r0                # User input Fried Parameter in m at 500 nm
-        self.fractionalR0 = fractionalR0      # Fractional Cn2 profile in percentage 
+        self.fractionalR0 = fractionalR0      # Fractional Cn2 profile in percentage
         self.altitude = altitude          # altitude of the layers
         self.cn2 = (self.r0**(-5. / 3) / (0.423 * (2*np.pi/self.wavelength)**2))/np.max([1, np.max(self.altitude)])      # Cn2 m^(-2/3)
         self.L0 = L0                # Outer Scale in m
@@ -743,6 +743,9 @@ class Atmosphere:
             layer_index = list(xp.arange(self.nLayer))
             n_sp = len(layer_index)
             display_cn2 = True
+        else:
+            n_sp = len(layer_index)
+            display_cn2 = True
 
         if type(layer_index) is not list:
             raise TypeError(' layer_index should be a list')
@@ -767,16 +770,13 @@ class Atmosphere:
         if display_cn2:
             # axCn2 = f.add_subplot(gs[1, :])
             ax = plt.subplot(gs[0, -1])
-            plt.imshow(xp.tile(xp.asarray(self.fractionalR0)[:, None], self.nLayer), origin='lower', interpolation='gaussian', extent=[
-                       0, 1, self.altitude[0], self.altitude[-1]+5000], cmap='jet'), plt.clim([0, xp.max(self.fractionalR0)])
-
             for i_layer in range(self.nLayer):
-                plt.text(0.5, self.altitude[i_layer], str(
-                    self.fractionalR0[i_layer]*100)+'%', color='w', fontweight='bold')
-            plt.ylabel('Altitude [m]')
-            plt.title('Cn2 Profile')
-            ax.set_xticks([])
-            makeSquareAxes(plt.gca())
+                p = ax.barh(self.altitude[i_layer]*1e-3, 100*np.round(self.fractionalR0[i_layer], 2), height=1.5, edgecolor='k', label='Layer '+str(i_layer+1))
+                ax.bar_label(p, label_type='center')
+            ax.legend()
+            plt.xlabel('Fractional Cn2 [%]')
+            plt.ylabel('Altitude [km]')
+
         for i_l, ax in enumerate(axis_list):
             tmpLayer = getattr(self, 'layer_'+str(layer_index[i_l]+1))
             ax.imshow(
@@ -884,7 +884,7 @@ class Atmosphere:
         if self.hasNotBeenInitialized is False:
             print('Updating the Atmosphere covariance matrices...')
             self.seeingArcsec = 206265*(self.wavelength/val)
-            self.cn2 = (self.r0**(-5. / 3) / (0.423 * (2*np.pi/self.wavelength)**2))/np.max([1, np.max(self.altitude)]) # Cn2 m^(-2/3)
+            self.cn2 = (self.r0**(-5. / 3) / (0.423 * (2*np.pi/self.wavelength)**2))/np.max([1, np.max(self.altitude)])  # Cn2 m^(-2/3)
             for i_layer in range(self.nLayer):
                 tmpLayer = getattr(self, 'layer_'+str(i_layer+1))
                 tmpLayer.ZZt_r0 = tmpLayer.ZZt*(self.r0_def/self.r0)**(5/3)
@@ -968,4 +968,3 @@ class Atmosphere:
     def __repr__(self):
         self.print_properties()
         return ''
-    
