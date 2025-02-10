@@ -88,4 +88,4 @@ class Asterism:
 
     def __repr__(self):
         self.print_properties()
-        return
+        return ''
