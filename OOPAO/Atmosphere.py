@@ -613,7 +613,7 @@ class Atmosphere:
 
             if self.mode == 1:
                 raise DeprecationWarning(
-                    "The dependency to the aotools package has been depreciated.")
+                    "The dependency to the aotools package has been deprecated.")
             else:
                 if self.mode == 2:
                     # with subharmonics
