@@ -156,7 +156,7 @@ class Atmosphere:
             temp = self.cn2 * self.fractionalR0[i] * self.windSpeed[i] ** (5/3)
             sum = sum + temp
         self.V0 = (sum/self.cn2)**(3/5) # computation of equivalent wind speed, Roddier 1982
-        self.tau0 = self.r0 / self.V0 # Coherence time of atmosphere, ROddier 1981
+        self.tau0 = 0.31 * self.r0 / self.V0 # Coherence time of atmosphere, Roddier 1981
         
         # default value to update phase screens at each iteration
         self.user_defined_opd = False
@@ -991,9 +991,9 @@ class Atmosphere:
         if self.hasNotBeenInitialized is False:
             if len(val) != self.nLayer:
                 print(
-                    'Error! Wrong value for the wind-speed! Make sure that you inpute a wind-speed for each layer')
+                    'Error! Wrong value for the fractional r0 ! Make sure that you inpute a fractional r0 for each layer')
             else:
-                print('Updating the fractional R0...')
+                print('Updating the fractional R0...BEWARE COMPLETE THE RECOMPUTATION...NOT ONLY V0 and Tau0 !')
                 sum = 0
                 for i in range(self.nLayer):
                     temp = self.cn2 * self.fractionalR0[i] * self.windSpeed[i] ** (5/3)
