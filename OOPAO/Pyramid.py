@@ -11,6 +11,7 @@ import numpy as np
 import scipy.ndimage as sp
 import scipy
 from joblib import Parallel, delayed
+from .tools.tools import warning
 
 from .Detector import Detector
 try:
@@ -85,7 +86,7 @@ class Pyramid:
             User-defined valid pixel mask for the signals computation.
             The default is None.
         old_mask : bool, optional
-            DEPRECIATED -- Flag to use the old pyramid mask.
+            DEPRECATED -- Flag to use the old pyramid mask.
             The default is False.
         rooftop : str, optional
             If different to None, allows to compute a two-sided Pyramid ("V" corresponds to a vertical split, "H" corresponds to an horizontal split).
@@ -97,13 +98,13 @@ class Pyramid:
             user-defined modulation path ( a list of [x,y] coordinates in lambda/D units is expected).
             The default is None.
         pupilSeparationRatio : float, optional
-            DEPRECTIATED -- Separation ratio of the PWFS pupils (Diameter/Distance Center to Center) -- DEPRECIATED -> use n_pix_separation instead).
+            DEPRECTATED -- Separation ratio of the PWFS pupils (Diameter/Distance Center to Center) -- DEPRECATED -> use n_pix_separation instead).
             The default is None.
         edgePixel : int, optional
-            DEPRECIATED -- number of pixel at the edge of the Pyramid Pupils.
+            DEPRECATED -- number of pixel at the edge of the Pyramid Pupils.
             The default is None.
         zeroPadding : int, optional
-            DEPRECIATED -- User-defined zero-padding value in pixels that will be added to each side of the arrays.
+            DEPRECATED -- User-defined zero-padding value in pixels that will be added to each side of the arrays.
             Consider using the n_pix_edge parameter that allows to do the same thing.
             The default is None.
 
@@ -143,7 +144,7 @@ class Pyramid:
         _ wfs.random_state_background    : a random state cycle can be defined to reproduces random sequences of noise -- default is based on the current clock time
         _ wfs.fov                        : Field of View of the Pyramid in arcsec
         _ wfs.raw_data                   : Intensity pattern on the detector before its integration by a detector ("pure" WFS signal)
-        _ wfs.pyramidFrame               : DEPRECIATED. copy of wfs.raw_data kept for backward compatibility
+        _ wfs.pyramidFrame               : DEPRECATED. copy of wfs.raw_data kept for backward compatibility
 
         The main properties of the object can be displayed using :
             wfs.print_properties()
@@ -226,15 +227,15 @@ class Pyramid:
         self.old_mask = old_mask
         # user defined modulation path
         self.user_modulation_path = user_modulation_path
-        # Separation ratio of the PWFS pupils (Diameter/Distance Center to Center) -- DEPRECIATED -> use n_pix_separation instead)
+        # Separation ratio of the PWFS pupils (Diameter/Distance Center to Center) -- DEPRECATED -> use n_pix_separation instead)
         self.pupilSeparationRatio = pupilSeparationRatio
         self.weight_vector = None
         if edgePixel is not None:
             raise AttributeError(
-                'The use of the edgePixel property has been depreciated. Consider using n_pix_edge instead')
+                'The use of the edgePixel property has been deprecated. Consider using n_pix_edge instead')
         if pupilSeparationRatio is not None:
             raise AttributeError(
-                'The use of the pupilSeparationRatio property has been depreciated. Consider using n_pix_separation instead')
+                'The use of the pupilSeparationRatio property has been deprecated. Consider using n_pix_separation instead')
         else:
             self.n_pix_separation = n_pix_separation
             self.sx = [0, 0, 0, 0]
@@ -244,8 +245,8 @@ class Pyramid:
         else:
             self.n_pix_edge = n_pix_edge
             if n_pix_edge != self.n_pix_separation//2:
-                print('WARNING: The recommanded value for n_pix_edge is ' +
-                      str(self.n_pix_separation//2) + ' instead of ' + str(n_pix_edge))
+                warning('The recommanded value for n_pix_edge is ' +
+                        str(self.n_pix_separation//2) + ' instead of ' + str(n_pix_edge))
         if self.gpu_available:
             self.joblib_setting = 'processes'
         else:
@@ -254,7 +255,7 @@ class Pyramid:
 
         if zeroPadding is not None:
             raise AttributeError(
-                'The use of the zeroPadding property has been depreciated')
+                'The use of the zeroPadding property has been deprecated')
         # Case where the zero-padding is not specificed => taking the smallest value ensuring to get edgePixel space from the edge.
         self.nRes = int((self.nSubap*2+self.n_pix_separation +
                         self.n_pix_edge*2)*self.telescope.resolution/self.nSubap)
@@ -270,7 +271,7 @@ class Pyramid:
         self.focal_plane_camera = Detector(int(
             (modulation*4+12)*self.zeroPaddingFactor), psf_sampling=self.zeroPaddingFactor)
         self.focal_plane_camera.is_focal_plane_camera = True
-        # Light ratio for the valid pixels selection 
+        # Light ratio for the valid pixels selection
         self.lightRatio = lightRatio
         if calibModulation >= self.telescope.resolution/2:
             self.calibModulation = self.telescope.resolution/2 - 1
@@ -358,7 +359,7 @@ class Pyramid:
             self.initial_mask = np.copy(self.mask)
         else:
             raise DeprecationWarning(
-                'The use of the old_mask parameter has been depreciated')
+                'The use of the old_mask parameter has been deprecated')
 
     def apply_shift_wfs(self, sx=None, sy=None, mis_reg=None, units='pixels'):
         if sx is None:
@@ -370,8 +371,8 @@ class Pyramid:
             sy = [mis_reg.dY_1, mis_reg.dY_2, mis_reg.dY_3, mis_reg.dY_4]
         # apply a TIP/TILT of the PWFS mask to shift the pupils
         if units == 'pixels':
-            factor = 2#(self.telescope.resolution/self.nSubap)
-        if units == 'm':            
+            factor = 2
+        if units == 'm':
             factor = 2/(self.telescope.D/self.nSubap)
         # sx and sy are the units of displacements in pixels
         if np.isscalar(sx) and np.isscalar(sy):
@@ -387,16 +388,14 @@ class Pyramid:
                 raise ValueError(
                     'Wrong size for sx and/or sy, a list of 4 values is expected.')
         if np.max(np.abs(shift_x)) > self.n_pix_edge or np.max(np.abs(shift_y)) > self.n_pix_edge:
-            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-            print('WARNING!!!! The Pyramid pupils have been shifted outside of the detector!! Wrapping of the signal is currently occuring!!')
-            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+            warning('The Pyramid pupils have been shifted outside of the detector!' +
+                    'Wrapping of the signal is currently occuring!!')
 
         self.sx = shift_x
         self.sy = shift_y
         self.m = self.get_phase_mask(resolution=self.nRes, n_subap=self.nSubap, n_pix_separation=self.n_pix_separation,
                                      n_pix_edge=self.n_pix_edge, psf_centering=self.psfCentering, sx=shift_x, sy=shift_y)
         self.mask = self.convert_for_gpu(np.complex64(np.exp(1j*self.m)))
-        # print('Updating the reference slopes and Wavelength Calibration for the new modulation...')
         self.slopesUnits = 1
         self.referenceSignal = 0
         self.referenceSignal_2D = 0
@@ -409,24 +408,22 @@ class Pyramid:
         # normalization factor for the Tip/Tilt
         n_pix_per_subap = self.telescope.resolution/self.nSubap
         norma = n_pix_per_subap/4
-        
         # support for the mask
         m = np.zeros([n_tot, n_tot])
         if psf_centering:
             # mask centered on 4 pixel
             lim = np.pi
-            step = 2*lim / n_tot//2
             # create a Tip/Tilt combination for each quadrant
-            [Tip, Tilt] = np.meshgrid(np.linspace(-lim, lim, n_tot//2,endpoint = False),
-                                      np.linspace(-lim, lim, n_tot//2,endpoint = False))
+            [Tip, Tilt] = np.meshgrid(np.linspace(-lim, lim, n_tot//2, endpoint=False),
+                                      np.linspace(-lim, lim, n_tot//2, endpoint=False))
             # make sur it is zero-mean
-            Tip -=np.mean(Tip)
-            Tilt -=np.mean(Tilt)
-            
-            m[:n_tot//2, :n_tot//2] = Tip * (n_subap + n_pix_separation +sx[0])*norma + Tilt * (n_subap+ n_pix_separation - sy[0])*norma
-            m[:n_tot//2, -n_tot//2:] = -Tip * (n_subap + n_pix_separation- sx[1])*norma + Tilt * (n_subap + n_pix_separation- sy[1])*norma
-            m[-n_tot//2:, -n_tot//2:] = -Tip * (n_subap+ n_pix_separation - sx[2])*norma + -Tilt * (n_subap+ n_pix_separation + sy[2])*norma
-            m[-n_tot//2:, :n_tot//2] = Tip * (n_subap+ n_pix_separation + sx[3])*norma + -Tilt * (n_subap+ n_pix_separation + sy[3])*norma
+            Tip -= np.mean(Tip)
+            Tilt -= np.mean(Tilt)
+
+            m[:n_tot//2, : n_tot//2] = (Tip * (n_subap + n_pix_separation + sx[0]) + Tilt * (n_subap + n_pix_separation - sy[0])) * norma
+            m[:n_tot//2, -n_tot//2:] = (-Tip * (n_subap + n_pix_separation - sx[1]) + Tilt * (n_subap + n_pix_separation - sy[1])) * norma
+            m[-n_tot//2:, -n_tot//2:] = (-Tip * (n_subap + n_pix_separation - sx[2]) - Tilt * (n_subap + n_pix_separation + sy[2])) * norma
+            m[-n_tot//2:, :n_tot//2] = (Tip * (n_subap + n_pix_separation + sx[3]) - Tilt * (n_subap + n_pix_separation + sy[3])) * norma
         else:
             # mask centered on 1 pixel => different normalization for each Tip/tilt
             d_pix = (np.pi) / (n_tot)     # size of a pixel in angle
@@ -434,32 +431,31 @@ class Pyramid:
             lim_m = np.pi - 2*d_pix
 
             # create a Tip/Tilt combination for each quadrant
-            [Tip_1, Tilt_1] = np.meshgrid(np.linspace(-lim_p, lim_p, n_tot//2 + 1,endpoint = True), np.linspace(-lim_p, lim_p, n_tot//2 + 1,endpoint = True))
-            [Tip_2, Tilt_2] = np.meshgrid(np.linspace(-lim_p, lim_p, n_tot//2 + 1,endpoint = True), np.linspace(-lim_m, lim_m, n_tot//2 - 1,endpoint = False))
-            [Tip_3, Tilt_3] = np.meshgrid(np.linspace(-lim_m, lim_m, n_tot//2 - 1,endpoint = False), np.linspace(-lim_m, lim_m, n_tot//2 - 1,endpoint = False))
-            [Tip_4, Tilt_4] = np.meshgrid(np.linspace(-lim_m, lim_m, n_tot//2 - 1,endpoint = False), np.linspace(-lim_p, lim_p, n_tot//2 + 1,endpoint = True))
-
-          
-            # make sur it is zero-mean
-            Tip_1 -=np.mean(Tip_1)
-            Tilt_1 -=np.mean(Tilt_1)
-            
-            # make sur it is zero-mean
-            Tip_2 -=np.mean(Tip_2)
-            Tilt_2 -=np.mean(Tilt_2)
+            [Tip_1, Tilt_1] = np.meshgrid(np.linspace(-lim_p, lim_p, n_tot//2 + 1, endpoint=True), np.linspace(-lim_p, lim_p, n_tot//2 + 1, endpoint=True))
+            [Tip_2, Tilt_2] = np.meshgrid(np.linspace(-lim_p, lim_p, n_tot//2 + 1, endpoint=True), np.linspace(-lim_m, lim_m, n_tot//2 - 1, endpoint=False))
+            [Tip_3, Tilt_3] = np.meshgrid(np.linspace(-lim_m, lim_m, n_tot//2 - 1, endpoint=False), np.linspace(-lim_m, lim_m, n_tot//2 - 1, endpoint=False))
+            [Tip_4, Tilt_4] = np.meshgrid(np.linspace(-lim_m, lim_m, n_tot//2 - 1, endpoint=False), np.linspace(-lim_p, lim_p, n_tot//2 + 1, endpoint=True))
 
             # make sur it is zero-mean
-            Tip_3 -=np.mean(Tip_3)
-            Tilt_3 -=np.mean(Tilt_3)
+            Tip_1 -= np.mean(Tip_1)
+            Tilt_1 -= np.mean(Tilt_1)
 
             # make sur it is zero-mean
-            Tip_4 -=np.mean(Tip_4)
-            Tilt_4 -=np.mean(Tilt_4)
-            
-            m[:n_tot//2 + 1, :n_tot//2+1] = Tip_1 * (n_subap + n_pix_separation +sx[0])*norma + Tilt_1 * (n_subap+ n_pix_separation - sy[0])*norma
-            m[:n_tot//2 + 1, -n_tot//2+1:] = -Tip_4 * (n_subap + n_pix_separation- sx[1])*norma + Tilt_4 * (n_subap + n_pix_separation- sy[1])*norma
-            m[-n_tot//2 + 1:, -n_tot//2 + 1:] = -Tip_3 * (n_subap+ n_pix_separation - sx[2])*norma + -Tilt_3 * (n_subap+ n_pix_separation + sy[2])*norma
-            m[-n_tot//2 + 1:, :n_tot//2 + 1] = Tip_2 * (n_subap+ n_pix_separation + sx[3])*norma + -Tilt_2 * (n_subap+ n_pix_separation + sy[3])*norma
+            Tip_2 -= np.mean(Tip_2)
+            Tilt_2 -= np.mean(Tilt_2)
+
+            # make sur it is zero-mean
+            Tip_3 -= np.mean(Tip_3)
+            Tilt_3 -= np.mean(Tilt_3)
+
+            # make sur it is zero-mean
+            Tip_4 -= np.mean(Tip_4)
+            Tilt_4 -= np.mean(Tilt_4)
+
+            m[:n_tot//2 + 1, :n_tot//2+1] = (Tip_1 * (n_subap + n_pix_separation + sx[0]) + Tilt_1 * (n_subap + n_pix_separation - sy[0]))*norma
+            m[:n_tot//2 + 1, -n_tot//2+1:] = (-Tip_4 * (n_subap + n_pix_separation - sx[1]) + Tilt_4 * (n_subap + n_pix_separation - sy[1]))*norma
+            m[-n_tot//2 + 1:, -n_tot//2 + 1:] = (-Tip_3 * (n_subap + n_pix_separation - sx[2]) - Tilt_3 * (n_subap + n_pix_separation + sy[2]))*norma
+            m[-n_tot//2 + 1:, :n_tot//2 + 1] = (Tip_2 * (n_subap + n_pix_separation + sx[3]) - Tilt_2 * (n_subap + n_pix_separation + sy[3]))*norma
 
         return -m  # sign convention for backward compatibility
 
@@ -499,10 +495,8 @@ class Pyramid:
                     self.initFrame >= self.lightRatio*self.initFrame.max())
                 self.nSignal = int(np.sum(self.validSignal))
         else:
-            print(
-                'You are using a user-defined mask for the selection of the valid pixel')
+            print('You are using a user-defined mask for the selection of the valid pixel')
             if self.postProcessing[:10] == 'slopesMaps':
-
                 # select the valid pixels of the detector according to the flux (case full-frame)
                 self.validI4Q = self.userValidSignal
                 self.validSignal = np.concatenate(
@@ -653,7 +647,6 @@ class Pyramid:
                 if self.nTheta > n_max_:
                     # break problem in pieces:
                     nCycle = int(np.ceil(self.nTheta/n_max_))
-                    # print(self.nTheta)
                     maps = self.convert_for_numpy(
                         xp.zeros([self.nRes, self.nRes]))
                     for i in range(nCycle):
@@ -662,7 +655,7 @@ class Pyramid:
                                 self.mempool = xp.get_default_memory_pool()
                                 self.mempool.free_all_blocks()
                             except:
-                                print('could not free the memory')
+                                warning('could not free the memory')
                         if i < nCycle-1:
                             def job_loop_single_mode_modulated():
                                 Q = Parallel(n_jobs=self.nJobs, prefer=self.joblib_setting)(delayed(self.pyramid_transform)(
@@ -727,7 +720,7 @@ class Pyramid:
                                     self.mempool = xp.get_default_memory_pool()
                                     self.mempool.free_all_blocks()
                                 except:
-                                    print('could not free the memory')
+                                    warning('could not free the memory')
                             if i < nCycle-1:
                                 def job_loop_multiple_mode_modulated():
                                     Q = Parallel(n_jobs=self.nJobs, prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.convert_for_gpu(
@@ -750,7 +743,7 @@ class Pyramid:
                                 self.mempool = xp.get_default_memory_pool()
                                 self.mempool.free_all_blocks()
                             except:
-                                print('could not free the memory')
+                                warning('could not free the memory')
                     else:
                         def job_loop_multiple_mode_modulated():
                             Q = Parallel(n_jobs=self.nJobs, prefer=self.joblib_setting)(delayed(
@@ -772,19 +765,13 @@ class Pyramid:
                             )
                     del self.bufferPyramidFrames
                 else:
-                    print(
-                        '%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-                    print('Error - Wrong dimension for the input phase. Aborting....')
-                    print('Aborting...')
-                    print(
-                        '%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-                    sys.exit(0)
+                    raise ValueError('Wrong dimension for the input phase. Aborting')
                 if self.gpu_available:
                     try:
                         self.mempool = xp.get_default_memory_pool()
                         self.mempool.free_all_blocks()
                     except:
-                        print('could not free the memory')
+                        warning('could not free the memory')
 
     def signalProcessing(self, cameraFrame=None):
         if cameraFrame is None:
@@ -890,15 +877,14 @@ class Pyramid:
 
     def get_modulation_frame(self, radius=6, norma=True):
         if radius <= 0:
-            Warning(
-                'radius for the field of view must be a strictly positive number. Ignoring the input value.')
+            warning('radius for the field of view must be a strictly positive number. Ignoring the input value.')
             radius = self.telescope.resolution//2
         self.modulation_camera_frame = self.focal_plane_camera.frame.astype(
             float)
         N_trunc = int(self.nRes/2 - radius*self.zeroPaddingFactor)
         if N_trunc <= 0:
-            print('radius Value is too high as the field of view is limited to ' +
-                  str(int(self.fov_l_d/2)) + ' lambda/D -- ignoring')
+            warning('radius Value is too high as the field of view is limited to ' +
+                    str(int(self.fov_l_d/2)) + ' lambda/D -- ignoring')
             modulation_camera_frame_zoom = self.modulation_camera_frame.copy()
         else:
             modulation_camera_frame_zoom = self.modulation_camera_frame[N_trunc:-
@@ -1077,8 +1063,7 @@ class Pyramid:
                         self.wfs_calibration(self.telescope)
                         print('Done!')
                 else:
-                    print(
-                        'ERROR: wrong shape for the spatial filter. No spatial filter attached to the mask')
+                    warning('Wrong shape for the spatial filter. No spatial filter attached to the mask')
                     self.mask = self.initial_mask
 
     @property
@@ -1109,8 +1094,8 @@ class Pyramid:
     def modulation(self, val):
         self._modulation = val
         if self._modulation >= (self.telescope.resolution//2):
-            raise ValueError(
-                'Error the modulation radius is too large for this resolution! Consider using a larger telescope resolution!')
+            raise ValueError('Error the modulation radius is too large for this resolution!' +
+                             'Consider using a larger telescope resolution!')
         if val != 0:
             self.modulation_path = []
             if self.user_modulation_path is not None:
@@ -1153,8 +1138,7 @@ class Pyramid:
 
         if hasattr(self, 'isCalibrated'):
             if self.isCalibrated:
-                print(
-                    'Updating the reference slopes and Wavelength Calibration for the new modulation...')
+                print('Updating the reference slopes and Wavelength Calibration for the new modulation')
                 self.slopesUnits = 1
                 self.referenceSignal = 0
                 self.referenceSignal_2D = 0
@@ -1170,8 +1154,7 @@ class Pyramid:
                         np.abs(self.modulation_camera_em)**2, axis=0)
                     if obj.resolution > self.nRes:
                         frame = intensity
-                        print(
-                            'Maximum resolution for focal plane camera is %i, cropping field to this dimension' % self.nRes)
+                        warning('Maximum resolution for focal plane camera is %i, cropping field to this dimension' % self.nRes)
                     else:
                         frame = intensity[intensity.shape[0]//2-obj.resolution//2:intensity.shape[0]//2+obj.resolution //
                                           2, intensity.shape[0]//2-obj.resolution//2:intensity.shape[0]//2+obj.resolution//2]
@@ -1185,12 +1168,11 @@ class Pyramid:
                     frame = (obj.rebin(obj.frame, (obj.resolution //
                              self.binning, obj.resolution//self.binning)))
                 except:
-                    raise Warning('The shape of the detector ('+str(obj.frame.shape) +
-                                  ') is not valid with the binning value requested:'+str(self.binning)+'! -- Ignoring the binning.')
+                    warning('The shape of the detector ('+str(obj.frame.shape)+')' +
+                            'is not valid with the binning value requested:' + str(self.binning) + '! -- Ignoring the binning.')
             obj.integrate(frame)
         else:
-            raise AttributeError(
-                'Error light propagated to the wrong type of object')
+            raise AttributeError('Error light propagated to the wrong type of object')
 
     def print_properties(self):
 
