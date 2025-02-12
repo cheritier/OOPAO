@@ -9,7 +9,7 @@ import inspect
 import multiprocessing
 import sys
 import time
-
+from .tools.tools import warning
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.ndimage as sp
@@ -41,8 +41,8 @@ class BioEdge:
         _ n_pix_edge            : number of pixel at the edge of the Bi-O Edge Pupils in number of pixels of the detector -- default value is n_pix_separation's value
         _ postProcessing        : processing of the signals ('fullFrame' or 'slopesMaps')                               -- default value is 'slopesMaps'
         
-        DEPRECIATED PARAMETERS:
-        _ pupilSeparationRatio  : Separation ratio of the PWFS pupils (Diameter/Distance Center to Center) -- DEPRECIATED -> use n_pix_separation instead)
+        DEPRECATED PARAMETERS:
+        _ pupilSeparationRatio  : Separation ratio of the PWFS pupils (Diameter/Distance Center to Center) -- DEPRECATED -> use n_pix_separation instead)
         _ edgePixel             : number of pixel at the edge of the Bi-O Edge Pupils
         
         ************************** OPTIONAL PARAMETERS **************************
@@ -161,16 +161,16 @@ class BioEdge:
         self.random_state_readout_noise = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
         self.random_state_background    = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
         self.user_modulation_path       = user_modulation_path                              # user defined modulation path
-        self.pupilSeparationRatio       = pupilSeparationRatio                              # Separation ratio of the PWFS pupils (Diameter/Distance Center to Center) -- DEPRECIATED -> use n_pix_separation instead)
+        self.pupilSeparationRatio       = pupilSeparationRatio                              # Separation ratio of the PWFS pupils (Diameter/Distance Center to Center) -- DEPRECATED -> use n_pix_separation instead)
         self.joblib_prefer_masks        = 'threads'
         self.nJobs_masks                = 1 
         self.weight_vector = None
         if edgePixel is not None:
             raise AttributeError(
-                'The use of the edgePixel property has been depreciated. Consider using n_pix_edge instead')
+                'The use of the edgePixel property has been deprecated. Consider using n_pix_edge instead')
         if pupilSeparationRatio is not None:
             raise AttributeError(
-                'The use of the pupilSeparationRatio property has been depreciated. Consider using n_pix_separation instead')
+                'The use of the pupilSeparationRatio property has been deprecated. Consider using n_pix_separation instead')
         else:
             self.n_pix_separation = n_pix_separation
             self.sx = [0, 0, 0, 0]
@@ -180,7 +180,7 @@ class BioEdge:
         else:
             self.n_pix_edge = n_pix_edge
             if n_pix_edge != self.n_pix_separation//2:
-                print('WARNING: The recommanded value for n_pix_edge is ' +
+                warning('The recommanded value for n_pix_edge is ' +
                       str(self.n_pix_separation//2) + ' instead of ' + str(n_pix_edge))
         if self.gpu_available:
             self.joblib_setting = 'processes'
@@ -190,7 +190,7 @@ class BioEdge:
 
         if zeroPadding is not None:
             raise AttributeError(
-                'The use of the zeroPadding property has been depreciated')
+                'The use of the zeroPadding property has been deprecated')
         # Case where the zero-padding is not specificed => taking the smallest value ensuring to get edgePixel space from the edge.
         self.nRes = int((self.nSubap*2+self.n_pix_separation +
                         self.n_pix_edge*2)*self.telescope.resolution/self.nSubap)
@@ -362,9 +362,7 @@ class BioEdge:
             else:
                 raise ValueError('Wrong size for sx and/or sy, a list of 4 values is expected.')
         if np.max(np.abs(shift_x))>self.n_pix_edge or np.max(np.abs(shift_y))>self.n_pix_edge:
-            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-            print('WARNING!!!! The Bi-O Edge pupils have been shifted outside of the detector!! Wrapping of the signal is currently occuring!!')
-            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+            warning('The Bi-O Edge pupils have been shifted outside of the detector!! Wrapping of the signal is currently occuring!!')
 
         self.sx = shift_x
         self.sy = shift_y
