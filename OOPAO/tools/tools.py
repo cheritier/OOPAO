@@ -426,3 +426,79 @@ def set_binning( array, binning_factor,mode='sum'):
                 return array.reshape(shape).mean(-2).mean(1)
     else:
         raise ValueError('Binning factor %d not compatible with the array size'%(binning_factor))
+def gaussian_2D(resolution, fwhm, position = None, theta = 0,centered = True):
+    """
+    This function computes a 2D gaussian function on a square support of resolution pixels. The gaussian function is normalised to 1. 
+    By default the gaussian function is centered on the support but its position can be modified by setting the position parameter.
+    The centering is done on 4 pixels by default but this can be modified setting the centered input to false.
+    Examples: 
+        -Compute a symmetric gaussian function centered on 4 pixels with a fwhm of 10 pix on a support of 100 pix
+            G = gaussian_2D(resolution=100, fwhm=10)
+        -Compute a symmetric gaussian function centered on a single pixel with a fwhm of 10 pix on a support of 100 pix
+            G = gaussian_2D(resolution=100, fwhm=10, centered=False)
+        -Compute a disymmetric gaussian function centered on 4 pixels with a fwhm of 10 pix in X and 20 pix in Y on a support of 100 pix
+            G = gaussian_2D(resolution=100, fwhm=[10,20])
+        -Compute a disymmetric gaussian function centered on 4 pixels with a fwhm of 10 pix in X and 20 pix in Y on a support of 100 pix
+            G = gaussian_2D(resolution=100, fwhm=[10,20],theta= np.pi/3)    
+        
+            
+    ----------
+    resolution : float
+        resolution of the 2D support in pixel
+    fwhm : float/list
+        Full Width Half max of the Gaussian function in pixels. 
+        If fwhm is a scalar value, the gaussian function is computed with the same fwhm in the X and Y direction. 
+        If fwhm is list of two scalar values, the gaussian function is computed with a different fwhm in the X and Y direction.
+    position : list, optional
+        Location in [pix] of the center of the gaussian function with respect to the center. 
+        The default is None and corresponds to a centered gaussian function.
+    theta : float, optional
+        Direction in [rad] for the case of an assymetric gaussian function. The default is 0.
+    centered : bool, optional
+            Flag to center the gaussian one 1x1 pixel (False) or 2x2 pixels (True). The default is True.
+
+    Returns
+    -------
+    G : numpy array (float64)
+        2D array containing the gaussian function.
+
+    """
+    if position is None:
+        x0 = resolution/2
+        y0 = resolution/2
+    else:
+        if isinstance(position,list):
+            if len(position) == 2:
+                x0 = resolution/2 + position[0]
+                y0 = resolution/2 + position[1]
+            else:
+                raise AttributeError('the input position should be a list of two elements')
+        else:
+            raise AttributeError('the input position should be a list of two elements')
+
+    if np.isscalar(fwhm):
+        fwhm = [fwhm, fwhm]
+    else:
+        if len(fwhm) != 2:
+            raise AttributeError('fwhm must be either a scalar or a list of length 2')
+        
+    # X & Y fwhm computation
+    cx = (fwhm[0])/2*np.sqrt(2*np.log(2))
+    cy = (fwhm[1])/2*np.sqrt(2*np.log(2))
+    
+    # define the cartesian grid on which the gaussian function is computed
+    x = np.linspace(0, resolution, resolution, endpoint=centered) 
+    X, Y = np.meshgrid(x, x)
+    
+    # Compute the 2D Gaussian coefficients
+    a = np.cos(theta)**2/(2*cx**2) + np.sin(theta)**2/(2*cy**2)
+    b = -np.sin(2*theta)/(4*cx**2) + np.sin(2*theta)/(4*cy**2)
+    c = np.sin(theta)**2/(2*cx**2) + np.cos(theta)**2/(2*cy**2)
+    # compute the gaussian function
+    G = np.exp(-(a*(X-x0)**2 + 2*b*(X-x0)*(Y-y0) + c*(Y-y0)**2))
+    G /= G.sum()
+    return G
+
+
+def warning(string):
+    print('\033[01m\033[33m'+'OOPAO Warning: \n' + string + '\033[0m')
