@@ -15,7 +15,7 @@ try:
 except ImportError or ModuleNotFoundError:
     xp = np
 
-from OOPAO.tools.tools import set_binning
+from OOPAO.tools.tools import set_binning, warning
 
 
 class Telescope:
@@ -204,7 +204,7 @@ class Telescope:
             self.pupil = circle < (D/2)**2
             self.pupil = self.pupil*obs
         else:
-            print(
+            warning(
                 'User-defined pupil, the central obstruction will not be taken into account...')
             self.pupil = self.user_defined_pupil.copy().astype(self.precision())
 
@@ -217,7 +217,7 @@ class Telescope:
         self.pupil = self.pupil
 
     def computeCoronoPSF(self, zeroPaddingFactor=2, display=False, coronagraphDiameter=4.5):
-        raise NameError("The method computeCoronoPSF has been depreciated and is now integrated within the computePSF method setting the tel.coronograph_diameter property (default value is None and means no coronograph considered)")
+        raise NameError("The method computeCoronoPSF has been deprecated and is now integrated within the computePSF method setting the tel.coronograph_diameter property (default value is None and means no coronograph considered)")
 
     def computePSF(self, zeroPaddingFactor=2, detector=None, img_resolution=None):
         conversion_constant = (180/xp.pi)*3600
@@ -288,7 +288,7 @@ class Telescope:
             # raise warning if the src is outside of the fov
             if input_source[i_src].coordinates[0] > max(self.xPSF_arcsec):
                 if warning_src is False:
-                    print('Warning : Some Sources are outside of the field of view of the detector (' + str(self.xPSF_arcsec[1])+' arcsec) -- Wrapping effects will appear')
+                    warning('At leaste one Source is outside of the field of view of the detector (' + str(self.xPSF_arcsec[1])+' arcsec) -- Wrapping effects will appear')
                     warning_src = True
 
             # propagate the EM Field
@@ -420,8 +420,7 @@ class Telescope:
                 offset_Y = xp.zeros(len(angle))
 
             if xp.max(xp.abs(offset_X)) >= max_offset or xp.max(xp.abs(offset_Y)) > max_offset:
-                print(
-                    'WARNING ! The spider offsets are too large! Weird things could happen!')
+                warning('The spider offsets are too large! Weird things could happen!')
             for i in range(len(angle)):
                 angle_val = (angle[i]+90) % 360
                 x = xp.linspace(-self.D/2, self.D/2, self.resolution, dtype=self.precision())
@@ -441,35 +440,12 @@ class Telescope:
             self.isInitialized = True
             self.pupil = pup.copy()
         else:
-            print('Thickness is <=0, returning default pupil')
+            warning('Thickness is <=0, returning default pupil')
             self.set_pupil()
         return
 
-    # def pad(self, resolution_padded):
-    #     if xp.ndim(self.OPD) == 2:
-    #         em_field_padded = xp.zeros(
-    #             [resolution_padded, resolution_padded], dtype=complex)
-    #         OPD_padded = xp.zeros(
-    #             [resolution_padded, resolution_padded], dtype=float)
-    #         center = resolution_padded//2
-    #         em_field_padded[center-self.resolution//2:center+self.resolution//2,
-    #                         center-self.resolution//2:center+self.resolution//2] = self.em_field
-    #         OPD_padded[center-self.resolution//2:center+self.resolution//2,
-    #                    center-self.resolution//2:center+self.resolution//2] = self.OPD
-    #     else:
-    #         em_field_padded = xp.zeros(
-    #             [resolution_padded, resolution_padded, self.OPD.shape[2]], dtype=complex)
-    #         OPD_padded = xp.zeros(
-    #             [resolution_padded, resolution_padded, self.OPD.shape[2]], dtype=float)
-    #         center = resolution_padded//2
-    #         em_field_padded[center-self.resolution//2:center+self.resolution//2,
-    #                         center-self.resolution//2:center+self.resolution//2, :] = self.em_field
-    #         OPD_padded[center-self.resolution//2:center+self.resolution//2,
-    #                    center-self.resolution//2:center+self.resolution//2, :] = self.OPD
-    #     return OPD_padded, em_field_padded
-
     def showPSF(self, zoom=1, GEO=False):
-        raise DeprecationWarning('This method has been depreciated.')
+        raise DeprecationWarning('This method has been deprecated.')
 
     @property
     def pupil(self):
@@ -483,7 +459,7 @@ class Telescope:
         self.pupilLogical = xp.where(tmp > 0)
         self.pupilReflectivity = self.pupil.astype(self.precision())
         if self.isInitialized:
-            print('Warning!: A new pupil is now considered, its reflectivity is considered to be uniform. Assign the proper reflectivity map to tel.pupilReflectivity if required.')
+            warning('A new pupil is now considered, its reflectivity is considered to be uniform. Assign the proper reflectivity map to tel.pupilReflectivity if required.')
 
     @property
     def OPD(self):
