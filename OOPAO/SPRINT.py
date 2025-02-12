@@ -11,7 +11,7 @@ from .MisRegistration import MisRegistration
 from .calibration.CalibrationVault import CalibrationVault
 from .mis_registration_identification_algorithm.computeMetaSensitivyMatrix import computeMetaSensitivityMatrix
 from .mis_registration_identification_algorithm.estimateMisRegistration import estimateMisRegistration
-
+from .tools.tools import warning
 
 class SPRINT:
     def __init__(self, obj, basis, nameFolder=None, nameSystem=None, mis_registration_zero_point=None, wfs_mis_registered=None, fast_algorithm=False, n_mis_reg=3, recompute_sensitivity=False, dm_input=None):
@@ -29,7 +29,7 @@ class SPRINT:
         # zero point for the sensitivity matrices
         if mis_registration_zero_point is None:
             self.mis_registration_zero_point = obj.dm.misReg
-            raise Warning('No input mis_registration_zero_point. Using the DM current mis-registration as the zero-point:')
+            warning('No input mis_registration_zero_point. Using the DM current mis-registration as the zero-point:')
             obj.dm.misReg.print_()
         else:
             self.mis_registration_zero_point = mis_registration_zero_point
