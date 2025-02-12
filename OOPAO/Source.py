@@ -270,12 +270,10 @@ class Source:
             if hasattr(phot, arg):
                 return getattr(phot, arg)
             else:
-                print('Error: Wrong name for the photometry object')
-                return -1
+                raise ValueError('Wrong name for the photometry object')
         else:
-            print('Error: The photometry object takes a scalar as an input')
-            return -1
-    
+            raise ValueError('The photometry object takes a scalar as an input')
+
     @property
     def nPhoton(self):
         return self._nPhoton
