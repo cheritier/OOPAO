@@ -7,7 +7,7 @@ Created on Wed Apr  3 14:18:03 2024
 
 import numpy as np
 import time
-from OOPAO.tools.tools import set_binning
+from OOPAO.tools.tools import set_binning, warning
 
 
 class Detector:
@@ -184,8 +184,8 @@ class Detector:
     def set_saturation(self, frame):
         self.saturation = (100*frame.max()/self.FWC)
         if frame.max() > self.FWC:
-            print('Warning: the detector is saturating, %.1f %%' %
-                  self.saturation)
+            warning('The detector is saturating, %.1f %%' %
+                    self.saturation)
         return np.clip(frame, a_min=0, a_max=self.FWC)
 
     def digitalization(self, frame):
@@ -197,7 +197,7 @@ class Detector:
                 2**(-self.bits) / np.sqrt(12)
             self.saturation = (100*frame.max()/self.FWC)
             if frame.max() > self.FWC:
-                print('Warning: the ADC is saturating (gain applyed %i), %.1f %%' % (
+                warning('The ADC is saturating (gain applyed %i), %.1f %%' % (
                     self.gain, self.saturation))
             frame = (frame / self.FWC * (2**self.bits-1)
                      ).astype(self.output_precision)
@@ -362,12 +362,8 @@ class Detector:
         self._backgroundNoise = val
         if val is True:
             if hasattr(self, 'backgroundFlux') is False or self.backgroundFlux is None:
-                print(
-                    '%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-                print('Warning: The background noise is enabled but no property backgroundFlux is set.\nA map of shape ' +
-                      str(self.frame.shape)+' is expected')
-                print(
-                    '%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                warning('The background noise is enabled but no property backgroundFlux is set.\nA map of shape ' +
+                        str(self.frame.shape)+' is expected')
             else:
                 print('Background Noise enabled! Using the following backgroundFlux:')
                 print(self.backgroundFlux)
