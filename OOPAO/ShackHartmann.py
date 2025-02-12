@@ -8,16 +8,16 @@ Created on Thu May 20 17:52:09 2021
 import time
 import numpy as np
 from .Detector import Detector
-from .tools.tools import bin_ndarray
+from .tools.tools import bin_ndarray, gaussian_2D, warning
 from joblib import Parallel, delayed
+import scipy as sp
 import sys
 try:
     import cupy as xp
     global_gpu_flag = True
-    xp = np #for now
+    xp = np  # for now
 except ImportError or ModuleNotFoundError:
     xp = np
-
 
 
 class ShackHartmann:
@@ -27,10 +27,12 @@ class ShackHartmann:
                  threshold_cog: float = 0.01,
                  is_geometric: bool = False,
                  binning_factor: int = 1,
-                 padding_extension_factor: int = 1,
+                 pixel_scale: float = None,
                  threshold_convolution: float = 0.05,
                  shannon_sampling: bool = False,
-                 unit_P2V=False):
+                 unit_P2V=False,
+                 n_pixel_per_subaperture=None,
+                 padding_extension_factor=None):
         """SHACK-HARTMANN
         A Shack Hartmann object consists in defining a 2D grd of lenslet arrays located in the pupil plane of the telescope to estimate the local tip/tilt seen by each lenslet.
         By default the Shack Hartmann detector is considered to be noise-free (for calibration purposes). These properties can be switched on and off on the fly (see properties)
@@ -57,15 +59,14 @@ class ShackHartmann:
         binning_factor : int, optional
             Binning factor of the detector.
             The default is 1.
-        padding_extension_factor : int, optional
-            Zero-padding factor on the spots intensity images.
-            This is a fast way to provide a larger field of view before the convolution
-            with LGS spots is achieved and allow to prevent wrapping effects.
-            The default is 1.
+        pixel_scale : float, optional
+                Pixel scale in [arcsec] requested by the user. The spots will be either zero-padded and binned accordingly to provide the closest pixel-scale available.
+                The default is the shannon sampling of the spots.
         threshold_convolution : float, optional
             Threshold considered to force the gaussian spots (elungated spots) to go to zero on the edges.
             The default is 0.05.
         shannon_sampling : bool, optional
+            This parameter is only used if the pixel_scale parameter is set to None.
             If True, the lenslet array spots are sampled at the same sampling as the FFT (2 pix per FWHM).
             If False, the sampling is 1 pix per FWHM (default).
             The default is False.
@@ -73,6 +74,18 @@ class ShackHartmann:
                 If True, the slopes units are calibrated using a Tip/Tilt normalized to 2 Pi peak-to-valley.
                 If False, the slopes units are calibrated using a Tip/Tilt normalized to 1 in the pupil (Default). In that case the slopes are expressed in [rad].
                 The default is False.
+        n_pixel_per_subaperture : int, optional
+                Number of pixel per subaperture of size defined by the pixel_scale parameter.
+                The maximum FoV in pixel is driven by the resolution of the telescope and is stored in the n_pix_subap_init property.
+                If n_pixel_per_subaperture < n_pix_subap_init, the subapertures are cropped to the right number of pixels
+                If n_pixel_per_subaperture > n_pix_subap_init, the subapertures are zero-padded to provide the right number of pixels.
+                    A warning is displayed as only the FoV defined by n_pix_subap_init contains signal and wrapping effects may occur.
+                The default is None and corresponds to n_pixel_per_subaperture = n_pixel_per_subap_init.
+        padding_extension_factor : int, optional
+            DEPRECATED - Zero-padding factor on the spots intensity images.
+            This is a fast way to provide a larger field of view before the convolution
+            with LGS spots is achieved and allow to prevent wrapping effects.
+            The default is 1.
 
         Raises
         ------
@@ -128,42 +141,63 @@ class ShackHartmann:
             self.precision_complex = xp.complex64
         else:
             self.precision_complex = xp.complex128
-            
+
         self.tag = 'shackHartmann'
         self.telescope = telescope
         if self.telescope.src is None:
-            raise AttributeError(
-                'The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
+            raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
         self.is_geometric = is_geometric
         self.nSubap = nSubap
+        self.d_subap = telescope.D/self.nSubap
         self.lightRatio = lightRatio
         self.binning_factor = binning_factor
         self.zero_padding = 2
-        self.padding_extension_factor = padding_extension_factor
         self.threshold_convolution = threshold_convolution
         self.threshold_cog = threshold_cog
         self.shannon_sampling = shannon_sampling
         self.unit_P2V = unit_P2V
-        # case where the spots are zeropadded to provide larger fOV
-        if padding_extension_factor >= 2:
-            self.n_pix_subap = int(
-                padding_extension_factor*self.telescope.resolution // self.nSubap)
-            self.is_extended = True
-            self.binning_factor = padding_extension_factor
-            self.zero_padding = 1
+        # original pixel scale assuming a zropadding factor of 2
+        self.pixel_scale_init = 206265*self.telescope.src.wavelength/self.d_subap / self.zero_padding
+        if padding_extension_factor is not None:
+            raise DeprecationWarning('The use of the the padding_extension_factor parameter is deprecated. ' +
+                                     'The pixel scale and FoV of the subaperture can be set using the pixel_scale and the n_pixel_per_subaperture parameters.')
+        if pixel_scale is None:
+            print('No user-input pixel scale - using shannon_sampling input value:'+str((1+self.shannon_sampling))+' pixel(s) per spot FWHM')
+            self.pixel_scale = self.pixel_scale_init*(2-self.shannon_sampling)
+            self.binning_pixel_scale = int(2-self.shannon_sampling)
         else:
-            self.n_pix_subap = self.telescope.resolution // self.nSubap
-            self.is_extended = False
+            print('User input pixel scale - The shannon_sampling input value is ignored')
+            # find the closest value of pixel-scale possible considering the sampling of the telescope
+            binning_pixel_scale = [np.floor(pixel_scale/self.pixel_scale_init), np.ceil(pixel_scale/self.pixel_scale_init)]
+            ind_ = (np.argmin([np.abs(binning_pixel_scale[0]*self.pixel_scale_init - pixel_scale), np.abs(binning_pixel_scale[1]*self.pixel_scale_init-pixel_scale)]))
+            binning_pixel_scale = binning_pixel_scale[ind_]
+            self.pixel_scale = self.pixel_scale_init*binning_pixel_scale
+            self.binning_pixel_scale = int(binning_pixel_scale)
+            print('The effective pixel-scale is: '+str(self.pixel_scale)+' arcsec')
 
-        # different resolutions needed
+        # different resolutions needed:
+        # 1) The number of pixel per subaperture
         self.n_pix_subap_init = self.telescope.resolution // self.nSubap
+        if n_pixel_per_subaperture is None:
+            self.n_pix_subap = self.n_pix_subap_init
+        else:
+            self.n_pix_subap = n_pixel_per_subaperture
+            if n_pixel_per_subaperture > self.n_pix_subap_init:
+                warning('The requested number of pixel per subaperture is too large!\n' +
+                        'The SH spots will be zero-padded to provide the desired number but will not contain any signal.\n' +
+                        'The FoV is limited to +/- '+str(self.n_pix_subap_init*self.pixel_scale_init/2)+' arcsec. Any signal further will be wrapping.\n' +
+                        'To avoid this effect, use a larger resolution for the telescope to increase the technical FoV.')
+                
+
+        # 2) The number of pixel required to extend the subaperture to fit the full LGS spots
         self.extra_pixel = (self.n_pix_subap-self.n_pix_subap_init)//2
+        # 3) The number of pixel per subaperture for the initial optical propagation
         self.n_pix_lenslet_init = self.n_pix_subap_init*self.zero_padding
+        # 4) The number of pixel per subaperture associated to the extended fov
         self.n_pix_lenslet = self.n_pix_subap*self.zero_padding
+        # associated centers for each case
         self.center = self.n_pix_lenslet//2
         self.center_init = self.n_pix_lenslet_init//2
-        self.lenslet_frame = np.zeros(
-            [self.n_pix_subap*self.zero_padding, self.n_pix_subap*self.zero_padding], dtype=complex)
         self.outerMask = np.ones(
             [self.n_pix_subap_init*self.zero_padding, self.n_pix_subap_init*self.zero_padding])
         self.outerMask[1:-1, 1:-1] = 0
@@ -183,19 +217,13 @@ class ShackHartmann:
         self.random_state_background = np.random.RandomState(
             seed=int(time.time()))      # random states to reproduce sequences of noise
 
-        # field of views
-        self.fov_lenslet_arcsec = (self.n_pix_subap*206265*self.binning_factor/self.padding_extension_factor *
-                                   self.telescope.src.wavelength/(self.telescope.D/self.nSubap))/(1+self.shannon_sampling)
-        self.fov_pixel_arcsec = self.fov_lenslet_arcsec / self.n_pix_subap
-        self.fov_pixel_binned_arcsec = self.fov_lenslet_arcsec / self.n_pix_subap_init
-
-        X_map, Y_map = np.meshgrid(np.arange(
-            self.n_pix_subap//self.binning_factor), np.arange(self.n_pix_subap//self.binning_factor))
+        X_map, Y_map = np.meshgrid(np.arange(self.n_pix_subap//self.binning_factor), np.arange(self.n_pix_subap//self.binning_factor))
         self.X_coord_map = np.atleast_3d(X_map).T
         self.Y_coord_map = np.atleast_3d(Y_map).T
 
         if telescope.src.type == 'LGS':
             self.is_LGS = True
+            self.convolution_tag = 'FFT'
         else:
             self.is_LGS = False
 
@@ -206,11 +234,10 @@ class ShackHartmann:
         # camera frame
         self.raw_data = np.zeros([self.n_pix_subap*(self.nSubap)//self.binning_factor,
                                  self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype=float)
-        # cube of lenslet zero padded
-        self.cube = np.zeros(
-            [self.nSubap**2, self.n_pix_lenslet_init, self.n_pix_lenslet_init])
-        self.cube_flux = np.zeros(
-            [self.nSubap**2, self.n_pix_subap_init, self.n_pix_subap_init], dtype=(complex))
+
+        self.cube_flux = np.zeros([self.nSubap**2,
+                                   self.n_pix_subap_init,
+                                   self.n_pix_subap_init], dtype=(float))
         self.index_x = []
         self.index_y = []
 
@@ -295,10 +322,11 @@ class ShackHartmann:
         print('Setting slopes units..')
 
         # normalize to pi p2v
-
-        [Tilt, Tip] = np.meshgrid(np.linspace(0, np.pi, self.telescope.resolution, endpoint=False), np.linspace(
-            0, np.pi, self.telescope.resolution, endpoint=False))
-
+        [Tilt, Tip] = np.meshgrid(np.linspace(-np.pi, np.pi, self.telescope.resolution, endpoint=False),
+                                  np.linspace(-np.pi, np.pi, self.telescope.resolution, endpoint=False))
+        # make sur it is zero-mean
+        Tip -= np.mean(Tip)
+        Tilt -= np.mean(Tilt)
         if self.unit_P2V is False:
             # normalize to 1 m RMS in the pupil
             Tilt *= 1/np.std(Tilt[self.telescope.pupil])
@@ -329,7 +357,7 @@ class ShackHartmann:
     def centroid(self, image, threshold=0.01):
 
         if np.ndim(image) <= 2:
-            im = np.reshape(image.copy(),(1, np.shape(image)[0], np.shape(image)[1]))
+            im = np.reshape(image.copy(), (1, np.shape(image)[0], np.shape(image)[1]))
         else:
             im = np.atleast_3d(image.copy())
 
@@ -352,12 +380,14 @@ class ShackHartmann:
             if input_flux_map is None:
                 input_flux_map = self.telescope.src.fluxMap.T
             tmp_flux_h_split = np.hsplit(input_flux_map, self.nSubap)
-            self.cube_flux = np.zeros(
-                [self.nSubap**2, self.n_pix_lenslet_init, self.n_pix_lenslet_init], dtype=float)
+            self.cube_flux = np.zeros([self.nSubap**2,
+                                       self.n_pix_lenslet_init,
+                                       self.n_pix_lenslet_init], dtype=float)
             for i in range(self.nSubap):
                 tmp_flux_v_split = np.vsplit(tmp_flux_h_split[i], self.nSubap)
-                self.cube_flux[i*self.nSubap:(i+1)*self.nSubap, self.center_init - self.n_pix_subap_init//2:self.center_init+self.n_pix_subap_init //
-                               2, self.center_init - self.n_pix_subap_init//2:self.center_init+self.n_pix_subap_init//2] = np.asarray(tmp_flux_v_split)
+                self.cube_flux[i*self.nSubap:(i+1)*self.nSubap,
+                               self.center_init - self.n_pix_subap_init//2:self.center_init+self.n_pix_subap_init // 2,
+                               self.center_init - self.n_pix_subap_init//2:self.center_init+self.n_pix_subap_init//2] = np.asarray(tmp_flux_v_split)
             self.photon_per_subaperture = np.apply_over_axes(
                 np.sum, self.cube_flux, [1, 2])
             self.current_nPhoton = self.telescope.src.nPhoton
@@ -365,11 +395,13 @@ class ShackHartmann:
 
     def get_lenslet_em_field(self, phase):
         tmp_phase_h_split = np.hsplit(phase.T, self.nSubap)
-        self.cube_em = np.zeros(
-            [self.nSubap**2, self.n_pix_lenslet_init, self.n_pix_lenslet_init], dtype=complex)
+        self.cube_em = np.zeros([self.nSubap**2,
+                                 self.n_pix_lenslet_init,
+                                 self.n_pix_lenslet_init], dtype=complex)
         for i in range(self.nSubap):
             tmp_phase_v_split = np.vsplit(tmp_phase_h_split[i], self.nSubap)
-            self.cube_em[i*self.nSubap:(i+1)*self.nSubap, self.center_init - self.n_pix_subap_init//2:self.center_init+self.n_pix_subap_init//2,
+            self.cube_em[i*self.nSubap:(i+1)*self.nSubap,
+                         self.center_init - self.n_pix_subap_init//2:self.center_init+self.n_pix_subap_init//2,
                          self.center_init - self.n_pix_subap_init//2:self.center_init+self.n_pix_subap_init//2] = np.exp(1j*np.asarray(tmp_phase_v_split))
         self.cube_em *= np.sqrt(self.cube_flux)*self.phasor_tiled
         return self.cube_em
@@ -379,8 +411,9 @@ class ShackHartmann:
             self.raw_data[ind_x*self.n_pix_subap//self.binning_factor:(ind_x+1)*self.n_pix_subap//self.binning_factor,
                           ind_y*self.n_pix_subap//self.binning_factor:(ind_y+1)*self.n_pix_subap//self.binning_factor] = intensity
         else:
-            self.raw_data[index_frame, ind_x*self.n_pix_subap//self.binning_factor:(
-                ind_x+1)*self.n_pix_subap//self.binning_factor, ind_y*self.n_pix_subap//self.binning_factor:(ind_y+1)*self.n_pix_subap//self.binning_factor] = intensity
+            self.raw_data[index_frame,
+                          ind_x*self.n_pix_subap//self.binning_factor:(ind_x+1)*self.n_pix_subap//self.binning_factor,
+                          ind_y*self.n_pix_subap//self.binning_factor:(ind_y+1)*self.n_pix_subap//self.binning_factor] = intensity
 
     def split_raw_data(self):
         raw_data_h_split = np.vsplit((self.cam.frame), self.nSubap)
@@ -423,111 +456,111 @@ class ShackHartmann:
     def lenslet_propagation_geometric(self, arr):
 
         [SLx, SLy] = self.gradient_2D(arr)
-
         sy = (bin_ndarray(SLx, [self.nSubap, self.nSubap], operation='sum'))
         sx = (bin_ndarray(SLy, [self.nSubap, self.nSubap], operation='sum'))
 
         return np.concatenate((sx, sy))
 
+    def convolve_direct(self, A_in, B_in):
+        return sp.signal.convolve(A_in, B_in, mode='same', method='direct')
+
     def get_convolution_spot(self):
         # compute the projection of the LGS on the subaperture to simulate
         #  the spots elongation using a convulotion with gaussian spot
         # coordinates of the LLT in [m] from the center (sign convention adjusted to match display position on camera)
-        [X0, Y0] = [self.telescope.src.laser_coordinates[1], -
-                    self.telescope.src.laser_coordinates[0]]
+        [X0, Y0] = [self.telescope.src.laser_coordinates[1], -self.telescope.src.laser_coordinates[0]]
 
         # 3D coordinates
-        coordinates_3D = np.zeros(
-            [3, len(self.telescope.src.Na_profile[0, :])])
-        coordinates_3D_ref = np.zeros(
-            [3, len(self.telescope.src.Na_profile[0, :])])
+        coordinates_3D = np.zeros([3, len(self.telescope.src.Na_profile[0, :])])
+        coordinates_3D_ref = np.zeros([3, len(self.telescope.src.Na_profile[0, :])])
+
+        # variable to store the shift due to the elongation
         delta_dx = np.zeros([2, len(self.telescope.src.Na_profile[0, :])])
         delta_dy = np.zeros([2, len(self.telescope.src.Na_profile[0, :])])
 
         # coordinates of the subapertures
-
-        x_subap = np.linspace(-self.telescope.D//2,
-                              self.telescope.D//2, self.nSubap)
-        y_subap = np.linspace(-self.telescope.D//2,
-                              self.telescope.D//2, self.nSubap)
-        # pre-allocate memory for shift x and y to apply to the gaussian spot
-
+        x_subap = np.linspace(-self.telescope.D//2, self.telescope.D//2, self.nSubap)
+        y_subap = np.linspace(-self.telescope.D//2, self.telescope.D//2, self.nSubap)
+        # grid of coordinates
+        [X, Y] = np.meshgrid(x_subap, y_subap)
         # number of pixel
         n_pix = self.n_pix_lenslet
         # size of a pixel in m
         d_pix = (self.telescope.D/self.nSubap)/self.n_pix_lenslet_init
+        # cartesian grid on whoch to compute the 2D spots
         v = np.linspace(-n_pix*d_pix/2, n_pix*d_pix/2, n_pix)
         [alpha_x, alpha_y] = np.meshgrid(v, v)
-
+        pixel_scale_arcsec = 206265*(self.telescope.src.wavelength/(self.telescope.D/self.nSubap))/(1+self.shannon_sampling)
         # FWHM of gaussian converted into pixel in arcsec
-        sigma_spot = self.telescope.src.FWHM_spot_up/(2*np.sqrt(np.log(2)))
+        sigma_spot = self.telescope.src.FWHM_spot_up/pixel_scale_arcsec
+
         for i in range(len(self.telescope.src.Na_profile[0, :])):
-            coordinates_3D[:2, i] = (
-                self.telescope.D/4)*([X0, Y0]/self.telescope.src.Na_profile[0, i])
-            coordinates_3D[2, i] = self.telescope.D**2. / \
-                (8.*self.telescope.src.Na_profile[0, i])/(2.*np.sqrt(3.))
-            coordinates_3D_ref[:, i] = coordinates_3D[:, i] - \
-                coordinates_3D[:, len(self.telescope.src.Na_profile[0, :])//2]
-        C_elung = []
-        C_gauss = []
+            coordinates_3D[:2, i] = (self.telescope.D/4)*([X0, Y0]/self.telescope.src.Na_profile[0, i])
+            coordinates_3D[2, i] = self.telescope.D**2. / (8.*self.telescope.src.Na_profile[0, i])/(2.*np.sqrt(3.))
+            coordinates_3D_ref[:, i] = coordinates_3D[:, i] - coordinates_3D[:, len(self.telescope.src.Na_profile[0, :])//2]
+        distance_to_llt = np.sqrt((X-X0)**2 + (Y-Y0)**2)
+        tmp = (np.where(distance_to_llt == np.max(distance_to_llt)))
+        if len(tmp) > 1:
+            tmp = tmp[0]
+        x_max = x_subap[tmp[0]]
+        y_max = y_subap[tmp[1]]
+        shift_X = np.zeros(len(self.telescope.src.Na_profile[0, :]))
+        shift_Y = np.zeros(len(self.telescope.src.Na_profile[0, :]))
+        for i in range(len(self.telescope.src.Na_profile[0, :])):
+            coordinates_3D[:2, i] = (self.telescope.D/4) * ([X0, Y0]/self.telescope.src.Na_profile[0, i])
+            coordinates_3D[2, i] = self.telescope.D**2. / (8. * self.telescope.src.Na_profile[0, i])/(2.*np.sqrt(3.))
+            coordinates_3D_ref[:, i] = coordinates_3D[:, i] - coordinates_3D[:, len(self.telescope.src.Na_profile[0, :])//2]
+            # shift in the focal planee (in rad) associated to the LGS
+            delta_dx[0, i] = coordinates_3D_ref[0, i] * (4/self.telescope.D)
+            delta_dy[0, i] = coordinates_3D_ref[1, i] * (4/self.telescope.D)
+            delta_dx[1, i] = coordinates_3D_ref[2, i] * (np.sqrt(3)*(4/self.telescope.D)**2) * x_max
+            delta_dy[1, i] = coordinates_3D_ref[2, i] * (np.sqrt(3)*(4/self.telescope.D)**2) * y_max
+            # resulting shift + conversion from radians to arcsec
+            shift_X[i] = 206265*(delta_dx[0, i] + delta_dx[1, i])/pixel_scale_arcsec
+            shift_Y[i] = 206265*(delta_dy[0, i] + delta_dy[1, i])/pixel_scale_arcsec
+
+        # maximum elongation in number of pixel
+        r_max = np.sqrt((shift_X[0]-shift_X[-1])**2+(shift_Y[0]-shift_Y[-1])**2)
+        # ensure to have an even number after binning
+        n_even = int(np.ceil(1*r_max/self.n_pix_subap_init)*self.n_pix_subap_init)
+        n_even = int(np.ceil(n_even/self.binning_pixel_scale)*self.binning_pixel_scale)
+        if n_even % 2 != 0:
+            n_even += self.binning_pixel_scale
+        # consider the maximum number of pixel between the required pixel scale and the LGS elongation
+        n_pix = np.max([n_even, self.n_pix_subap*self.binning_pixel_scale])
+
+        spot_kernel_elongation_fft = []
         shift_x_buffer = []
         shift_y_buffer = []
-
-        C_gauss = []
-        criterion_elungation = self.n_pix_lenslet * \
-            (self.telescope.D/self.nSubap)/self.n_pix_lenslet_init
-
-        valid_subap_1D = np.copy(self.valid_subapertures_1D[:])
+        spot_kernel_elongation = []
         count = -1
-        # gaussian spot (for calibration)
-        intensity_gauss = (self.telescope.src.Na_profile[1, :][0]/(self.telescope.src.Na_profile[0, :][0]**2)) * np.exp(- ((alpha_x)**2 + (alpha_y)**2)/(2*sigma_spot**2))
+        # gaussian spot
+        intensity_gauss = gaussian_2D(resolution=n_pix, fwhm=sigma_spot)
         intensity_gauss /= intensity_gauss.sum()
-
+        self.intensity_gauss = intensity_gauss
         for i_subap in range(len(x_subap)):
             for j_subap in range(len(y_subap)):
                 count += 1
-                if valid_subap_1D[count]:
-                    intensity = np.zeros([n_pix, n_pix], dtype=(complex))
+                if self.valid_subapertures_1D[count]:
+                    intensity = np.zeros([n_pix, n_pix], dtype=(float))
                     # intensity_gauss = np.zeros([n_pix,n_pix],dtype=(complex))
-                    shift_X = np.zeros(
-                        len(self.telescope.src.Na_profile[0, :]))
-                    shift_Y = np.zeros(
-                        len(self.telescope.src.Na_profile[0, :]))
+                    shift_X = np.zeros(len(self.telescope.src.Na_profile[0, :]))
+                    shift_Y = np.zeros(len(self.telescope.src.Na_profile[0, :]))
                     for i in range(len(self.telescope.src.Na_profile[0, :])):
-                        coordinates_3D[:2, i] = (
-                            self.telescope.D/4)*([X0, Y0]/self.telescope.src.Na_profile[0, i])
-                        coordinates_3D[2, i] = self.telescope.D**2. / \
-                            (8. *
-                             self.telescope.src.Na_profile[0, i])/(2.*np.sqrt(3.))
-
-                        coordinates_3D_ref[:, i] = coordinates_3D[:, i] - \
-                            coordinates_3D[:, len(
-                                self.telescope.src.Na_profile[0, :])//2]
-
-                        delta_dx[0, i] = coordinates_3D_ref[0, i] * \
-                            (4/self.telescope.D)
-                        delta_dy[0, i] = coordinates_3D_ref[1, i] * \
-                            (4/self.telescope.D)
-
-                        delta_dx[1, i] = coordinates_3D_ref[2, i] * \
-                            (np.sqrt(3)*(4/self.telescope.D)**2) * \
-                            x_subap[i_subap]
-                        delta_dy[1, i] = coordinates_3D_ref[2, i] * \
-                            (np.sqrt(3)*(4/self.telescope.D)**2) * \
-                            y_subap[j_subap]
-
-                        # resulting shift + conversion from radians to pixels in m
-                        shift_X[i] = 206265*self.fov_pixel_arcsec * \
-                            (delta_dx[0, i] + delta_dx[1, i])
-                        shift_Y[i] = 206265*self.fov_pixel_arcsec * \
-                            (delta_dy[0, i] + delta_dy[1, i])
-
-                        intensity_tmp = (self.telescope.src.Na_profile[1, :][i]/(self.telescope.src.Na_profile[0, :][i]**2))*np.exp(- (
-                            (alpha_x-shift_X[i])**2 + (alpha_y-shift_Y[i])**2)/(2*sigma_spot**2))
-
-                        intensity += intensity_tmp
-
-                    # truncation of the wings of the gaussian
+                        coordinates_3D[:2, i] = (self.telescope.D/4) * ([X0, Y0]/self.telescope.src.Na_profile[0, i])
+                        coordinates_3D[2, i] = self.telescope.D**2. / (8. * self.telescope.src.Na_profile[0, i])/(2.*np.sqrt(3.))
+                        coordinates_3D_ref[:, i] = coordinates_3D[:, i] - coordinates_3D[:, len(self.telescope.src.Na_profile[0, :])//2]
+                        # shift in the focal planee (in rad) associated to the LGS
+                        delta_dx[0, i] = coordinates_3D_ref[0, i] * (4/self.telescope.D)
+                        delta_dy[0, i] = coordinates_3D_ref[1, i] * (4/self.telescope.D)
+                        delta_dx[1, i] = coordinates_3D_ref[2, i] * (np.sqrt(3)*(4/self.telescope.D)**2) * x_subap[i_subap]
+                        delta_dy[1, i] = coordinates_3D_ref[2, i] * (np.sqrt(3)*(4/self.telescope.D)**2) * y_subap[j_subap]
+                        # resulting shift + conversion from radians to arcsec
+                        shift_X[i] = 206265*(delta_dx[0, i] + delta_dx[1, i])/pixel_scale_arcsec
+                        shift_Y[i] = 206265*(delta_dy[0, i] + delta_dy[1, i])/pixel_scale_arcsec
+                        # sum the 2D spots
+                        intensity += self.telescope.src.Na_profile[1, :][i] * gaussian_2D(resolution=n_pix, fwhm=sigma_spot, position=[shift_X[i], shift_Y[i]])
+                    # truncation of the wings of the gaussian to speed up the convolution
                     intensity[intensity < self.threshold_convolution*intensity.max()] = 0
                     # normalization to conserve energy
                     intensity /= intensity.sum()
@@ -535,35 +568,16 @@ class ShackHartmann:
                     shift_x_buffer.append(shift_X)
                     shift_y_buffer.append(shift_Y)
 
-                    C_elung.append((np.fft.fft2(intensity.T)))
-                    C_gauss.append((np.fft.fft2(intensity_gauss.T)))
+                    spot_kernel_elongation_fft.append((np.fft.fft2(intensity.T)))
+                    # C_gauss.append((np.fft.fft2(intensity_gauss.T)))
+                    spot_kernel_elongation.append(intensity.T)
 
+        # self.intensity_gauss = intensity_gauss
         self.shift_x_buffer = np.asarray(shift_x_buffer)
         self.shift_y_buffer = np.asarray(shift_y_buffer)
 
-        self.shift_x_max_arcsec = np.max(shift_x_buffer, axis=1)
-        self.shift_y_max_arcsec = np.max(shift_y_buffer, axis=1)
-
-        self.shift_x_min_arcsec = np.min(shift_x_buffer, axis=1)
-        self.shift_y_min_arcsec = np.min(shift_y_buffer, axis=1)
-
-        self.max_elung_x = np.max(
-            self.shift_x_max_arcsec-self.shift_x_min_arcsec)
-        self.max_elung_y = np.max(
-            self.shift_y_max_arcsec-self.shift_y_min_arcsec)
-        self.elungation_factor = np.max(
-            [self.max_elung_x, self.max_elung_y])/criterion_elungation
-
-        if self.max_elung_x > criterion_elungation or self.max_elung_y > criterion_elungation:
-            print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  WARNING  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-            print('Warning: The largest spot elongation is '+str(np.round(self.elungation_factor, 3)) +
-                  ' times larger than a subaperture! Consider using a higher resolution or increasing the padding_extension_factor parameter')
-            print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-
-        self.C = np.asarray(C_elung.copy())
-        self.C_gauss = np.asarray(C_gauss)
-        self.C_elung = np.asarray(C_elung)
-
+        self.spot_kernel_elongation_fft = np.asarray(spot_kernel_elongation_fft)
+        self.spot_kernel_elongation = np.asarray(spot_kernel_elongation)
         return
 
     def sh_measure(self, phase_in):
@@ -585,12 +599,12 @@ class ShackHartmann:
         val_nan = np.where(np.isnan(self.centroid_lenslets))
 
         if np.shape(val_inf)[1] != 0:
-            print('Warning! some subapertures are giving inf values!')
+            warning('Some subapertures are giving inf values!')
             self.centroid_lenslets[np.where(
                 np.isinf(self.centroid_lenslets))] = 0
 
         if np.shape(val_nan)[1] != 0:
-            print('Warning! some subapertures are giving nan values!')
+            warning('Some subapertures are giving nan values!')
             self.centroid_lenslets[np.where(
                 np.isnan(self.centroid_lenslets))] = 0
 
@@ -624,56 +638,102 @@ class ShackHartmann:
                 self.raw_data = np.zeros([self.n_pix_subap*(self.nSubap)//self.binning_factor,
                                          self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype=float)
 
-                # normalization for FFT
-                norma = self.cube.shape[1]
+                # normalization for the FFT
+                norma = self.cube_flux.shape[1]
 
                 # compute spot intensity
                 if self.telescope.spatialFilter is None:
                     phase = self.telescope.src.phase
                     self.initialize_flux()
-
                 else:
                     phase = self.telescope.phase_filtered
-                    self.initialize_flux(
-                        ((self.telescope.amplitude_filtered)**2).T*self.telescope.src.fluxMap.T)
-                intensity = (np.abs(np.fft.fft2(np.asarray(
-                    self.get_lenslet_em_field(phase)), axes=[1, 2])/norma)**2)
+                    self.initialize_flux(((self.telescope.amplitude_filtered)**2).T*self.telescope.src.fluxMap.T)
+                intensity = (np.abs(np.fft.fft2(np.asarray(self.get_lenslet_em_field(phase)), axes=[1, 2])/norma)**2)
                 # reduce to valid subaperture
                 intensity = intensity[self.valid_subapertures_1D, :, :]
 
                 self.sum_intensity = np.sum(intensity, axis=0)
-                self.edge_subaperture_criterion = np.sum(
-                    intensity*self.outerMask)/np.sum(intensity)
+                self.edge_subaperture_criterion = np.sum(intensity*self.outerMask)/np.sum(intensity)
                 if self.edge_subaperture_criterion > 0.05:
-                    print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-                    print('WARNING !!!! THE LIGHT IN THE SUBAPERTURE IS MAYBE WRAPPING !!!'+str(np.round(100*self.edge_subaperture_criterion, 1)) +
-                          ' % of the total flux detected on the edges of the subapertures. You may want to lower the seeing value or increase the resolution')
-                    print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                    warning('The light in the subaperture is probably wrapping!\n'+str(np.round(100*self.edge_subaperture_criterion, 1)) +
+                            ' % of the total flux detected on the edges of the subapertures.\n' +
+                            'You may want to lower the seeing value or increase the number of pixel per subaperture')
 
-                # if FoV is extended, zero pad the spot intensity
-                if self.is_extended:
-                    intensity = np.pad(intensity, [[0, 0], [self.extra_pixel, self.extra_pixel], [
-                               self.extra_pixel, self.extra_pixel]])
-
-                # in case of LGS sensor, convolve with LGS spots to create spot elungation
+                # in case of LGS sensor, convolve with LGS spots kernel to create spot elungation
                 if self.is_LGS:
-                    intensity = np.fft.fftshift(
-                        np.abs((np.fft.ifft2(np.fft.fft2(intensity)*self.C))), axes=[1, 2])
+                    if self.convolution_tag == 'FFT':
+                        # zero pad the spot intensity to match LGS spot size for the FFT product
+                        self.extra_pixel = (self.spot_kernel_elongation_fft.shape[1] - intensity.shape[1])//2
+                        intensity = np.pad(intensity,
+                                           [[0, 0],
+                                            [self.extra_pixel, self.extra_pixel],
+                                            [self.extra_pixel, self.extra_pixel]])
+                        print(intensity.shape)
+                        # compute convolution using the FFT
+                        intensity = np.fft.fftshift(np.abs((np.fft.ifft2(np.fft.fft2(intensity)*self.spot_kernel_elongation_fft))), axes=[1, 2])
+                        # bin the resulting image to the right pixel scale
+                        self.maps_intensity = bin_ndarray(intensity,
+                                                          [intensity.shape[0],
+                                                           intensity.shape[1]//self.binning_pixel_scale,
+                                                           intensity.shape[1]//self.binning_pixel_scale],
+                                                          operation='sum')
+                        # crop the resulting spots to the right number of pixels
+                        n_crop = (self.maps_intensity.shape[1] - self.n_pix_subap)//2
+                        if n_crop > 0:
+                            self.maps_intensity = self.maps_intensity[:, n_crop:-n_crop, n_crop:-n_crop]
+                    elif self.convolution_tag == 'direct':
+                        n_crop = intensity.shape[1]//4
+                        intensity = intensity[:, n_crop:-n_crop, n_crop:-n_crop]
+                        # parallelization of the direct convolution using joblib
 
-                # Crop to get the spot at shannon sampling
-                if self.shannon_sampling:
-                    self.maps_intensity = intensity[:, self.n_pix_subap//2:-self.n_pix_subap//2, self.n_pix_subap//2:-self.n_pix_subap//2]
-
-                if self.binning_factor > 1:
-                    self.maps_intensity = bin_ndarray(self.maps_intensity, [
-                                                      self.maps_intensity.shape[0], self.n_pix_subap//self.binning_factor, self.n_pix_subap//self.binning_factor], operation='sum')
+                        def joblib_convolve_direct():
+                            Q = Parallel(n_jobs=12, prefer='threads')(delayed(self.convolve_direct)(i, j) for i, j in zip(self.spot_kernel_elongation, intensity))
+                            return Q
+                        intensity = np.asarray(joblib_convolve_direct())
+                        # # bin the resulting image
+                        self.maps_intensity = bin_ndarray(intensity,
+                                                          [intensity.shape[0],
+                                                           intensity.shape[1] // self.binning_pixel_scale,
+                                                           intensity.shape[1] // self.binning_pixel_scale],
+                                                          operation='sum')
+                        # crop the resulting spots
+                        n_crop = (self.maps_intensity.shape[1] - self.n_pix_subap)//2
+                        if n_crop > 0:
+                            self.maps_intensity = self.maps_intensity[:, n_crop:-n_crop, n_crop:-n_crop]
                 else:
-                    self.maps_intensity = bin_ndarray(
-                        intensity, [intensity.shape[0], self.n_pix_subap//self.binning_factor, self.n_pix_subap//self.binning_factor], operation='sum')
-                # bin the 2D spots intensity to get the desired number of pixel per subaperture
+                    # set the sampling of the spots
+                    if self.pixel_scale == self.pixel_scale_init:
+                        self.maps_intensity = intensity
+                    elif self.pixel_scale < self.pixel_scale_init:
+                        raise ValueError('The smallest pixel scale value is ' + str(self.pixel_scale_init) + ' "')
+                    else:
+                        # pad the intensity to provide the right number of pixel before binning
+                        self.extra_pixel = (self.binning_pixel_scale*self.n_pix_subap_init - intensity.shape[1])//2
+                        intensity = np.pad(intensity,
+                                           [[0, 0],
+                                            [self.extra_pixel, self.extra_pixel],
+                                            [self.extra_pixel, self.extra_pixel]])
+                        # bin the spots to get the requested pixel scale
+                        self.maps_intensity = bin_ndarray(intensity, [
+                                                          intensity.shape[0],
+                                                          self.n_pix_subap_init,
+                                                          self.n_pix_subap_init], operation='sum')
+                # crop to the right number of pixel
+                n_crop = (self.maps_intensity.shape[1] - self.n_pix_subap)//2
+                if n_crop > 0:
+                    self.maps_intensity = self.maps_intensity[:, n_crop:-n_crop, n_crop:-n_crop]
+                elif n_crop < 0:
+                    self.maps_intensity = np.pad(self.maps_intensity, [[0, 0],
+                                                                       [-n_crop, -n_crop],
+                                                                       [-n_crop, -n_crop]])
                 if self.binning_factor > 1:
                     self.maps_intensity = bin_ndarray(self.maps_intensity, [
-                                                      self.maps_intensity.shape[0], self.n_pix_subap//self.binning_factor, self.n_pix_subap//self.binning_factor], operation='sum')
+                                                      self.maps_intensity.shape[0],
+                                                      self.n_pix_subap//self.binning_factor,
+                                                      self.n_pix_subap//self.binning_factor], operation='sum')
+                else:
+                    if self.binning_factor != 1:
+                        raise ValueError('The binning factor must be a scalar >= 1')
 
                 # fill camera frame with computed intensity (only valid subapertures)
                 def joblib_fill_raw_data():
@@ -687,7 +747,6 @@ class ShackHartmann:
 
             else:
                 # -- case with multiple wave-fronts to sense--
-
                 # set phase buffer
                 self.phase_buffer = np.moveaxis(
                     self.telescope.src.phase, -1, 0)
@@ -699,7 +758,7 @@ class ShackHartmann:
                 # tile the valid LGS convolution spot to match the number of input phase
                 if self.is_LGS:
                     self.lgs_exp = np.tile(
-                        self.C, [self.phase_buffer.shape[0], 1, 1])
+                        self.spot_kernel_elongation_fft, [self.phase_buffer.shape[0], 1, 1])
 
                 # reset camera frame
                 self.raw_data = np.zeros([self.phase_buffer.shape[0], self.n_pix_subap*(
@@ -721,10 +780,10 @@ class ShackHartmann:
                 # get the spots intensity
                 intensity = np.abs(np.fft.fft2(emf_buffer)/norma)**2
 
-                # if FoV is extended, zero pad the spot intensity
-                if self.is_extended:
-                    intensity = np.pad(intensity, [[0, 0], [self.extra_pixel, self.extra_pixel], [
-                               self.extra_pixel, self.extra_pixel]])
+                # # if FoV is extended, zero pad the spot intensity
+                # if self.is_extended:
+                #     intensity = np.pad(intensity, [[0, 0], [self.extra_pixel, self.extra_pixel], [
+                #                self.extra_pixel, self.extra_pixel]])
 
                 # if lgs convolve with gaussian
                 if self.is_LGS:
@@ -801,21 +860,21 @@ class ShackHartmann:
         print('{: ^20s}'.format('Subaperture Size') + '{: ^18s}'.format(
             str(np.round(self.telescope.D/self.nSubap, 2))) + '{: ^18s}'.format('[m]'))
         print('{: ^20s}'.format('Pixel FoV') + '{: ^18s}'.format(
-            str(np.round(self.fov_pixel_binned_arcsec, 2))) + '{: ^18s}'.format('[arcsec]'))
+            str(np.round(self.pixel_scale, 2))) + '{: ^18s}'.format('[arcsec]'))
         print('{: ^20s}'.format('Subapertue FoV') + '{: ^18s}'.format(
-            str(np.round(self.fov_lenslet_arcsec, 2))) + '{: ^18s}'.format('[arcsec]'))
+            str(np.round(self.pixel_scale*self.n_pix_subap, 2))) + '{: ^18s}'.format('[arcsec]'))
         print('{: ^20s}'.format('Valid Subaperture') +
               '{: ^18s}'.format(str(str(self.nValidSubaperture))))
         print('{: ^20s}'.format('Binning Factor') +
               '{: ^18s}'.format(str(str(self.binning_factor))))
 
-        if self.is_LGS:
-            print('{: ^20s}'.format('Spot Elungation') + '{: ^18s}'.format(str(100 *
-                  np.round(self.elungation_factor, 3))) + '{: ^18s}'.format('% of a subap'))
+        # if self.is_LGS:
+        #     print('{: ^20s}'.format('Spot Elungation') + '{: ^18s}'.format(str(100 *
+        #           np.round(self.elongation_factor, 3))) + '{: ^18s}'.format('% of a subap'))
         print('{: ^20s}'.format('Geometric WFS') +
               '{: ^18s}'.format(str(self.is_geometric)))
-        print('{: ^20s}'.format('Shannon Sampling') +
-              '{: ^18s}'.format(str(self.shannon_sampling)))
+        print('{: ^20s}'.format('Spot Sampling') +
+              '{: ^18s}'.format(str(2*self.pixel_scale_init/self.pixel_scale)) + '{: ^18s}'.format('[pix/FWHM]'))
 
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         if self.is_geometric:
@@ -829,18 +888,6 @@ class ShackHartmann:
     @is_geometric.setter
     def is_geometric(self, val):
         self._is_geometric = val
-        if hasattr(self, 'isInitialized'):
-            if self.isInitialized:
-                print('Re-initializing WFS...')
-                self.initialize_wfs()
-
-    @property
-    def C(self):
-        return self._C
-
-    @C.setter
-    def C(self, val):
-        self._C = val
         if hasattr(self, 'isInitialized'):
             if self.isInitialized:
                 print('Re-initializing WFS...')
@@ -863,12 +910,10 @@ class ShackHartmann:
                 self.valid_subapertures_1D = np.reshape(
                     self.valid_subapertures, [self.nSubap**2])
 
-                [self.validLenslets_x, self.validLenslets_y] = np.where(
-                    self.photon_per_subaperture_2D >= self.lightRatio*np.max(self.photon_per_subaperture))
+                [self.validLenslets_x, self.validLenslets_y] = np.where(self.photon_per_subaperture_2D >= self.lightRatio*np.max(self.photon_per_subaperture))
 
                 # index of valid slopes X and Y
-                self.valid_slopes_maps = np.concatenate(
-                    (self.valid_subapertures, self.valid_subapertures))
+                self.valid_slopes_maps = np.concatenate((self.valid_subapertures, self.valid_subapertures))
 
                 # number of valid lenslet
                 self.nValidSubaperture = int(np.sum(self.valid_subapertures))
@@ -883,12 +928,10 @@ class ShackHartmann:
         if obj.tag == 'detector':
             obj._integrated_time += self.telescope.samplingTime
             obj.integrate(self.raw_data)
-            # self.raw_data = obj.frame
         else:
-            print('Error light propagated to the wrong type of object')
+            raise AttributeError('The light is propagated to the wrong type of object')
         return -1
 
     def __repr__(self):
         self.print_properties()
         return ' '
-
