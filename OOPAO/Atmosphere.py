@@ -151,11 +151,7 @@ class Atmosphere:
         self.tag = 'atmosphere'      # Tag of the object
         self.nExtra = 2                 # number of extra pixel to generate the phase screens
         self.telescope = telescope         # associated telescope object
-        sum = 0
-        for i in range(self.nLayer):
-            temp = self.cn2 * self.fractionalR0[i] * self.windSpeed[i] ** (5/3)
-            sum = sum + temp
-        self.V0 = (sum/self.cn2)**(3/5) # computation of equivalent wind speed, Roddier 1982
+        self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5) # computation of equivalent wind speed, Roddier 1982
         self.tau0 = 0.31 * self.r0 / self.V0 # Coherence time of atmosphere, Roddier 1981
         
         # default value to update phase screens at each iteration
