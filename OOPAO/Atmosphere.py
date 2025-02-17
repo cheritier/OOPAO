@@ -151,9 +151,8 @@ class Atmosphere:
         self.tag = 'atmosphere'      # Tag of the object
         self.nExtra = 2                 # number of extra pixel to generate the phase screens
         self.telescope = telescope         # associated telescope object
-        self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5) # computation of equivalent wind speed, Roddier 1982
-        self.tau0 = 0.31 * self.r0 / self.V0 # Coherence time of atmosphere, Roddier 1981
-        
+        self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5)  # computation of equivalent wind speed, Roddier 1982
+        self.tau0 = 0.31 * self.r0 / self.V0  # Coherence time of atmosphere, Roddier 1981
         # default value to update phase screens at each iteration
         self.user_defined_opd = False
         if self.telescope.src is None:
@@ -926,12 +925,11 @@ class Atmosphere:
 
         if self.hasNotBeenInitialized is False:
             if len(val) != self.nLayer:
-                print(
-                    'Error! Wrong value for the wind-speed! Make sure that you inpute a wind-speed for each layer')
+                raise ValueError('Wrong value for the wind-speed! Make sure that you inpute a wind-speed for each layer')
             else:
                 print('Updating the wind speed...')
-                    self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5) # computation of equivalent wind speed, Roddier 1982
-                    self.tau0 = 0.31 * self.r0 / self.V0 # Coherence time of atmosphere, Roddier 1981
+                self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5)  # computation of equivalent wind speed, Roddier 1982
+                self.tau0 = 0.31 * self.r0 / self.V0  # Coherence time of atmosphere, Roddier 1981
                 for i_layer in range(self.nLayer):
                     tmpLayer = getattr(self, 'layer_'+str(i_layer+1))
                     tmpLayer.windSpeed = val[i_layer]
@@ -955,8 +953,7 @@ class Atmosphere:
 
         if self.hasNotBeenInitialized is False:
             if len(val) != self.nLayer:
-                print(
-                    'Error! Wrong value for the wind-speed! Make sure that you inpute a wind-speed for each layer')
+                raise ValueError('Wrong value for the wind-speed! Make sure that you inpute a wind-direction for each layer')
             else:
                 print('Updating the wind direction...')
                 for i_layer in range(self.nLayer):
@@ -979,19 +976,14 @@ class Atmosphere:
     @fractionalR0.setter
     def fractionalR0(self, val):
         self._fractionalR0 = val
-
         if self.hasNotBeenInitialized is False:
             if len(val) != self.nLayer:
-                print(
-                    'Error! Wrong value for the fractional r0 ! Make sure that you inpute a fractional r0 for each layer')
+                raise ValueError('Wrong value for the fractional r0 ! Make sure that you inpute a fractional r0 for each layer!' +
+                                 ' If you want to change the number of layer, re-generate a new atmosphere object.')
             else:
                 print('Updating the fractional R0...BEWARE COMPLETE THE RECOMPUTATION...NOT ONLY V0 and Tau0 !')
-                    self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5) # computation of equivalent wind speed, Roddier 1982
-                    self.tau0 = 0.31 * self.r0 / self.V0 # Coherence time of atmosphere, Roddier 1981
-
-
-
-
+                self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5)  # computation of equivalent wind speed, Roddier 1982
+                self.tau0 = 0.31 * self.r0 / self.V0  # Coherence time of atmosphere, Roddier 1981
 
     def __repr__(self):
         self.print_properties()
