@@ -161,6 +161,7 @@ class ShackHartmann:
         self.threshold_cog = threshold_cog
         self.shannon_sampling = shannon_sampling
         self.unit_P2V = unit_P2V
+        self.weighting_map = 1
         # original pixel scale assuming a zropadding factor of 2
         self.pixel_scale_init = 206265*self.telescope.src.wavelength/self.d_subap / self.zero_padding
         if padding_extension_factor is not None:
@@ -356,12 +357,28 @@ class ShackHartmann:
         self.telescope.OPD_no_pupil = tmp_opd_no_pupil
         self.print_properties()
 
-    def set_weighted_centroiding_map(self,is_lgs,is_gaussian,fwhm_factor):
-        if is_lgs:                        
-            _, _, _, spot_kernel_elongation = self.get_convolution_spot(fwhm_factor=fwhm_factor, compute_fft_kernel=False, is_gaussian=is_gaussian)
+    def set_weighted_centroiding_map(self, is_lgs, is_gaussian, fwhm_factor):
+        
+        if is_lgs:
+            print('The weighting map is based on the LGS spots kernel')
+            _, _, _, weighting_map = self.get_convolution_spot(fwhm_factor=fwhm_factor, compute_fft_kernel=False, is_gaussian=is_gaussian)
+            # bin the resulting image to the right pixel scale
+            weighting_map = bin_ndarray(weighting_map,
+                                        [weighting_map.shape[0],
+                                         weighting_map.shape[1]//self.binning_pixel_scale,
+                                         weighting_map.shape[1]//self.binning_pixel_scale], operation='sum')
+
+            # crop the resulting spots to the right number of pixels
+            n_crop = (weighting_map.shape[1] - self.n_pix_subap)//2
+            if n_crop > 0:
+                weighting_map = weighting_map[:, n_crop:-n_crop, n_crop:-n_crop]
         else:
-            gaussian_2D(resolution, fwhm)            
-        return
+            print('The weighting map is a uniform gaussian 2D function')
+            weighting_map = np.tile(gaussian_2D(resolution=self.n_pix_subap, fwhm=fwhm_factor), [self.nValidSubaperture, 1, 1])
+        warning('A new weighting map is now considered.' +
+                'The units must be re-calibrated')
+        self.weighting_map = weighting_map
+        return weighting_map
 
     def centroid(self, image, threshold=0.01):
 
@@ -423,13 +440,13 @@ class ShackHartmann:
 
     def split_raw_data(self):
         raw_data_h_split = np.vsplit((self.cam.frame), self.nSubap)
-        self.maps_intensity = np.zeros([self.nSubap**2, 
+        self.maps_intensity = np.zeros([self.nSubap**2,
                                         self.n_pix_subap,
                                         self.n_pix_subap], dtype=float)
         center = self.n_pix_subap//2
         for i in range(self.nSubap):
             raw_data_v_split = np.hsplit(raw_data_h_split[i], self.nSubap)
-            self.maps_intensity[i*self.nSubap:(i+1)*self.nSubap, 
+            self.maps_intensity[i*self.nSubap:(i+1)*self.nSubap,
                                 center - self.n_pix_subap//self.binning_factor//2:center+self.n_pix_subap//self.binning_factor // 2,
                                 center - self.n_pix_subap//self.binning_factor//2:center+self.n_pix_subap//self.binning_factor//2] = np.asarray(raw_data_v_split)
         self.maps_intensity = self.maps_intensity[self.valid_subapertures_1D, :, :]
@@ -498,7 +515,6 @@ class ShackHartmann:
         [alpha_x, alpha_y] = np.meshgrid(v, v)
         # FWHM of gaussian converted into pixel in arcsec
         sigma_spot = fwhm_factor*self.telescope.src.FWHM_spot_up/self.pixel_scale_init
-        
         for i in range(len(self.telescope.src.Na_profile[0, :])):
             coordinates_3D[:2, i] = (self.telescope.D/4)*([X0, Y0]/self.telescope.src.Na_profile[0, i])
             coordinates_3D[2, i] = self.telescope.D**2. / (8.*self.telescope.src.Na_profile[0, i])/(2.*np.sqrt(3.))
@@ -565,14 +581,14 @@ class ShackHartmann:
                                                                                               fwhm=sigma_spot,
                                                                                               position=[shift_X[i], shift_Y[i]])
                     # length of the LGS spot in arcsec
-                    r = (np.sqrt((np.max(shift_X*self.pixel_scale_init)-np.min(shift_X*self.pixel_scale_init))**2 + 
+                    r = (np.sqrt((np.max(shift_X*self.pixel_scale_init)-np.min(shift_X*self.pixel_scale_init))**2 +
                                  (np.max(shift_Y*self.pixel_scale_init)-np.min(shift_Y*self.pixel_scale_init))**2))
-                    theta = np.pi+(np.pi/2+(np.arctan(-shift_X[-1]/shift_Y[-1]))) +np.pi/2
+                    theta = np.pi+(np.pi/2+(np.arctan(-shift_X[-1]/shift_Y[-1]))) + np.pi/2
                     if is_gaussian:
                         intensity = gaussian_2D(resolution=n_pix,
-                                                fwhm=[r/self.pixel_scale_init,self.telescope.src.FWHM_spot_up/self.pixel_scale_init],
-                                                position=[0,0],
-                                                theta=theta)
+                                                fwhm=[fwhm_factor*r/self.pixel_scale_init, fwhm_factor*self.telescope.src.FWHM_spot_up/self.pixel_scale_init],
+                                                position=[0, 0],
+                                                theta=theta).T
                     # truncation of the wings of the gaussian to speed up the convolution
                     intensity[intensity < self.threshold_convolution*intensity.max()] = 0
                     # normalization to conserve energy
@@ -599,7 +615,7 @@ class ShackHartmann:
         self.split_raw_data()
 
         # compute the centroid on valid subaperture
-        self.centroid_lenslets = self.centroid(self.maps_intensity, self.threshold_cog)
+        self.centroid_lenslets = self.centroid(self.maps_intensity*self.weighting_map, self.threshold_cog)
 
         # discard nan and inf values
         val_inf = np.where(np.isinf(self.centroid_lenslets))
@@ -700,7 +716,6 @@ class ShackHartmann:
                                                 [intensity.shape[0],
                                                  intensity.shape[1] // self.binning_pixel_scale,
                                                  intensity.shape[1] // self.binning_pixel_scale], operation='sum')
-                        
                         # crop the resulting spots
                         n_crop = (intensity.shape[1] - self.n_pix_subap)//2
                         if n_crop > 0:
