@@ -151,6 +151,9 @@ class Atmosphere:
         self.tag = 'atmosphere'      # Tag of the object
         self.nExtra = 2                 # number of extra pixel to generate the phase screens
         self.telescope = telescope         # associated telescope object
+        self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5) # computation of equivalent wind speed, Roddier 1982
+        self.tau0 = 0.31 * self.r0 / self.V0 # Coherence time of atmosphere, Roddier 1981
+        
         # default value to update phase screens at each iteration
         self.user_defined_opd = False
         if self.telescope.src is None:
@@ -679,6 +682,8 @@ class Atmosphere:
         print('{: ^18s}'.format('r0 @500 nm') +
               '{: ^18s}'.format(str(self.r0)+' [m]'))
         print('{: ^18s}'.format('L0') + '{: ^18s}'.format(str(self.L0)+' [m]'))
+        print('{: ^18s}'.format('Tau0') + '{: ^18s}'.format(str(xp.round(self.tau0, 3))+' [s]'))
+        print('{: ^18s}'.format('V0') + '{: ^18s}'.format(str(xp.round(self.V0, 2))+' [m/s]'))
         print('{: ^18s}'.format('Seeing @500nm') +
               '{: ^18s}'.format(str(xp.round(self.seeingArcsec, 2))+' ["]'))
         print('{: ^18s}'.format('Frequency') +
@@ -925,6 +930,8 @@ class Atmosphere:
                     'Error! Wrong value for the wind-speed! Make sure that you inpute a wind-speed for each layer')
             else:
                 print('Updating the wind speed...')
+                    self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5) # computation of equivalent wind speed, Roddier 1982
+                    self.tau0 = 0.31 * self.r0 / self.V0 # Coherence time of atmosphere, Roddier 1981
                 for i_layer in range(self.nLayer):
                     tmpLayer = getattr(self, 'layer_'+str(i_layer+1))
                     tmpLayer.windSpeed = val[i_layer]
@@ -964,6 +971,27 @@ class Atmosphere:
                     tmpLayer.ratio[0] = ps_turb_x/self.ps_loop
                     tmpLayer.ratio[1] = ps_turb_y/self.ps_loop
                     setattr(self, 'layer_'+str(i_layer+1), tmpLayer)
+
+    @property
+    def fractionalR0(self):
+        return self._fractionalR0
+
+    @fractionalR0.setter
+    def fractionalR0(self, val):
+        self._fractionalR0 = val
+
+        if self.hasNotBeenInitialized is False:
+            if len(val) != self.nLayer:
+                print(
+                    'Error! Wrong value for the fractional r0 ! Make sure that you inpute a fractional r0 for each layer')
+            else:
+                print('Updating the fractional R0...BEWARE COMPLETE THE RECOMPUTATION...NOT ONLY V0 and Tau0 !')
+                    self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5) # computation of equivalent wind speed, Roddier 1982
+                    self.tau0 = 0.31 * self.r0 / self.V0 # Coherence time of atmosphere, Roddier 1981
+
+
+
+
 
     def __repr__(self):
         self.print_properties()
