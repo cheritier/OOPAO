@@ -930,8 +930,8 @@ class Atmosphere:
                     'Error! Wrong value for the wind-speed! Make sure that you inpute a wind-speed for each layer')
             else:
                 print('Updating the wind speed...')
-                    self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5) # computation of equivalent wind speed, Roddier 1982
-                    self.tau0 = 0.31 * self.r0 / self.V0 # Coherence time of atmosphere, Roddier 1981
+                self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5) # computation of equivalent wind speed, Roddier 1982
+                self.tau0 = 0.31 * self.r0 / self.V0 # Coherence time of atmosphere, Roddier 1981
                 for i_layer in range(self.nLayer):
                     tmpLayer = getattr(self, 'layer_'+str(i_layer+1))
                     tmpLayer.windSpeed = val[i_layer]
