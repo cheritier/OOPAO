@@ -7,6 +7,7 @@ Created on Thu May 20 17:52:09 2021
 
 import time
 import numpy as np
+import matplotlib.pyplot as plt
 from .Detector import Detector
 from .tools.tools import bin_ndarray, gaussian_2D, warning
 from joblib import Parallel, delayed
@@ -18,6 +19,35 @@ try:
     xp = np  # for now
 except ImportError or ModuleNotFoundError:
     xp = np
+
+
+def bin_2d_array(arr, bin_size):
+    """
+    Bins a 2D array by performing a mean operation where the mean is calculated as
+    the sum of all elements divided by the number of nonzero elements in the bin.
+
+    Parameters:
+    arr (numpy.ndarray): Input 2D array.
+    bin_size (int): Size of the binning window (assumed square).
+
+    Returns:
+    numpy.ndarray: Binned 2D array.
+    """
+    rows, cols = arr.shape
+    new_rows, new_cols = rows // bin_size, cols // bin_size
+
+    binned_array = np.zeros((new_rows, new_cols))
+
+    for i in range(new_rows):
+        for j in range(new_cols):
+            sub_array = arr[i * bin_size:(i + 1) * bin_size, j * bin_size:(j + 1) * bin_size]
+            nonzero_elements = sub_array[sub_array != 0]
+            if nonzero_elements.size > 0:
+                binned_array[i, j] = np.sum(nonzero_elements) / nonzero_elements.size
+            else:
+                binned_array[i, j] = 0  # If all elements are zero, assign zero
+
+    return binned_array
 
 
 class ShackHartmann:
@@ -318,6 +348,7 @@ class ShackHartmann:
         self.slopes_units = 1
         print('Acquiring reference slopes..')
         self.telescope.resetOPD()
+        # self.telescope.src.phase_no_pupil = self.telescope.pupil*1
         self.wfs_measure(self.telescope.src.phase)
         self.reference_slopes_maps = np.copy(self.signal_2D)
         self.isInitialized = True
@@ -470,17 +501,24 @@ class ShackHartmann:
         return
 
     def gradient_2D(self, arr):
-        res_x = (np.gradient(arr, axis=0)/self.telescope.pixelSize) * \
+        arr[~self.telescope.pupil] = np.nan
+        res_x = (np.gradient(arr, axis=0, edge_order=1)/self.telescope.pixelSize) * \
             self.telescope.pupil
-        res_y = (np.gradient(arr, axis=1)/self.telescope.pixelSize) * \
+        res_x = np.nan_to_num(res_x)
+        res_y = (np.gradient(arr, axis=1, edge_order=1)/self.telescope.pixelSize) * \
             self.telescope.pupil
+        res_y = np.nan_to_num(res_y)
         return res_x, res_y
 
     def lenslet_propagation_geometric(self, arr):
 
         [SLx, SLy] = self.gradient_2D(arr)
-        sy = (bin_ndarray(SLx, [self.nSubap, self.nSubap], operation='sum'))
-        sx = (bin_ndarray(SLy, [self.nSubap, self.nSubap], operation='sum'))
+        # sy = (bin_ndarray(SLx, [self.nSubap, self.nSubap], operation='sum'))
+        sy = bin_2d_array(SLx, len(SLx)//self.nSubap)
+        # sx = (bin_ndarray(SLy, [self.nSubap, self.nSubap], operation='sum'))
+        sx = bin_2d_array(SLy, len(SLy) // self.nSubap)
+
+        print(np.shape(sy), np.shape(sx))
 
         return np.concatenate((sx, sy))
 
@@ -809,6 +847,7 @@ class ShackHartmann:
                 self.raw_data = np.zeros([self.n_pix_subap*(self.nSubap)//self.binning_factor,
                                          self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype=float)
 
+                # self.slopes_units = 1
                 self.signal_2D = self.lenslet_propagation_geometric(
                     self.telescope.src.phase_no_pupil)*self.valid_slopes_maps/self.slopes_units
 
