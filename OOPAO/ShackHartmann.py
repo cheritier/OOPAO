@@ -797,8 +797,6 @@ class ShackHartmann:
 
                 self.signal = self.signal_2D[self.valid_slopes_maps]
 
-                self*self.cam
-
             # Geometric SH with multiple WFS
             else:
                 self.phase_buffer = np.moveaxis(
