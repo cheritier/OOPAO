@@ -280,7 +280,7 @@ class ShackHartmann:
 
     def initialize_wfs(self):
         tmp_opd = self.telescope.OPD.copy()
-        tmp_opd_no_pupil = self.telescope.OPD_no_pupil.copy()
+        # tmp_opd_no_pupil = self.telescope.OPD_no_pupil.copy()
 
         self.isInitialized = False
         readoutNoise = np.copy(self.cam.readoutNoise)
@@ -320,7 +320,7 @@ class ShackHartmann:
 
         for i in range(5):
             self.telescope.OPD = self.telescope.pupil*Tilt*(i-2)*amp
-            self.telescope.OPD_no_pupil = Tilt*(i-2)*amp
+            # self.telescope.OPD_no_pupil = Tilt*(i-2)*amp
 
             self.wfs_measure(self.telescope.src.phase)
             mean_slope[i] = np.mean(self.signal[:self.nValidSubaperture])
@@ -333,7 +333,7 @@ class ShackHartmann:
         self.cam.photonNoise = readoutNoise
         self.cam.readoutNoise = photonNoise
         self.telescope.OPD = tmp_opd
-        self.telescope.OPD_no_pupil = tmp_opd_no_pupil
+        # self.telescope.OPD_no_pupil = tmp_opd_no_pupil
         self.print_properties()
 
     def set_weighted_centroiding_map(self, is_lgs, is_gaussian, fwhm_factor):
