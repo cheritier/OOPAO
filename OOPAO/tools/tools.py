@@ -343,6 +343,34 @@ def bin_ndarray(ndarray, new_shape, operation='sum'):
     return ndarray
 
 
+def bin_2d_array(arr, bin_size):
+    """
+    Bins a 2D array by performing a mean operation where the mean is calculated as
+    the sum of all elements divided by the number of nonzero elements in the bin.
+
+    Parameters:
+    arr (numpy.ndarray): Input 2D array.
+    bin_size (int): Size of the binning window (assumed square).
+
+    Returns:
+    numpy.ndarray: Binned 2D array.
+    """
+    rows, cols = arr.shape
+    new_rows, new_cols = rows // bin_size, cols // bin_size
+
+    binned_array = np.zeros((new_rows, new_cols))
+
+    for i in range(new_rows):
+        for j in range(new_cols):
+            sub_array = arr[i * bin_size:(i + 1) * bin_size, j * bin_size:(j + 1) * bin_size]
+            nonzero_elements = sub_array[sub_array != 0]
+            if nonzero_elements.size > 0:
+                binned_array[i, j] = np.sum(nonzero_elements) / nonzero_elements.size
+            else:
+                binned_array[i, j] = 0  # If all elements are zero, assign zero
+
+    return binned_array
+
 
 def get_gpu_memory():
     command = "nvidia-smi --query-gpu=memory.free --format=csv"
