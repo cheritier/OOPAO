@@ -8,7 +8,7 @@ Created on Thu May 20 17:52:09 2021
 import time
 import numpy as np
 from .Detector import Detector
-from .tools.tools import bin_ndarray, gaussian_2D, warning, bin_2d_array
+from .tools.tools import bin_ndarray, gaussian_2D, warning
 from joblib import Parallel, delayed
 import scipy as sp
 import sys
@@ -461,8 +461,8 @@ class ShackHartmann:
     def lenslet_propagation_geometric(self, arr):
 
         [SLx, SLy] = self.gradient_2D(arr)
-        sy = bin_2d_array(SLx, len(SLx)//self.nSubap)
-        sx = bin_2d_array(SLy, len(SLy) // self.nSubap)
+        sy = bin_ndarray(ndarray=SLx, new_shape=(self.nSubap, self.nSubap), operation="mean", ignore_zeros=True)
+        sx = bin_ndarray(ndarray=SLy, new_shape=(self.nSubap, self.nSubap), operation="mean", ignore_zeros=True)
 
         return np.concatenate((sx, sy))
 
@@ -789,8 +789,6 @@ class ShackHartmann:
         else:
             # Geometric SH with single WF
             if np.ndim(self.telescope.src.phase) == 2:
-                self.raw_data = np.zeros([self.n_pix_subap*(self.nSubap)//self.binning_factor,
-                                         self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype=float)
 
                 self.signal_2D = self.lenslet_propagation_geometric(
                     self.telescope.src.phase)*self.valid_slopes_maps/self.slopes_units
@@ -806,6 +804,7 @@ class ShackHartmann:
                     Q = Parallel(n_jobs=1, prefer='processes')(
                         delayed(self.lenslet_propagation_geometric)(i) for i in self.phase_buffer)
                     return Q
+
                 maps = compute_geometric_signals()
                 self.signal_2D = np.asarray(maps)/self.slopes_units
                 self.signal = self.signal_2D[:, self.valid_slopes_maps].T

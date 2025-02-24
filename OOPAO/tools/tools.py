@@ -303,74 +303,95 @@ def centroid(image, threshold = 0):
             x+=im[i,j]*j/s
             y+=im[j,i]*j/s
             
-    return x,y    
+    return x,y
 
 
-def bin_ndarray(ndarray, new_shape, operation='sum'):
+def bin_ndarray(ndarray, new_shape, operation='sum', ignore_zeros=False):
     """
-    Bins an ndarray in all axes based on the target shape, by summing or
-        averaging.
+    Bins a ndarray in all axes based on the target shape, by summing or
+    averaging.
 
-    Number of output dimensions must match number of input dimensions and 
-        new axes must divide old ones.
-
-    Example
-    -------
-    >>> m = np.arange(0,100,1).reshape((10,10))
-    >>> n = bin_ndarray(m, new_shape=(5,5), operation='sum')
-    >>> print(n)
-
-    [[ 22  30  38  46  54]
-     [102 110 118 126 134]
-     [182 190 198 206 214]
-     [262 270 278 286 294]
-     [342 350 358 366 374]]
-
-    """
-    operation = operation.lower()
-    if not operation in ['sum', 'mean']:
-        raise ValueError("Operation not supported.")
-    if ndarray.ndim != len(new_shape):
-        raise ValueError("Shape mismatch: {} -> {}".format(ndarray.shape,
-                                                           new_shape))
-    compression_pairs = [(d, c//d) for d,c in zip(new_shape,
-                                                  ndarray.shape)]
-    flattened = [l for p in compression_pairs for l in p]
-    ndarray = ndarray.reshape(flattened)
-    for i in range(len(new_shape)):
-        op = getattr(ndarray, operation)
-        ndarray = op(-1*(i+1))
-    return ndarray
-
-
-def bin_2d_array(arr, bin_size):
-    """
-    Bins a 2D array by performing a mean operation where the mean is calculated as
-    the sum of all elements divided by the number of nonzero elements in the bin.
+    If operation = "mean" and ignore_zeros is True, the mean is computed
+    considering only  nonzero elements in each bin. Useful binning feature
+    for the geometric SH implementation.
 
     Parameters:
-    arr (numpy.ndarray): Input 2D array.
-    bin_size (int): Size of the binning window (assumed square).
+    -----------
+    ndarray : numpy.ndarray
+        Input array to be binned.
+    new_shape : tuple
+        Target shape after binning.
+    operation : str, optional
+        Either 'sum' or 'mean'. Default is 'sum'.
+    ignore_zeros : bool, optional
+        If True, the mean is computed considering only nonzero elements.
 
     Returns:
-    numpy.ndarray: Binned 2D array.
+    --------
+    numpy.ndarray
+        Binned array.
     """
-    rows, cols = arr.shape
-    new_rows, new_cols = rows // bin_size, cols // bin_size
 
-    binned_array = np.zeros((new_rows, new_cols))
+    operation = operation.lower()
+    if operation not in ['sum', 'mean']:
+        raise ValueError("Operation not supported.")
+    if ndarray.ndim != len(new_shape):
+        raise ValueError(f"Shape mismatch: {ndarray.shape} -> {new_shape}")
 
-    for i in range(new_rows):
-        for j in range(new_cols):
-            sub_array = arr[i * bin_size:(i + 1) * bin_size, j * bin_size:(j + 1) * bin_size]
-            nonzero_elements = sub_array[sub_array != 0]
-            if nonzero_elements.size > 0:
-                binned_array[i, j] = np.sum(nonzero_elements) / nonzero_elements.size
-            else:
-                binned_array[i, j] = 0  # If all elements are zero, assign zero
+    compression_pairs = [(d, c // d) for d, c in zip(new_shape, ndarray.shape)]
+    reshaped_shape = [l for pair in compression_pairs for l in pair]
+    ndarray = ndarray.reshape(reshaped_shape)
+
+    if ignore_zeros and operation == 'mean':
+        # Compute sum and count of nonzero elements
+        summed = np.sum(ndarray, axis=tuple(range(1, len(new_shape) * 2, 2)))
+        count_nonzero = np.count_nonzero(ndarray, axis=tuple(range(1, len(new_shape) * 2, 2)))
+        with np.errstate(divide='ignore', invalid='ignore'):  # avoid division by 0 problems
+            binned_array = np.where(count_nonzero > 0, summed / count_nonzero, 0)
+    else:
+        # Apply regular sum or mean binning
+        # getattr --> retrieves numpy method: ndarray.sum if operation = "sum" and ndarray.mean if operation = "mean"
+        op = getattr(ndarray,operation)
+        binned_array = op(axis=tuple(range(1, len(new_shape) * 2, 2)))  # apply method to obtain final binned array
 
     return binned_array
 
+
+# def bin_ndarray(ndarray, new_shape, operation='sum'):
+#     """
+#     Bins an ndarray in all axes based on the target shape, by summing or
+#         averaging.
+#
+#     Number of output dimensions must match number of input dimensions and
+#         new axes must divide old ones.
+#
+#     Example
+#     -------
+#     >>> m = np.arange(0,100,1).reshape((10,10))
+#     >>> n = bin_ndarray(m, new_shape=(5,5), operation='sum')
+#     >>> print(n)
+#
+#     [[ 22  30  38  46  54]
+#      [102 110 118 126 134]
+#      [182 190 198 206 214]
+#      [262 270 278 286 294]
+#      [342 350 358 366 374]]
+#
+#     """
+#     operation = operation.lower()
+#     if not operation in ['sum', 'mean']:
+#         raise ValueError("Operation not supported.")
+#     if ndarray.ndim != len(new_shape):
+#         raise ValueError("Shape mismatch: {} -> {}".format(ndarray.shape,
+#                                                            new_shape))
+#     compression_pairs = [(d, c//d) for d,c in zip(new_shape,
+#                                                   ndarray.shape)]
+#     flattened = [l for p in compression_pairs for l in p]
+#     ndarray = ndarray.reshape(flattened)
+#     for i in range(len(new_shape)):
+#         op = getattr(ndarray, operation)
+#         ndarray = op(-1*(i+1))
+#     return ndarray
 
 def get_gpu_memory():
     command = "nvidia-smi --query-gpu=memory.free --format=csv"
