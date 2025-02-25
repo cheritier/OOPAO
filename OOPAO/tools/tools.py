@@ -303,46 +303,95 @@ def centroid(image, threshold = 0):
             x+=im[i,j]*j/s
             y+=im[j,i]*j/s
             
-    return x,y    
+    return x,y
 
 
-def bin_ndarray(ndarray, new_shape, operation='sum'):
+def bin_ndarray(ndarray, new_shape, operation='sum', ignore_zeros=False):
     """
-    Bins an ndarray in all axes based on the target shape, by summing or
-        averaging.
+    Bins a ndarray in all axes based on the target shape, by summing or
+    averaging.
 
-    Number of output dimensions must match number of input dimensions and 
-        new axes must divide old ones.
+    If operation = "mean" and ignore_zeros is True, the mean is computed
+    considering only  nonzero elements in each bin. Useful binning feature
+    for the geometric SH implementation.
 
-    Example
-    -------
-    >>> m = np.arange(0,100,1).reshape((10,10))
-    >>> n = bin_ndarray(m, new_shape=(5,5), operation='sum')
-    >>> print(n)
+    Parameters:
+    -----------
+    ndarray : numpy.ndarray
+        Input array to be binned.
+    new_shape : tuple
+        Target shape after binning.
+    operation : str, optional
+        Either 'sum' or 'mean'. Default is 'sum'.
+    ignore_zeros : bool, optional
+        If True, the mean is computed considering only nonzero elements.
 
-    [[ 22  30  38  46  54]
-     [102 110 118 126 134]
-     [182 190 198 206 214]
-     [262 270 278 286 294]
-     [342 350 358 366 374]]
-
+    Returns:
+    --------
+    numpy.ndarray
+        Binned array.
     """
+
     operation = operation.lower()
-    if not operation in ['sum', 'mean']:
+    if operation not in ['sum', 'mean']:
         raise ValueError("Operation not supported.")
     if ndarray.ndim != len(new_shape):
-        raise ValueError("Shape mismatch: {} -> {}".format(ndarray.shape,
-                                                           new_shape))
-    compression_pairs = [(d, c//d) for d,c in zip(new_shape,
-                                                  ndarray.shape)]
-    flattened = [l for p in compression_pairs for l in p]
-    ndarray = ndarray.reshape(flattened)
-    for i in range(len(new_shape)):
-        op = getattr(ndarray, operation)
-        ndarray = op(-1*(i+1))
-    return ndarray
+        raise ValueError(f"Shape mismatch: {ndarray.shape} -> {new_shape}")
+
+    compression_pairs = [(d, c // d) for d, c in zip(new_shape, ndarray.shape)]
+    reshaped_shape = [l for pair in compression_pairs for l in pair]
+    ndarray = ndarray.reshape(reshaped_shape)
+
+    if ignore_zeros and operation == 'mean':
+        # Compute sum and count of nonzero elements
+        summed = np.sum(ndarray, axis=tuple(range(1, len(new_shape) * 2, 2)))
+        count_nonzero = np.count_nonzero(ndarray, axis=tuple(range(1, len(new_shape) * 2, 2)))
+        with np.errstate(divide='ignore', invalid='ignore'):  # avoid division by 0 problems
+            binned_array = np.where(count_nonzero > 0, summed / count_nonzero, 0)
+    else:
+        # Apply regular sum or mean binning
+        # getattr --> retrieves numpy method: ndarray.sum if operation = "sum" and ndarray.mean if operation = "mean"
+        op = getattr(ndarray,operation)
+        binned_array = op(axis=tuple(range(1, len(new_shape) * 2, 2)))  # apply method to obtain final binned array
+
+    return binned_array
 
 
+# def bin_ndarray(ndarray, new_shape, operation='sum'):
+#     """
+#     Bins an ndarray in all axes based on the target shape, by summing or
+#         averaging.
+#
+#     Number of output dimensions must match number of input dimensions and
+#         new axes must divide old ones.
+#
+#     Example
+#     -------
+#     >>> m = np.arange(0,100,1).reshape((10,10))
+#     >>> n = bin_ndarray(m, new_shape=(5,5), operation='sum')
+#     >>> print(n)
+#
+#     [[ 22  30  38  46  54]
+#      [102 110 118 126 134]
+#      [182 190 198 206 214]
+#      [262 270 278 286 294]
+#      [342 350 358 366 374]]
+#
+#     """
+#     operation = operation.lower()
+#     if not operation in ['sum', 'mean']:
+#         raise ValueError("Operation not supported.")
+#     if ndarray.ndim != len(new_shape):
+#         raise ValueError("Shape mismatch: {} -> {}".format(ndarray.shape,
+#                                                            new_shape))
+#     compression_pairs = [(d, c//d) for d,c in zip(new_shape,
+#                                                   ndarray.shape)]
+#     flattened = [l for p in compression_pairs for l in p]
+#     ndarray = ndarray.reshape(flattened)
+#     for i in range(len(new_shape)):
+#         op = getattr(ndarray, operation)
+#         ndarray = op(-1*(i+1))
+#     return ndarray
 
 def get_gpu_memory():
     command = "nvidia-smi --query-gpu=memory.free --format=csv"

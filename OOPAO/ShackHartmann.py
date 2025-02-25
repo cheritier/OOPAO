@@ -19,7 +19,6 @@ try:
 except ImportError or ModuleNotFoundError:
     xp = np
 
-
 class ShackHartmann:
     def __init__(self, nSubap: float,
                  telescope,
@@ -30,9 +29,9 @@ class ShackHartmann:
                  pixel_scale: float = None,
                  threshold_convolution: float = 0.05,
                  shannon_sampling: bool = False,
-                 unit_P2V=False,
-                 n_pixel_per_subaperture=None,
-                 padding_extension_factor=None):
+                 unit_P2V: bool = False,
+                 n_pixel_per_subaperture: int = None,
+                 padding_extension_factor: int = None):
         """SHACK-HARTMANN
         A Shack Hartmann object consists in defining a 2D grd of lenslet arrays located in the pupil plane of the telescope to estimate the local tip/tilt seen by each lenslet.
         By default the Shack Hartmann detector is considered to be noise-free (for calibration purposes). These properties can be switched on and off on the fly (see properties)
@@ -111,9 +110,6 @@ class ShackHartmann:
         The main properties of a Telescope object are listed here:
         _ wfs.signal                     : signal measured by the Shack Hartmann
         _ wfs.signal_2D                  : 2D map of the signal measured by the Shack Hartmann
-        _ wfs.random_state_photon_noise  : a random state cycle can be defined to reproduces random sequences of noise -- default is based on the current clock time
-        _ wfs.random_state_readout_noise : a random state cycle can be defined to reproduces random sequences of noise -- default is based on the current clock time
-        _ wfs.random_state_background    : a random state cycle can be defined to reproduces random sequences of noise -- default is based on the current clock time
         _ wfs.fov_lenslet_arcsec         : Field of View of the subapertures in arcsec
         _ wfs.fov_pixel_binned_arcsec    : Field of View of the pixel in arcsec
 
@@ -223,18 +219,7 @@ class ShackHartmann:
         # WFS detector object
         self.cam = Detector(round(nSubap*self.n_pix_subap))
         self.cam.photonNoise = 0
-        self.cam.readoutNoise = 0        # single lenslet
-        # noies random states
-        self.random_state_photon_noise = np.random.RandomState(
-            seed=int(time.time()))      # random states to reproduce sequences of noise
-        self.random_state_readout_noise = np.random.RandomState(
-            seed=int(time.time()))      # random states to reproduce sequences of noise
-        self.random_state_background = np.random.RandomState(
-            seed=int(time.time()))      # random states to reproduce sequences of noise
-
-        X_map, Y_map = np.meshgrid(np.arange(self.n_pix_subap//self.binning_factor), np.arange(self.n_pix_subap//self.binning_factor))
-        self.X_coord_map = np.atleast_3d(X_map).T
-        self.Y_coord_map = np.atleast_3d(Y_map).T
+        self.cam.readoutNoise = 0
 
         # joblib parameter
         self.nJobs = 1
@@ -295,7 +280,7 @@ class ShackHartmann:
 
     def initialize_wfs(self):
         tmp_opd = self.telescope.OPD.copy()
-        tmp_opd_no_pupil = self.telescope.OPD_no_pupil.copy()
+        # tmp_opd_no_pupil = self.telescope.OPD_no_pupil.copy()
 
         self.isInitialized = False
         readoutNoise = np.copy(self.cam.readoutNoise)
@@ -305,12 +290,6 @@ class ShackHartmann:
         self.cam.readoutNoise = 0
 
         # reference signal
-        self.sx0 = np.zeros([self.nSubap, self.nSubap])
-        self.sy0 = np.zeros([self.nSubap, self.nSubap])
-        # signal vector
-        self.sx = np.zeros([self.nSubap, self.nSubap])
-        self.sy = np.zeros([self.nSubap, self.nSubap])
-        # signal map
         self.SX = np.zeros([self.nSubap, self.nSubap])
         self.SY = np.zeros([self.nSubap, self.nSubap])
         # flux per subaperture
@@ -341,7 +320,7 @@ class ShackHartmann:
 
         for i in range(5):
             self.telescope.OPD = self.telescope.pupil*Tilt*(i-2)*amp
-            self.telescope.OPD_no_pupil = Tilt*(i-2)*amp
+            # self.telescope.OPD_no_pupil = Tilt*(i-2)*amp
 
             self.wfs_measure(self.telescope.src.phase)
             mean_slope[i] = np.mean(self.signal[:self.nValidSubaperture])
@@ -354,7 +333,7 @@ class ShackHartmann:
         self.cam.photonNoise = readoutNoise
         self.cam.readoutNoise = photonNoise
         self.telescope.OPD = tmp_opd
-        self.telescope.OPD_no_pupil = tmp_opd_no_pupil
+        # self.telescope.OPD_no_pupil = tmp_opd_no_pupil
         self.print_properties()
 
     def set_weighted_centroiding_map(self, is_lgs, is_gaussian, fwhm_factor):
@@ -470,17 +449,20 @@ class ShackHartmann:
         return
 
     def gradient_2D(self, arr):
-        res_x = (np.gradient(arr, axis=0)/self.telescope.pixelSize) * \
-            self.telescope.pupil
-        res_y = (np.gradient(arr, axis=1)/self.telescope.pixelSize) * \
-            self.telescope.pupil
+        arr[~self.telescope.pupil] = np.nan
+
+        res_x = (np.gradient(arr, axis=0, edge_order=1)/self.telescope.pixelSize) * self.telescope.pupil
+        res_x = np.nan_to_num(res_x)
+        res_y = (np.gradient(arr, axis=1, edge_order=1)/self.telescope.pixelSize) * self.telescope.pupil
+        res_y = np.nan_to_num(res_y)
+
         return res_x, res_y
 
     def lenslet_propagation_geometric(self, arr):
 
         [SLx, SLy] = self.gradient_2D(arr)
-        sy = (bin_ndarray(SLx, [self.nSubap, self.nSubap], operation='sum'))
-        sx = (bin_ndarray(SLy, [self.nSubap, self.nSubap], operation='sum'))
+        sy = bin_ndarray(ndarray=SLx, new_shape=(self.nSubap, self.nSubap), operation="mean", ignore_zeros=True)
+        sx = bin_ndarray(ndarray=SLy, new_shape=(self.nSubap, self.nSubap), operation="mean", ignore_zeros=True)
 
         return np.concatenate((sx, sy))
 
@@ -805,25 +787,24 @@ class ShackHartmann:
                     self.compute_raw_data_multi(self.maps_intensity)
 
         else:
+            # Geometric SH with single WF
             if np.ndim(self.telescope.src.phase) == 2:
-                self.raw_data = np.zeros([self.n_pix_subap*(self.nSubap)//self.binning_factor,
-                                         self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype=float)
 
                 self.signal_2D = self.lenslet_propagation_geometric(
-                    self.telescope.src.phase_no_pupil)*self.valid_slopes_maps/self.slopes_units
+                    self.telescope.src.phase)*self.valid_slopes_maps/self.slopes_units
 
                 self.signal = self.signal_2D[self.valid_slopes_maps]
 
-                self*self.cam
-
+            # Geometric SH with multiple WFS
             else:
                 self.phase_buffer = np.moveaxis(
-                    self.telescope.src.phase_no_pupil, -1, 0)
+                    self.telescope.src.phase, -1, 0)
 
                 def compute_geometric_signals():
                     Q = Parallel(n_jobs=1, prefer='processes')(
                         delayed(self.lenslet_propagation_geometric)(i) for i in self.phase_buffer)
                     return Q
+
                 maps = compute_geometric_signals()
                 self.signal_2D = np.asarray(maps)/self.slopes_units
                 self.signal = self.signal_2D[:, self.valid_slopes_maps].T
