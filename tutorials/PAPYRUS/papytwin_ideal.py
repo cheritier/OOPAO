@@ -25,7 +25,7 @@ from papyrus_tools import actuators_position
 
 #%% -----------------------     read parameter file   ----------------------------------
 
-from parameter_files.parameterFile_Papytwin_ideal import initializeParameterFile
+from parameter_files.parameterFile_papytwin_ideal import initializeParameterFile
 from parameter_files.OCAM2K  import OCAM_param
 from parameter_files.CRED2   import CRED2_param
 from parameter_files.CS165CU import CS165CU_param

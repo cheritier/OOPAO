@@ -150,9 +150,9 @@ from OOPAO.Atmosphere import Atmosphere
 
 
 atm = Atmosphere(telescope = tel, 
-                 r0 =0.06,
+                 r0 =0.6,
                  L0=25, 
-                 windSpeed = [5], 
+                 windSpeed = [2], 
                  fractionalR0 = [1], 
                  windDirection = [0],
                  altitude = [0])

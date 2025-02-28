@@ -234,7 +234,7 @@ def compute_papyrus_model(param,loc,source,IFreal):
 
 
 
-def optimize_pwfs_pupils(wfs,valid_pixel_map):
+def optimize_pwfs_pupils(wfs,valid_pixel_map,n_it=3):
     
     wfs.modulation = 20
     
@@ -244,7 +244,7 @@ def optimize_pwfs_pupils(wfs,valid_pixel_map):
     xs = [0,0,0,0]
     ys = [0,0,0,0]
     
-    for i_it in range(3):
+    for i_it in range(n_it):
         wfs.apply_shift_wfs(sx =xs,sy = ys)
     
         for i in range(4):
@@ -260,14 +260,14 @@ def optimize_pwfs_pupils(wfs,valid_pixel_map):
     
             
             plt.figure(1)
-            plt.subplot(3,4,4*i_it + i+1)
+            plt.subplot(n_it,4,4*i_it + i+1)
             plt.imshow(I-I_)
             plt.plot(x,y,'+',markersize = 20)
             plt.plot(x_,y_,'+',markersize = 20)
             plt.title('Step '+str(i_it)+' -- ['+str(np.round(x-x_,1))+','+str(np.round(y-y_,1))+']')
             plt.axis('off')
-            xs[i] += ((x-x_)*2)
-            ys[i] += ((y_-y)*2)
+            xs[i] += ((x-x_))
+            ys[i] += ((y_-y))
             plt.draw()
             plt.pause(0.2)
             
