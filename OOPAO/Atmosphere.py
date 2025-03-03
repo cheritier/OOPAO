@@ -312,9 +312,9 @@ class Atmosphere:
             layer.mapShift[layer.outerMask != 0] = X
             layer.mapShift[layer.outerMask == 0] = xp.reshape(layer.phase, layer.resolution*layer.resolution)
             layer.notDoneOnce = True
-        print('Done!')
-        layer.A = layer.A.astype(self.precision())
-        layer.B = layer.A.astype(self.precision())
+            layer.A = layer.A.astype(self.precision())
+            layer.B = layer.A.astype(self.precision())
+            print('Done!')
         return layer
 
     def add_row(self, layer, stepInPixel, map_full=None):
@@ -889,15 +889,15 @@ class Atmosphere:
             print('Updating the Atmosphere covariance matrices...')
             self.seeingArcsec = 206265*(self.wavelength/val)
             self.cn2 = (self.r0**(-5. / 3) / (0.423 * (2*np.pi/self.wavelength)**2))/np.max([1, np.max(self.altitude)])  # Cn2 m^(-2/3)
-            for i_layer in range(self.nLayer):
-                tmpLayer = getattr(self, 'layer_'+str(i_layer+1))
-                tmpLayer.ZZt_r0 = tmpLayer.ZZt*(self.r0_def/self.r0)**(5/3)
-                tmpLayer.ZXt_r0 = tmpLayer.ZXt*(self.r0_def/self.r0)**(5/3)
-                tmpLayer.XXt_r0 = tmpLayer.XXt*(self.r0_def/self.r0)**(5/3)
-                tmpLayer.ZZt_inv_r0 = tmpLayer.ZZt_inv / \
-                    ((self.r0_def/self.r0)**(5/3))
-                BBt = tmpLayer.XXt_r0 - xp.matmul(tmpLayer.A, tmpLayer.ZXt_r0)
-                tmpLayer.B = xp.linalg.cholesky(BBt).astype(self.precision())
+            if self.compute_covariance:
+                for i_layer in range(self.nLayer):
+                    tmpLayer = getattr(self, 'layer_'+str(i_layer+1))
+                    tmpLayer.ZZt_r0 = tmpLayer.ZZt*(self.r0_def/self.r0)**(5/3)
+                    tmpLayer.ZXt_r0 = tmpLayer.ZXt*(self.r0_def/self.r0)**(5/3)
+                    tmpLayer.XXt_r0 = tmpLayer.XXt*(self.r0_def/self.r0)**(5/3)
+                    tmpLayer.ZZt_inv_r0 = tmpLayer.ZZt_inv / ((self.r0_def/self.r0)**(5/3))
+                    BBt = tmpLayer.XXt_r0 - xp.matmul(tmpLayer.A, tmpLayer.ZXt_r0)
+                    tmpLayer.B = xp.linalg.cholesky(BBt).astype(self.precision())
 
     @property
     def L0(self):
