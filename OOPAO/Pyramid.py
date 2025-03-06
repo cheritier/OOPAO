@@ -1165,7 +1165,7 @@ class Pyramid:
                 frame = (obj.set_binning(intensity, self.nRes/obj.resolution))
             if self.binning != 1:
                 try:
-                    frame = (obj.rebin(obj.frame, (obj.resolution //
+                    frame = (obj.rebin(frame, (obj.resolution //
                              self.binning, obj.resolution//self.binning)))
                 except:
                     warning('The shape of the detector ('+str(obj.frame.shape)+')' +
