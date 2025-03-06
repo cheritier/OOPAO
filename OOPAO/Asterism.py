@@ -51,26 +51,8 @@ class Asterism:
         self.altitude = []
         self.nPhoton = 0
         self.chromatic_shift = None
-        self.print_properties()
-
-    def print_properties(self):
-        for i in range(self.n_source):
-            self.coordinates.append(self.src[i].coordinates)
-            self.altitude.append(self.src[i].altitude)
-            self.nPhoton += self.src[i].nPhoton/self.n_source
-        self.tag = 'asterism'
-        self.type = 'asterism'
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ASTERISM %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        print('{: ^18s}'.format('Source') + '{: ^18s}'.format('Wavelength') + '{: ^18s}'.format(
-            'Zenith [arcsec]') + '{: ^18s}'.format('Azimuth [deg]') + '{: ^18s}'.format('Altitude [m]') + '{: ^18s}'.format('Magnitude'))
-        print('------------------------------------------------------------------------------------------------------------')
-
-        for i in range(self.n_source):
-            print('{: ^18s}'.format(str(i+1)+' -- '+self.src[i].type) + '{: ^18s}'.format(str(self.src[i].wavelength)) + '{: ^18s}'.format(str(self.src[i].coordinates[0])) + '{: ^18s}'.format(
-                str(self.src[i].coordinates[1]))+'{: ^18s}'.format(str(np.round(self.src[i].altitude, 2))) + '{: ^18s}'.format(str(self.src[i].magnitude)))
-            print('------------------------------------------------------------------------------------------------------------')
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-
+        print(self)
+        
     def __mul__(self, telescope):
         if type(telescope.OPD) is not list:
             tmp_OPD = telescope.OPD.copy()
@@ -85,7 +67,36 @@ class Asterism:
         # assign the source object to the telescope object
         telescope.src = self
         return telescope
+    
+    def properties(self) -> dict:
+        self.prop = dict()
+        self.prop['type']       = f"{'Source':<20s}|"
+        self.prop['wavelength'] = f"{'Wavelength [m]':<20s}|"
+        self.prop['zenith']     = f"{'Zenith [arcsec]':<20s}|"
+        self.prop['azimuth']    = f"{'Azimuth [°]':<20s}|"
+        self.prop['altitude']   = f"{'Altitude [m]':<20s}|"
+        self.prop['magnitude']  = f"{'Magnitude':<20s}|"
+        self.prop['flux']       = f"{'Flux [photon/m²/s]':<20s}|"
+        for i in range(min(self.n_source,6)):
+            self.prop['type']       += f"{'%d - %s'%(i+1,self.src[i].type):^9s}|"
+            self.prop['wavelength'] += f"{self.src[i].wavelength:^9.1e}|"
+            self.prop['zenith']     += f"{self.src[i].coordinates[0]:^9.2f}|"
+            self.prop['azimuth']    += f"{self.src[i].coordinates[1]:^9.2f}|"
+            self.prop['altitude']   += f"{self.src[i].altitude:^9.2f}|"
+            self.prop['magnitude']  += f"{self.src[i]._magnitude:^9.2f}|"
+            self.prop['flux']       += f"{self.src[i]._nPhoton:^9.1e}|"
+        return self.prop
 
     def __repr__(self):
-        self.print_properties()
-        return ''
+        self.properties()
+        str_prop = str()
+        n_char = len(max(self.prop.values(), key=len))
+        for i in range(len(self.prop.values())):
+            str_prop += list(self.prop.values())[i] + '\n'
+        if self.n_source > 6:
+            title = f'\n{" Asterism - printing 6 first sources out of %d "%self.n_source:-^{n_char}}\n'
+        else:
+            title = f'\n{" Asterism ":-^{n_char}}\n'
+        end_line = f'{"":-^{n_char}}\n'
+        table = title + str_prop + end_line
+        return table

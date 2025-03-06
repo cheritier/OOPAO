@@ -131,7 +131,7 @@ class GainSensingCamera:
                          len(max(prop.split('\n'), key=len)))
             for i in range(len(self.detector_properties.values())):
                 prop += list(self.detector_properties.values())[i] + '\n'
-        title = f'{"GSC":-^{n_char}}\n'
+        title = f'{" GSC ":-^{n_char}}\n'
         end_line = f'{"":-^{n_char}}\n'
         table = title + prop + end_line
         return table

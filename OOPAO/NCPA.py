@@ -88,7 +88,7 @@ class NCPA:
             self.NCPA_f2_law(f2)
 
         self.tag = 'NCPA'
-        self.print_properties()
+        print(self)
 
     def NCPA_f2_law(self, f2):
         if type(f2) is list and len(f2) == 4:
@@ -143,14 +143,19 @@ class NCPA:
         B = self.tel.OPD
         return B
 
-    def print_properties(self):
-        print()
-        print('------------ NCPA ------------')
-        print('{:^20s}|{:^9s}'.format('Modal basis', self.basis))
-        print('{:^20s}|{:^9.2f}'.format('Amplitude [nm RMS]', np.std(
-            self.OPD[np.where(self.tel.pupil > 0)])*1e9))
-        print('------------------------------')
+    def properties(self) -> dict:
+        self.prop = dict()
+        self.prop['basis']     = f"{'Modal basis':<20s}|{self.basis:^9s}"
+        self.prop['amplitude'] = f"{'Amplitude [nm RMS]':<20s}|{np.std(self.OPD[np.where(self.tel.pupil > 0)])*1e9:^9.1f}"
+        return self.prop
 
     def __repr__(self):
-        self.print_properties()
-        return ' '
+        self.properties()
+        str_prop = str()
+        n_char = len(max(self.prop.values(), key=len))
+        for i in range(len(self.prop.values())):
+            str_prop += list(self.prop.values())[i] + '\n'
+        title = f'\n{" NCPA ":-^{n_char}}\n'
+        end_line = f'{"":-^{n_char}}\n'
+        table = title + str_prop + end_line
+        return table

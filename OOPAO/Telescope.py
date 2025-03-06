@@ -190,7 +190,7 @@ class Telescope:
         self.display_optical_path = display_optical_path
         # perfect coronograph diameter (circular)
         self.coronagraph_diameter = None
-        self.print_properties()
+        print(self)
         self.isInitialized = True
 
     def set_pupil(self):
@@ -706,30 +706,31 @@ class Telescope:
         else:
             print('No light propagated through the telescope')
         return
-
-    def print_properties(self):
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TELESCOPE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        print('{: ^18s}'.format('Diameter') + '{: ^18s}'.format(str(self.D)) + '{: ^18s}'.format('[m]'))
-        print('{: ^18s}'.format('Resolution') + '{: ^18s}'.format(str(self.resolution)) + '{: ^18s}'.format('[pixels]'))
-        print('{: ^18s}'.format('Pixel Size') + '{: ^18s}'.format(str(xp.round(self.pixelSize, 2))) + '{: ^18s}'.format('[m]'))
-        print('{: ^18s}'.format('Surface') + '{: ^18s}'.format(str(xp.round(self.pixelArea*self.pixelSize**2))) + '{: ^18s}'.format('[m2]'))
-        print('{: ^18s}'.format('Central Obstruction') + '{: ^18s}'.format(str(100 * self.centralObstruction)) + '{: ^18s}'.format('[% of diameter]'))
-        print('{: ^18s}'.format('Pixels in the pupil') + '{: ^18s}'.format(str(self.pixelArea)) + '{: ^18s}'.format('[pixels]'))
-        print('{: ^18s}'.format('Field of View') + '{: ^18s}'.format(str(self.fov)) + '{: ^18s}'.format('[arcsec]'))
+    
+    def properties(self) -> dict:
+        self.prop = dict()
+        self.prop['diameter']    = f"{'Diameter [m]':<25s}|{self.D:^10.2f}"
+        self.prop['resolution']  = f"{'Resolution [px]':<25s}|{self.resolution:^10d}"
+        self.prop['pixel_size']  = f"{'Pixel size [m]':<25s}|{self.pixelSize:^10.2f}"
+        self.prop['surface']     = f"{'Surface [m²]':<25s}|{self.pixelSize:^10.2f}"
+        self.prop['obstruction'] = f"{'Central obstruction [%]':<25s}|{self.centralObstruction*100:^10d}"
+        self.prop['n_pix_pupil'] = f"{'Pixels in pupil':<25s}|{self.pixelArea:^10d}"
+        self.prop['fov']         = f"{'Field of view [arcsec]':<25s}|{self.fov:^10d}"
         if self.src:
             if self.src.type == 'asterism':
                 for i_src in range(len(self.src.src)):
-                    print('{: ^18s}'.format('Source '+self.src.src[i_src].type) + '{: ^18s}'.format(
-                        str(xp.round(1e9*self.src.src[i_src].wavelength, 2))) + '{: ^18s}'.format('[nm]'))
+                    self.prop['source_%d'%i_src] = f"{'Source %s [m]'%self.src.src[i_src].type:<25s}|{self.src.src[i_src].wavelength:^10.2e}"
             else:
-                print('{: ^18s}'.format('Source '+self.src.type) + '{: ^18s}'.format(str(xp.round(1e9*self.src.wavelength, 2))) + '{: ^18s}'.format('[nm]'))
-        else:
-            print('{: ^18s}'.format('Source') + '{: ^18s}'.format('None') + '{: ^18s}'.format(''))
-
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        self.print_optical_path()
-        return
+                self.prop['source_%d'] = f"{'Source %s [m]'%self.src.type:<25s}|{self.src.wavelength:^10.2e}"
+        return self.prop
 
     def __repr__(self):
-        self.print_properties()
-        return ''
+        self.properties()
+        str_prop = str()
+        n_char = len(max(self.prop.values(), key=len))
+        for i in range(len(self.prop.values())):
+            str_prop += list(self.prop.values())[i] + '\n'
+        title = f'\n{" Telescope ":-^{n_char}}\n'
+        end_line = f'{"":-^{n_char}}\n'
+        table = title + str_prop + end_line
+        return table

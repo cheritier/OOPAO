@@ -69,7 +69,8 @@ class MisRegistration:
                 'anam_' + str('%.2f' % self.anamorphosisAngle) + '_'\
                 'mR_' + str('%.4f' % (self.radialScaling+1.)) + '_'\
                 'mT_' + str('%.4f' % (self.tangentialScaling+1.))
-
+        
+        self.properties()
         self.isInitialized = True
 
 #        mis-registrations can be added or sub-tracted using + and -
@@ -251,12 +252,25 @@ class MisRegistration:
                     'mN_' + str('%.4f' % (self.radialScaling+1.)) + '_'\
                     'mT_' + str('%.4f' % (val+1.))
 
-    def print_(self):
-        print('{: ^14s}'.format('Rotation [deg]') + '\t' + '{: ^11s}'.format('Shift X [m]') + '\t' + '{: ^11s}'.format(
-            'Shift Y [m]') + '\t' + '{: ^18s}'.format('Radial Scaling [%]') + '\t' + '{: ^22s}'.format('Tangential Scaling [%]'))
-        print("{: ^14s}".format(str(self.rotationAngle)) + '\t' + '{: ^11s}'.format(str(self.shiftX))+'\t' + '{: ^11s}'.format(
-            str(self.shiftY)) + '\t' + '{: ^18s}'.format(str(self.radialScaling))+'\t' + '{: ^22s}'.format(str(self.tangentialScaling)))
+    def properties(self) -> dict:
+        self.prop = dict()
+        self.prop['rotation']           = f"{'Rotation [°]':<25s}|{self.rotationAngle:^9.1f}"
+        self.prop['shift_x']            = f"{'Shift X [m]':<25s}|{self.shiftX:^9.1e}"
+        self.prop['shift_y']            = f"{'Shift Y [m]':<25s}|{self.shiftY:^9.1e}"
+        self.prop['anamophosis_angle']  = f"{'Anamorphosis angle [°]':<25s}|{self.anamorphosisAngle:^9.1f}"
+        self.prop['tengential_scaling'] = f"{'Tangential scaling [%]':<25s}|{self.tangentialScaling*100:^9.2f}"
+        self.prop['radial_scaling']     = f"{'Radial scaling [%]':<25s}|{self.radialScaling*100:^9.2f}"
+        return self.prop
 
     def __repr__(self):
-        self.print_()
-        return ' '
+        self.properties()
+        str_prop = str()
+        n_char = len(max(self.prop.values()))
+        for i in range(len(self.prop.values())):
+            str_prop += list(self.prop.values())[i] + '\n'
+        title = f'\n{"Misregistration":-^{n_char}}\n'
+        end_line = f'{"":-^{n_char}}\n'
+        table = title + str_prop + end_line
+        return table
+    
+    

@@ -208,8 +208,9 @@ class Atmosphere:
         # reset the r0 and generate a new phase screen to override the ro_def computation
         self.r0 = self.r0
         self.generateNewPhaseScreen(0)
-        self.print_properties()
-
+        # self.print_properties()
+        print(self)
+        
     def buildLayer(self, telescope, r0, L0, i_layer, compute_covariance=True):
         """
             Generation of phase screens using the method introduced in Assemat et al (2006)
@@ -659,7 +660,7 @@ class Atmosphere:
     def print_atm(self):
         # Keep this ancient function name for compatibility
         self.print_properties()
-
+        
     def print_properties(self):
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         print('{: ^12s}'.format('Layer') + '{: ^12s}'.format('Direction') + '{: ^12s}'.format('Speed') +
@@ -985,6 +986,37 @@ class Atmosphere:
                 self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5)  # computation of equivalent wind speed, Roddier 1982
                 self.tau0 = 0.31 * self.r0 / self.V0  # Coherence time of atmosphere, Roddier 1981
 
+    def properties(self) -> dict:
+        self.prop = dict()
+        self.prop['layer']          = f"{'Layer':<14s}|"
+        self.prop['direction']      = f"{'Direction [°]':<14s}|"
+        self.prop['speed']          = f"{'Speed [m/s]':<14s}|"
+        self.prop['altitude']       = f"{'Altitude [m]':<14s}|"
+        self.prop['fractional_cn2'] = f"{'Frac Cn² [%]':<14s}|"
+        self.prop['diameter']       = f"{'diameter [m]':<14s}|"
+        self.prop['delimiter'] = ''
+        self.prop['r0'] = f"{'r0 @ 500 nm [m]':<20s}|{self.r0:^10.2f}"
+        self.prop['L0'] = f"{'L0 [m]':<20s}|{self.L0:^10.1f}"
+        self.prop['tau0'] = f"{'Tau0 [s]':<20s}|{self.tau0:^10.4f}"
+        self.prop['V0'] = f"{'V0 [m/s]':<20s}|{self.V0:^10.2f}"
+        self.prop['frequency'] = f"{'Frequency [Hz]':<20s}|{1/self.telescope.samplingTime:^10.1f}"
+        for i in range(self.nLayer):
+            self.prop['layer']          += f"{i:^7d}|"
+            self.prop['direction']      += f"{self.windDirection[i]:^7d}|"
+            self.prop['speed']          += f"{self.windSpeed[i]:^7.1f}|"
+            self.prop['altitude']       += f"{self.altitude[i]:^7.0e}|"
+            self.prop['fractional_cn2'] += f"{self.fractionalR0[i]*100:^7.0f}|"
+            self.prop['diameter']       += f"{getattr(self,'layer_'+str(i+1)).D:^7.1f}|"
+        return self.prop
+
     def __repr__(self):
-        self.print_properties()
-        return ''
+        self.properties()
+        str_prop = str()
+        n_char = len(max(self.prop.values(), key=len))
+        self.prop['delimiter'] = f'{"":=^{n_char}}'
+        for i in range(len(self.prop.values())):
+            str_prop += list(self.prop.values())[i] + '\n'
+        title = f'\n{" Atmosphere ":-^{n_char}}\n'
+        end_line = f'{"":-^{n_char}}\n'
+        table = title + str_prop + end_line
+        return table
