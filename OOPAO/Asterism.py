@@ -70,33 +70,22 @@ class Asterism:
     
     def properties(self) -> dict:
         self.prop = dict()
-        self.prop['type']       = f"{'Source':<20s}|"
-        self.prop['wavelength'] = f"{'Wavelength [m]':<20s}|"
-        self.prop['zenith']     = f"{'Zenith [arcsec]':<20s}|"
-        self.prop['azimuth']    = f"{'Azimuth [°]':<20s}|"
-        self.prop['altitude']   = f"{'Altitude [m]':<20s}|"
-        self.prop['magnitude']  = f"{'Magnitude':<20s}|"
-        self.prop['flux']       = f"{'Flux [photon/m²/s]':<20s}|"
-        for i in range(min(self.n_source,6)):
-            self.prop['type']       += f"{'%d - %s'%(i+1,self.src[i].type):^9s}|"
-            self.prop['wavelength'] += f"{self.src[i].wavelength:^9.1e}|"
-            self.prop['zenith']     += f"{self.src[i].coordinates[0]:^9.2f}|"
-            self.prop['azimuth']    += f"{self.src[i].coordinates[1]:^9.2f}|"
-            self.prop['altitude']   += f"{self.src[i].altitude:^9.2f}|"
-            self.prop['magnitude']  += f"{self.src[i]._magnitude:^9.2f}|"
-            self.prop['flux']       += f"{self.src[i]._nPhoton:^9.1e}|"
+        self.prop['parameters'] = f"{'Source':^8s}|{'Wavelength':^12s}|{'Zenith':^8s}|{'Azimuth':^9s}|{'Altitude':^10s}|{'Magnitude':^11s}|{'Flux':^11s}|"
+        self.prop['units'] = f"{'':^8s}|{'[m]':^12s}|{'[arcsec]':^8s}|{'[°]':^9s}|{'[m]':^10s}|{'':^11s}|{'[ph/m²/s]':^11s}|"
+        for i in range(self.n_source):
+            if i%2==0:
+                self.prop['layer_%02d'%i] = f"\033[00m{'%3d-%s'%(i+1,self.src[i].type):^8s}|{self.src[i].wavelength:^12.1e}|{self.src[i].coordinates[0]:^8.2f}|{self.src[i].coordinates[1]:^9.2f}|{self.src[i].altitude:^10.2f}|{self.src[i]._magnitude:^11.2f}|{self.src[i]._nPhoton:^11.1e}|"
+            else:
+                self.prop['layer_%02d'%i] = f"\033[47m{'%3d-%s'%(i+1,self.src[i].type):^8s}|{self.src[i].wavelength:^12.1e}|{self.src[i].coordinates[0]:^8.2f}|{self.src[i].coordinates[1]:^9.2f}|{self.src[i].altitude:^10.2f}|{self.src[i]._magnitude:^11.2f}|{self.src[i]._nPhoton:^11.1e}|"
         return self.prop
 
     def __repr__(self):
         self.properties()
         str_prop = str()
-        n_char = len(max(self.prop.values(), key=len))
+        n_char = len(max(self.prop.values(), key=len)) - len('\033[00m')
         for i in range(len(self.prop.values())):
             str_prop += list(self.prop.values())[i] + '\n'
-        if self.n_source > 6:
-            title = f'\n{" Asterism - printing 6 first sources out of %d "%self.n_source:-^{n_char}}\n'
-        else:
-            title = f'\n{" Asterism ":-^{n_char}}\n'
-        end_line = f'{"":-^{n_char}}\n'
+        title = f'\n{" Asterism ":-^{n_char}}\n'
+        end_line = f'\033[00m{"":-^{n_char}}\n'
         table = title + str_prop + end_line
         return table

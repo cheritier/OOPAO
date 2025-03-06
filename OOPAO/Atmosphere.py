@@ -988,32 +988,26 @@ class Atmosphere:
 
     def properties(self) -> dict:
         self.prop = dict()
-        self.prop['layer']          = f"{'Layer':<14s}|"
-        self.prop['direction']      = f"{'Direction [°]':<14s}|"
-        self.prop['speed']          = f"{'Speed [m/s]':<14s}|"
-        self.prop['altitude']       = f"{'Altitude [m]':<14s}|"
-        self.prop['fractional_cn2'] = f"{'Frac Cn² [%]':<14s}|"
-        self.prop['diameter']       = f"{'diameter [m]':<14s}|"
-        self.prop['delimiter'] = ''
-        self.prop['r0'] = f"{'r0 @ 500 nm [m]':<20s}|{self.r0:^10.2f}"
-        self.prop['L0'] = f"{'L0 [m]':<20s}|{self.L0:^10.1f}"
-        self.prop['tau0'] = f"{'Tau0 [s]':<20s}|{self.tau0:^10.4f}"
-        self.prop['V0'] = f"{'V0 [m/s]':<20s}|{self.V0:^10.2f}"
-        self.prop['frequency'] = f"{'Frequency [Hz]':<20s}|{1/self.telescope.samplingTime:^10.1f}"
+        self.prop['parameters'] = f"{'Layer':^7s}|{'Direction':^11s}|{'Speed':^7s}|{'Altitude':^10s}|{'Frac Cn²':^10s}|{'Diameter':^10s}|"
+        self.prop['units'] = f"{'':^7s}|{'[°]':^11s}|{'[m/s]':^7s}|{'[m]':^10s}|{'[%]':^10s}|{'[m]':^10s}|"
         for i in range(self.nLayer):
-            self.prop['layer']          += f"{i:^7d}|"
-            self.prop['direction']      += f"{self.windDirection[i]:^7d}|"
-            self.prop['speed']          += f"{self.windSpeed[i]:^7.1f}|"
-            self.prop['altitude']       += f"{self.altitude[i]:^7.0e}|"
-            self.prop['fractional_cn2'] += f"{self.fractionalR0[i]*100:^7.0f}|"
-            self.prop['diameter']       += f"{getattr(self,'layer_'+str(i+1)).D:^7.1f}|"
+            if i%2==0:
+                self.prop['layer_%02d'%i] = f"\033[00m{i+1:^7d}|{self.windDirection[i]:^11d}|{self.windSpeed[i]:^7.1f}|{self.altitude[i]:^10.0e}|{self.fractionalR0[i]*100:^10.0f}|{getattr(self,'layer_'+str(i+1)).D:^10.3f}|"
+            else:
+                self.prop['layer_%02d'%i] = f"\033[47m{i+1:^7d}|{self.windDirection[i]:^11d}|{self.windSpeed[i]:^7.1f}|{self.altitude[i]:^10.0e}|{self.fractionalR0[i]*100:^10.0f}|{getattr(self,'layer_'+str(i+1)).D:^10.3f}|"
+        self.prop['delimiter'] = ''
+        self.prop['r0'] = f"{'r0 @ 500 nm [m]':<16s}|{self.r0:^10.2f}"
+        self.prop['L0'] = f"{'L0 [m]':<16s}|{self.L0:^10.1f}"
+        self.prop['tau0'] = f"{'Tau0 [s]':<16s}|{self.tau0:^10.4f}"
+        self.prop['V0'] = f"{'V0 [m/s]':<16s}|{self.V0:^10.2f}"
+        self.prop['frequency'] = f"{'Frequency [Hz]':<16s}|{1/self.telescope.samplingTime:^10.1f}"
         return self.prop
 
     def __repr__(self):
         self.properties()
         str_prop = str()
-        n_char = len(max(self.prop.values(), key=len))
-        self.prop['delimiter'] = f'{"":=^{n_char}}'
+        n_char = len(max(self.prop.values(), key=len)) - len('\033[00m')
+        self.prop['delimiter'] = f'\033[00m{"":=^{n_char}}'
         for i in range(len(self.prop.values())):
             str_prop += list(self.prop.values())[i] + '\n'
         title = f'\n{" Atmosphere ":-^{n_char}}\n'
