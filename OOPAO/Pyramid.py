@@ -1181,7 +1181,7 @@ class Pyramid:
         self.prop['fov']              = f"{'Field of view [arcsec]':<25s}|{self.fov:^9.2f}"
         self.prop['modulation']       = f"{'Modulation radius [l/D]':<25s}|{self.modulation:^9d}"
         self.prop['psf_sampling']     = f"{'PSF sampling [px/(l/D)]':<25s}|{self.zeroPaddingFactor:^9.2f}"
-        self.prop['psf_centering']    = f"{'PSF core centering [px]':<25s}|{(1+self.psfCentering*3):^9d}"
+        self.prop['psf_centering']    = f"{'PSF centering':<25s}|{str(self.psfCentering):^9s}"
         self.prop['n_valid_pixels']   = f"{'Valid pixels':<25s}|{self.nSignal:^9d}"
         self.prop['post_processing']  = f"{'Post processing':<25s}|{self.postProcessing:^9s}"
         return self.prop
