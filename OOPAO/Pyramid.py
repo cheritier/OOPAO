@@ -30,8 +30,8 @@ class Pyramid:
                  lightRatio: float,
                  postProcessing: str = 'slopesMaps',
                  psfCentering: bool = True,
-                 n_pix_separation: float = 2,
-                 calibModulation: float = 50,
+                 n_pix_separation: float = 2.,
+                 calibModulation: float = 50.,
                  n_pix_edge: float = None,
                  extraModulationFactor: int = 0,
                  binning: int = 1,
@@ -39,7 +39,7 @@ class Pyramid:
                  userValidSignal: bool = None,
                  old_mask: bool = False,
                  rooftop: str = None,
-                 delta_theta: float = 0,
+                 delta_theta: float = 0.,
                  user_modulation_path: list = None,
                  pupilSeparationRatio: float = None,
                  edgePixel: int = None,
@@ -1174,16 +1174,20 @@ class Pyramid:
         else:
             raise AttributeError('Error light propagated to the wrong type of object')
 
+    # for backward compatibility
+    def print_properties(self):
+        print(self)
+
     def properties(self) -> dict:
         self.prop = dict()
-        self.prop['pupil_diameter']   = f"{'Pupil diameter [px]':<25s}|{self.nSubap:^9d}"
+        self.prop['pupil_diameter'] = f"{'Pupil diameter [px]':<25s}|{self.nSubap:^9d}"
         self.prop['pupil_separation'] = f"{'Pupil separation [px]':<25s}|{self.n_pix_separation:^9d}"
-        self.prop['fov']              = f"{'Field of view [arcsec]':<25s}|{self.fov:^9.2f}"
-        self.prop['modulation']       = f"{'Modulation radius [l/D]':<25s}|{self.modulation:^9d}"
-        self.prop['psf_sampling']     = f"{'PSF sampling [px/(l/D)]':<25s}|{self.zeroPaddingFactor:^9.2f}"
-        self.prop['psf_centering']    = f"{'PSF centering':<25s}|{str(self.psfCentering):^9s}"
-        self.prop['n_valid_pixels']   = f"{'Valid pixels':<25s}|{self.nSignal:^9d}"
-        self.prop['post_processing']  = f"{'Post processing':<25s}|{self.postProcessing:^9s}"
+        self.prop['fov'] = f"{'Field of view [arcsec]':<25s}|{self.fov:^9.2f}"
+        self.prop['modulation'] = f"{'Modulation radius [l/D]':<25s}|{self.modulation:^9d}"
+        self.prop['psf_sampling'] = f"{'PSF sampling [px/(l/D)]':<25s}|{self.zeroPaddingFactor:^9.2f}"
+        self.prop['psf_centering'] = f"{'PSF centering':<25s}|{str(self.psfCentering):^9s}"
+        self.prop['n_valid_pixels'] = f"{'Valid pixels':<25s}|{self.nSignal:^9d}"
+        self.prop['post_processing'] = f"{'Post processing':<25s}|{self.postProcessing:^9s}"
         return self.prop
 
     def __repr__(self):

@@ -69,8 +69,8 @@ class MisRegistration:
                 'anam_' + str('%.2f' % self.anamorphosisAngle) + '_'\
                 'mR_' + str('%.4f' % (self.radialScaling+1.)) + '_'\
                 'mT_' + str('%.4f' % (self.tangentialScaling+1.))
-        
-        self.properties()
+
+        _ = self.properties()
         self.isInitialized = True
 
 #        mis-registrations can be added or sub-tracted using + and -
@@ -252,14 +252,22 @@ class MisRegistration:
                     'mN_' + str('%.4f' % (self.radialScaling+1.)) + '_'\
                     'mT_' + str('%.4f' % (val+1.))
 
+    # for backward compatibility
+    def print_properties(self):
+        print(self)
+
+    # for backward compatibility
+    def print_(self):
+        print(self)
+
     def properties(self) -> dict:
         self.prop = dict()
-        self.prop['rotation']           = f"{'Rotation [°]':<25s}|{self.rotationAngle:^9.1f}"
-        self.prop['shift_x']            = f"{'Shift X [m]':<25s}|{self.shiftX:^9.1e}"
-        self.prop['shift_y']            = f"{'Shift Y [m]':<25s}|{self.shiftY:^9.1e}"
-        self.prop['anamophosis_angle']  = f"{'Anamorphosis angle [°]':<25s}|{self.anamorphosisAngle:^9.1f}"
+        self.prop['rotation'] = f"{'Rotation [°]':<25s}|{self.rotationAngle:^9.2f}"
+        self.prop['shift_x'] = f"{'Shift X [m]':<25s}|{self.shiftX:^9.1e}"
+        self.prop['shift_y'] = f"{'Shift Y [m]':<25s}|{self.shiftY:^9.1e}"
+        self.prop['anamophosis_angle'] = f"{'Anamorphosis angle [°]':<25s}|{self.anamorphosisAngle:^9.2f}"
         self.prop['tengential_scaling'] = f"{'Tangential scaling [%]':<25s}|{self.tangentialScaling*100:^9.2f}"
-        self.prop['radial_scaling']     = f"{'Radial scaling [%]':<25s}|{self.radialScaling*100:^9.2f}"
+        self.prop['radial_scaling'] = f"{'Radial scaling [%]':<25s}|{self.radialScaling*100:^9.2f}"
         return self.prop
 
     def __repr__(self):
@@ -272,5 +280,3 @@ class MisRegistration:
         end_line = f'{"":-^{n_char}}\n'
         table = title + str_prop + end_line
         return table
-    
-    

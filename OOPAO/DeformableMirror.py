@@ -601,27 +601,17 @@ class DeformableMirror:
                 sys.exit(0)
             self.current_coefs = self.coefs.copy()
 
-    # def print_properties(self):
-    #     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% DEFORMABLE MIRROR %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-    #     print('{: ^21s}'.format('Controlled Actuators') +
-    #           '{: ^18s}'.format(str(self.nValidAct)))
-    #     print('{: ^21s}'.format('M4') + '{: ^18s}'.format(str(self.isM4)))
-    #     print('{: ^21s}'.format('Pitch') +
-    #           '{: ^18s}'.format(str(self.pitch)) + '{: ^18s}'.format('[m]'))
-    #     print('{: ^21s}'.format('Mechanical Coupling') +
-    #           '{: ^18s}'.format(str(self.mechCoupling)) + '{: ^18s}'.format('[%]'))
-    #     print('-------------------------------------------------------------------------------')
-    #     print('Mis-registration:')
-    #     self.misReg.print_()
-    #     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+    # for backward compatibility
+    def print_properties(self):
+        print(self)
 
     def properties(self) -> dict:
         self.prop = dict()
-        self.prop['controlled_act']      = f"{'Controlled Actuators':<25s}|{self.nValidAct:^9d}"
-        self.prop['is_m4']               = f"{'M4':<25s}|{str(self.isM4):^9s}"
-        self.prop['pitch']               = f"{'Pitch [m]':<25s}|{self.pitch:^9.2f}"
+        self.prop['controlled_act'] = f"{'Controlled Actuators':<25s}|{self.nValidAct:^9d}"
+        self.prop['is_m4'] = f"{'M4':<25s}|{str(self.isM4):^9s}"
+        self.prop['pitch'] = f"{'Pitch [m]':<25s}|{self.pitch:^9.2f}"
         self.prop['mechanical_coupling'] = f"{'Mechnical coupling [%]':<25s}|{self.mechCoupling*100:^9.0f}"
-        self.prop['delimiter']              = ''
+        self.prop['delimiter'] = ''
         self.prop.update(self.misReg.prop)
         return self.prop
 

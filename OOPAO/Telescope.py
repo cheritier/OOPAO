@@ -23,10 +23,10 @@ class Telescope:
     def __init__(self, resolution: float,
                  diameter: float,
                  samplingTime: float = 0.001,
-                 centralObstruction: float = 0,
-                 fov: float = 0,
+                 centralObstruction: float = 0.,
+                 fov: float = 0.,
                  pupil: bool = None,
-                 pupilReflectivity: float = 1,
+                 pupilReflectivity: float = 1.,
                  display_optical_path: bool = False):
         """TELESCOPE
         A Telescope object consists in defining the 2D mask of the entrance pupil.
@@ -706,16 +706,20 @@ class Telescope:
         else:
             print('No light propagated through the telescope')
         return
-    
+
+    # for backward compatibility
+    def print_properties(self):
+        print(self)
+
     def properties(self) -> dict:
         self.prop = dict()
-        self.prop['diameter']    = f"{'Diameter [m]':<25s}|{self.D:^10.2f}"
-        self.prop['resolution']  = f"{'Resolution [px]':<25s}|{self.resolution:^10d}"
-        self.prop['pixel_size']  = f"{'Pixel size [m]':<25s}|{self.pixelSize:^10.2f}"
-        self.prop['surface']     = f"{'Surface [m²]':<25s}|{self.pixelSize:^10.2f}"
-        self.prop['obstruction'] = f"{'Central obstruction [%]':<25s}|{self.centralObstruction*100:^10d}"
+        self.prop['diameter'] = f"{'Diameter [m]':<25s}|{self.D:^10.2f}"
+        self.prop['resolution'] = f"{'Resolution [px]':<25s}|{self.resolution:^10d}"
+        self.prop['pixel_size'] = f"{'Pixel size [m]':<25s}|{self.pixelSize:^10.2f}"
+        self.prop['surface'] = f"{'Surface [m²]':<25s}|{self.pixelSize:^10.2f}"
+        self.prop['obstruction'] = f"{'Central obstruction [%]':<25s}|{self.centralObstruction*100:^10.0f}"
         self.prop['n_pix_pupil'] = f"{'Pixels in pupil':<25s}|{self.pixelArea:^10d}"
-        self.prop['fov']         = f"{'Field of view [arcsec]':<25s}|{self.fov:^10d}"
+        self.prop['fov'] = f"{'Field of view [arcsec]':<25s}|{self.fov:^10.2f}"
         if self.src:
             if self.src.type == 'asterism':
                 for i_src in range(len(self.src.src)):

@@ -656,40 +656,7 @@ class Atmosphere:
         print('Seeing \t' + str(xp.round(seeingArcsec_wvl, 2)) + str('\t ["]'))
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         return
-
-    def print_atm(self):
-        # Keep this ancient function name for compatibility
-        self.print_properties()
-        
-    def print_properties(self):
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        print('{: ^12s}'.format('Layer') + '{: ^12s}'.format('Direction') + '{: ^12s}'.format('Speed') +
-              '{: ^12s}'.format('Altitude') + '{: ^12s}'.format('Fractional Cn2') + '{: ^12s}'.format('Diameter'))
-        print('{: ^12s}'.format('') + '{: ^12s}'.format('[deg]') + '{: ^12s}'.format(
-            '[m/s]') + '{: ^12s}'.format('[m]') + '{: ^12s}'.format('[%]') + '{: ^12s}'.format('[m]'))
-
-        print('======================================================================')
-
-        for i_layer in range(self.nLayer):
-            print('{: ^12s}'.format(str(i_layer+1)) + '{: ^12s}'.format(str(self.windDirection[i_layer])) + '{: ^12s}'.format(str(self.windSpeed[i_layer])) + '{: ^12s}'.format(
-                str(self.altitude[i_layer])) + '{: ^12s}'.format(str(self.fractionalR0[i_layer])) + '{: ^12s}'.format(str(getattr(self, 'layer_'+str(i_layer+1)).D)))
-            if i_layer < self.nLayer-1:
-                print(
-                    '----------------------------------------------------------------------')
-
-        print('======================================================================')
-
-        print('{: ^18s}'.format('r0 @500 nm') +
-              '{: ^18s}'.format(str(self.r0)+' [m]'))
-        print('{: ^18s}'.format('L0') + '{: ^18s}'.format(str(self.L0)+' [m]'))
-        print('{: ^18s}'.format('Tau0') + '{: ^18s}'.format(str(xp.round(self.tau0, 3))+' [s]'))
-        print('{: ^18s}'.format('V0') + '{: ^18s}'.format(str(xp.round(self.V0, 2))+' [m/s]'))
-        print('{: ^18s}'.format('Seeing @500nm') +
-              '{: ^18s}'.format(str(xp.round(self.seeingArcsec, 2))+' ["]'))
-        print('{: ^18s}'.format('Frequency') +
-              '{: ^18s}'.format(str(xp.round(1/self.telescope.samplingTime, 2))+' [Hz]'))
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-
+       
     def __mul__(self, obj):
         if obj.tag == 'telescope' or obj.tag == 'source' or obj.tag == 'asterism':
             if obj.tag == 'telescope':
@@ -985,6 +952,10 @@ class Atmosphere:
                 print('Updating the fractional R0...BEWARE COMPLETE THE RECOMPUTATION...NOT ONLY V0 and Tau0 !')
                 self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5)  # computation of equivalent wind speed, Roddier 1982
                 self.tau0 = 0.31 * self.r0 / self.V0  # Coherence time of atmosphere, Roddier 1981
+
+    # for backward compatibility
+    def print_properties(self):
+        print(self)
 
     def properties(self) -> dict:
         self.prop = dict()

@@ -19,10 +19,10 @@ class Detector:
                  FWC: int = None,
                  gain: int = 1,
                  sensor: str = 'CCD',
-                 QE: float = 1,
+                 QE: float = 1.,
                  binning: int = 1,
-                 psf_sampling: float = 2,
-                 darkCurrent: float = 0,
+                 psf_sampling: float = 2.,
+                 darkCurrent: float = 0.,
                  readoutNoise: float = 0,
                  photonNoise: bool = False,
                  backgroundNoise: bool = False,
@@ -378,6 +378,10 @@ class Detector:
         self._integrated_time = 0
         self.buffer_frame = []
 
+    # for backward compatibility
+    def print_properties(self):
+        print(self)
+
     def properties(self) -> dict:
         self.prop = dict()
         self.prop['sensor'] = f"{'Sensor type':<25s}|{self.sensor:^9s}"
@@ -392,7 +396,7 @@ class Detector:
         self.prop['gain'] = f"{'Gain':<25s}|{self.gain:^9d}"
         self.prop['QE'] = f"{'Quantum efficiency [%]':<25s}|{int(self.QE*100):^9d}"
         self.prop['binning'] = f"{'Binning':<25s}|{str(self.binning)+'x'+str(self.binning):^9s}"
-        self.prop['dark_current'] = f"{'Dark current [e-/px/s]':<25s}|{self.darkCurrent:^9d}"
+        self.prop['dark_current'] = f"{'Dark current [e-/px/s]':<25s}|{self.darkCurrent:^9.2f}"
         self.prop['photon_noise'] = f"{'Photon noise':<25s}|{str(self.photonNoise):^9s}"
         self.prop['bkg_noise'] = f"{'Bkg noise [e-]':<25s}|{str(self.backgroundNoise):^9s}"
         self.prop['readout_noise'] = f"{'Readout noise [e-/px]':<25s}|{self.readoutNoise:^9.1f}"

@@ -97,11 +97,12 @@ class Source:
             l.append(len(i))
         path = OOPAO_path[np.argmin(l)]
         precision = np.load(path+'/precision_oopao.npy')
-        if precision ==64:
+
+        if precision == 64:
             self.precision = np.float64
         else:
             self.precision = np.float32
-                
+
         if self.precision is np.float32:
             self.precision_complex = np.complex64
         else:
@@ -302,15 +303,19 @@ class Source:
         print('Flux updated, magnitude is %2i and flux is %.2e'%(self._magnitude, self._nPhoton))
         self.__updating_flux = False
 
+    # for backward compatibility
+    def print_properties(self):
+        print(self)
+
     def properties(self) -> dict:
         self.prop = dict()
-        self.prop['type']       = f"{'Source':<20s}|{self.type:^9s}"
+        self.prop['type'] = f"{'Source':<20s}|{self.type:^9s}"
         self.prop['wavelength'] = f"{'Wavelength [m]':<20s}|{self.wavelength:^9.1e}"
-        self.prop['zenith']     = f"{'Zenith [arcsec]':<20s}|{self.coordinates[0]:^9.2f}"
-        self.prop['azimuth']    = f"{'Azimuth [°]':<20s}|{self.coordinates[1]:^9.2f}"
-        self.prop['altitude']   = f"{'Altitude [m]':<20s}|{self.altitude:^9.2f}"
-        self.prop['magnitude']  = f"{'Magnitude':<20s}|{self._magnitude:^9.2f}"
-        self.prop['flux']       = f"{'Flux [photon/m²/s]':<20s}|{self._nPhoton:^9.1e}"
+        self.prop['zenith'] = f"{'Zenith [arcsec]':<20s}|{self.coordinates[0]:^9.2f}"
+        self.prop['azimuth'] = f"{'Azimuth [°]':<20s}|{self.coordinates[1]:^9.2f}"
+        self.prop['altitude'] = f"{'Altitude [m]':<20s}|{self.altitude:^9.2f}"
+        self.prop['magnitude'] = f"{'Magnitude':<20s}|{self._magnitude:^9.2f}"
+        self.prop['flux'] = f"{'Flux [photon/m²/s]':<20s}|{self._nPhoton:^9.1e}"
         return self.prop
 
     def __repr__(self):

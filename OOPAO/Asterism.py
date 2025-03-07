@@ -52,6 +52,12 @@ class Asterism:
         self.nPhoton = 0
         self.chromatic_shift = None
         print(self)
+        self.tag = 'asterism'
+        self.type = 'asterism'
+        for i in range(self.n_source):
+            self.coordinates.append(self.src[i].coordinates)
+            self.altitude.append(self.src[i].altitude)
+            self.nPhoton += self.src[i].nPhoton/self.n_source
         
     def __mul__(self, telescope):
         if type(telescope.OPD) is not list:
@@ -67,6 +73,10 @@ class Asterism:
         # assign the source object to the telescope object
         telescope.src = self
         return telescope
+
+    # for backward compatibility
+    def print_properties(self):
+        print(self)
     
     def properties(self) -> dict:
         self.prop = dict()
