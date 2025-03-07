@@ -963,9 +963,9 @@ class Atmosphere:
         self.prop['units'] = f"{'':^7s}|{'[°]':^11s}|{'[m/s]':^7s}|{'[m]':^10s}|{'[%]':^10s}|{'[m]':^10s}|"
         for i in range(self.nLayer):
             if i%2==0:
-                self.prop['layer_%02d'%i] = f"\033[00m{i+1:^7d}|{self.windDirection[i]:^11d}|{self.windSpeed[i]:^7.1f}|{self.altitude[i]:^10.0e}|{self.fractionalR0[i]*100:^10.0f}|{getattr(self,'layer_'+str(i+1)).D:^10.3f}|"
+                self.prop['layer_%02d'%i] = f"\033[00m{i+1:^7d}|{self.windDirection[i]:^11.0f}|{self.windSpeed[i]:^7.1f}|{self.altitude[i]:^10.0e}|{self.fractionalR0[i]*100:^10.0f}|{getattr(self,'layer_'+str(i+1)).D:^10.3f}|"
             else:
-                self.prop['layer_%02d'%i] = f"\033[47m{i+1:^7d}|{self.windDirection[i]:^11d}|{self.windSpeed[i]:^7.1f}|{self.altitude[i]:^10.0e}|{self.fractionalR0[i]*100:^10.0f}|{getattr(self,'layer_'+str(i+1)).D:^10.3f}|"
+                self.prop['layer_%02d'%i] = f"\033[47m{i+1:^7d}|{self.windDirection[i]:^11.0f}|{self.windSpeed[i]:^7.1f}|{self.altitude[i]:^10.0e}|{self.fractionalR0[i]*100:^10.0f}|{getattr(self,'layer_'+str(i+1)).D:^10.3f}|"
         self.prop['delimiter'] = ''
         self.prop['r0'] = f"{'r0 @ 500 nm [m]':<16s}|{self.r0:^10.2f}"
         self.prop['L0'] = f"{'L0 [m]':<16s}|{self.L0:^10.1f}"

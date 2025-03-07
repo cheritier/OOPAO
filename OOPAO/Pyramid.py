@@ -1181,12 +1181,12 @@ class Pyramid:
     def properties(self) -> dict:
         self.prop = dict()
         self.prop['pupil_diameter'] = f"{'Pupil diameter [px]':<25s}|{self.nSubap:^9d}"
-        self.prop['pupil_separation'] = f"{'Pupil separation [px]':<25s}|{self.n_pix_separation:^9d}"
+        self.prop['pupil_separation'] = f"{'Pupil separation [px]':<25s}|{self.n_pix_separation:^9.2f}"
         self.prop['fov'] = f"{'Field of view [arcsec]':<25s}|{self.fov:^9.2f}"
-        self.prop['modulation'] = f"{'Modulation radius [l/D]':<25s}|{self.modulation:^9d}"
+        self.prop['modulation'] = f"{'Modulation radius [l/D]':<25s}|{self.modulation:^9.1f}"
         self.prop['psf_sampling'] = f"{'PSF sampling [px/(l/D)]':<25s}|{self.zeroPaddingFactor:^9.2f}"
         self.prop['psf_centering'] = f"{'PSF centering':<25s}|{str(self.psfCentering):^9s}"
-        self.prop['n_valid_pixels'] = f"{'Valid pixels':<25s}|{self.nSignal:^9d}"
+        self.prop['n_valid_pixels'] = f"{'Valid pixels':<25s}|{self.nSignal:^9.0f}"
         self.prop['post_processing'] = f"{'Post processing':<25s}|{self.postProcessing:^9s}"
         return self.prop
 
