@@ -145,7 +145,7 @@ class Source:
             self.type = 'NGS'
 
         if self.display_properties:
-            self.print_properties()
+            print(self)
 
         self.is_initialized = True
         
@@ -301,19 +301,25 @@ class Source:
         self._nPhoton = self.zeroPoint*10**(-0.4*self._magnitude)
         print('Flux updated, magnitude is %2i and flux is %.2e'%(self._magnitude, self._nPhoton))
         self.__updating_flux = False
-    
-    def print_properties(self):
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOURCE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        print('{: ^8s}'.format('Source') + '{: ^10s}'.format('Wavelength') + '{: ^8s}'.format('Zenith') + '{: ^10s}'.format(
-            'Azimuth') + '{: ^10s}'.format('Altitude') + '{: ^10s}'.format('Magnitude') + '{: ^10s}'.format('Flux'))
-        print('{: ^8s}'.format('') + '{: ^10s}'.format('[m]') + '{: ^8s}'.format('[arcsec]') + '{: ^10s}'.format(
-            '[deg]') + '{: ^10s}'.format('[m]') + '{: ^10s}'.format('') + '{: ^10s}'.format('[phot/m2/s]'))
 
-        print('-------------------------------------------------------------------')
-        print('{: ^8s}'.format(self.type) + '{: ^10s}'.format(str(self.wavelength)) + '{: ^8s}'.format(str(self.coordinates[0])) + '{: ^10s}'.format(str(
-            self.coordinates[1]))+'{: ^10s}'.format(str(np.round(self.altitude, 2))) + '{: ^10s}'.format(str(self._magnitude))+'{: ^10s}'.format(str(np.round(self._nPhoton, 1))))
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+    def properties(self) -> dict:
+        self.prop = dict()
+        self.prop['type']       = f"{'Source':<20s}|{self.type:^9s}"
+        self.prop['wavelength'] = f"{'Wavelength [m]':<20s}|{self.wavelength:^9.1e}"
+        self.prop['zenith']     = f"{'Zenith [arcsec]':<20s}|{self.coordinates[0]:^9.2f}"
+        self.prop['azimuth']    = f"{'Azimuth [°]':<20s}|{self.coordinates[1]:^9.2f}"
+        self.prop['altitude']   = f"{'Altitude [m]':<20s}|{self.altitude:^9.2f}"
+        self.prop['magnitude']  = f"{'Magnitude':<20s}|{self._magnitude:^9.2f}"
+        self.prop['flux']       = f"{'Flux [photon/m²/s]':<20s}|{self._nPhoton:^9.1e}"
+        return self.prop
 
     def __repr__(self):
-        self.print_properties()
-        return ''
+        self.properties()
+        str_prop = str()
+        n_char = len(max(self.prop.values(), key=len))
+        for i in range(len(self.prop.values())):
+            str_prop += list(self.prop.values())[i] + '\n'
+        title = f'\n{" Source ":-^{n_char}}\n'
+        end_line = f'{"":-^{n_char}}\n'
+        table = title + str_prop + end_line
+        return table

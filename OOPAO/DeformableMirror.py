@@ -392,7 +392,7 @@ class DeformableMirror:
             self.coefs = np.zeros(self.nValidAct, dtype=self.precision())
         self.current_coefs = self.coefs.copy()
         if self.print_dm_properties:
-            self.print_properties()
+            print(self)
 
     def buildLayer(self, telescope, altitude):
         # initialize layer object
@@ -556,20 +556,6 @@ class DeformableMirror:
 
         return output
 
-    def print_properties(self):
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% DEFORMABLE MIRROR %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        print('{: ^21s}'.format('Controlled Actuators') +
-              '{: ^18s}'.format(str(self.nValidAct)))
-        print('{: ^21s}'.format('M4') + '{: ^18s}'.format(str(self.isM4)))
-        print('{: ^21s}'.format('Pitch') +
-              '{: ^18s}'.format(str(self.pitch)) + '{: ^18s}'.format('[m]'))
-        print('{: ^21s}'.format('Mechanical Coupling') +
-              '{: ^18s}'.format(str(self.mechCoupling)) + '{: ^18s}'.format('[%]'))
-        print('-------------------------------------------------------------------------------')
-        print('Mis-registration:')
-        self.misReg.print_()
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-
     @property
     def coefs(self):
         return self._coefs
@@ -615,6 +601,38 @@ class DeformableMirror:
                 sys.exit(0)
             self.current_coefs = self.coefs.copy()
 
+    # def print_properties(self):
+    #     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% DEFORMABLE MIRROR %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+    #     print('{: ^21s}'.format('Controlled Actuators') +
+    #           '{: ^18s}'.format(str(self.nValidAct)))
+    #     print('{: ^21s}'.format('M4') + '{: ^18s}'.format(str(self.isM4)))
+    #     print('{: ^21s}'.format('Pitch') +
+    #           '{: ^18s}'.format(str(self.pitch)) + '{: ^18s}'.format('[m]'))
+    #     print('{: ^21s}'.format('Mechanical Coupling') +
+    #           '{: ^18s}'.format(str(self.mechCoupling)) + '{: ^18s}'.format('[%]'))
+    #     print('-------------------------------------------------------------------------------')
+    #     print('Mis-registration:')
+    #     self.misReg.print_()
+    #     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+
+    def properties(self) -> dict:
+        self.prop = dict()
+        self.prop['controlled_act']      = f"{'Controlled Actuators':<25s}|{self.nValidAct:^9d}"
+        self.prop['is_m4']               = f"{'M4':<25s}|{str(self.isM4):^9s}"
+        self.prop['pitch']               = f"{'Pitch [m]':<25s}|{self.pitch:^9.2f}"
+        self.prop['mechanical_coupling'] = f"{'Mechnical coupling [%]':<25s}|{self.mechCoupling*100:^9.0f}"
+        self.prop['delimiter']              = ''
+        self.prop.update(self.misReg.prop)
+        return self.prop
+
     def __repr__(self):
-        self.print_properties()
-        return ' '
+        self.properties()
+        str_prop = str()
+        n_char = len(max(self.prop.values(), key=len))
+        self.prop['delimiter'] = f'{"== Misregistration ":=<{n_char}}'
+        for i in range(len(self.prop.values())):
+            str_prop += list(self.prop.values())[i] + '\n'
+        title = f'\n{" Deformable mirror ":-^{n_char}}\n'
+        end_line = f'{"":-^{n_char}}\n'
+        table = title + str_prop + end_line
+        return table

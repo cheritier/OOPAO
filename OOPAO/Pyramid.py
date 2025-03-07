@@ -345,7 +345,7 @@ class Pyramid:
         self.wfs_calibration(self.telescope)
         self.telescope.resetOPD()
         self.wfs_measure(phase_in=self.telescope.src.phase)
-        self.print_properties()
+        print(self)
 
     def mask_computation(self):
         print('Pyramid Mask initialization...')
@@ -1174,25 +1174,25 @@ class Pyramid:
         else:
             raise AttributeError('Error light propagated to the wrong type of object')
 
-    def print_properties(self):
-
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PYRAMID WFS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        print('{: ^18s}'.format('Pupils Diameter') +
-              '{: ^18s}'.format(str(self.nSubap)) + '{: ^18s}'.format('[pixels]'))
-        print('{: ^18s}'.format('Pupils Separation') +
-              '{: ^18s}'.format(str(self.n_pix_separation)) + '{: ^18s}'.format('[pixels]'))
-        print('{: ^18s}'.format(
-            'FoV') + '{: ^18s}'.format(str(np.round(self.fov, 2))) + '{: ^18s}'.format('[arcsec]'))
-        print('{: ^18s}'.format('TT Modulation') +
-              '{: ^18s}'.format(str(self.modulation)) + '{: ^18s}'.format('[lamda/D]'))
-        print('{: ^18s}'.format('PSF Core Sampling') + '{: ^18s}'.format(str(1 +
-              self.psfCentering*3)) + '{: ^18s}'.format('[pixel(s)]'))
-        print('{: ^18s}'.format('Valid Pixels') +
-              '{: ^18s}'.format(str(self.nSignal)) + '{: ^18s}'.format('[pixel(s)]'))
-        print('{: ^18s}'.format('Signal Computation') +
-              '{: ^18s}'.format(str(self.postProcessing)))
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+    def properties(self) -> dict:
+        self.prop = dict()
+        self.prop['pupil_diameter']   = f"{'Pupil diameter [px]':<25s}|{self.nSubap:^9d}"
+        self.prop['pupil_separation'] = f"{'Pupil separation [px]':<25s}|{self.n_pix_separation:^9d}"
+        self.prop['fov']              = f"{'Field of view [arcsec]':<25s}|{self.fov:^9.2f}"
+        self.prop['modulation']       = f"{'Modulation radius [l/D]':<25s}|{self.modulation:^9d}"
+        self.prop['psf_sampling']     = f"{'PSF sampling [px/(l/D)]':<25s}|{self.zeroPaddingFactor:^9.2f}"
+        self.prop['psf_centering']    = f"{'PSF centering':<25s}|{str(self.psfCentering):^9s}"
+        self.prop['n_valid_pixels']   = f"{'Valid pixels':<25s}|{self.nSignal:^9d}"
+        self.prop['post_processing']  = f"{'Post processing':<25s}|{self.postProcessing:^9s}"
+        return self.prop
 
     def __repr__(self):
-        self.print_properties()
-        return ''
+        self.properties()
+        str_prop = str()
+        n_char = len(max(self.prop.values(), key=len))
+        for i in range(len(self.prop.values())):
+            str_prop += list(self.prop.values())[i] + '\n'
+        title = f'\n{" Pyramid WFS ":-^{n_char}}\n'
+        end_line = f'{"":-^{n_char}}\n'
+        table = title + str_prop + end_line
+        return table
