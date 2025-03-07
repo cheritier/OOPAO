@@ -99,7 +99,7 @@ def getColorOrder():
         
 def display_wfs_signals(wfs,signals,returnOutput=False, norma = False):
     
-    if wfs.tag == 'pyramid' or 'bioEdge':
+    if wfs.tag == 'pyramid' or wfs.tag == 'bioEdge':
         A= np.zeros(wfs.validSignal.shape)
         print(A.shape)
         A[:]=np.inf
