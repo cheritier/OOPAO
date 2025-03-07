@@ -768,18 +768,18 @@ class ShackHartmann:
                 m = compute_diffractive_signals_multi()
 
                 # re-organization of signals into the right properties according to number of wavefronts considered
-                self.signal_2D = np.zeros([self.phase_buffer.shape[0],
-                                           m[0][0].shape[0],
-                                           m[0][0].shape[1]])
-                self.signal = np.zeros([self.phase_buffer.shape[0],
-                                        m[0][1].shape[0]])
+                self.signal_2D = np.zeros([m[0][0].shape[0],
+                                           m[0][0].shape[1],
+                                           self.phase_buffer.shape[0]])
+                self.signal = np.zeros([m[0][1].shape[0],
+                                        self.phase_buffer.shape[0]])
                 self.maps_intensity = np.zeros([self.phase_buffer.shape[0],
                                                 m[0][2].shape[0],
                                                 m[0][2].shape[1],
                                                 m[0][2].shape[2]])
                 for i in range(self.phase_buffer.shape[0]):
-                    self.signal_2D[i, :, :] = m[i][0]
-                    self.signal[i, :] = m[i][1]
+                    self.signal_2D[:, :, i] = m[i][0]
+                    self.signal[:, i] = m[i][1]
                     self.maps_intensity[i, :, :, :] = m[i][2]
 
                 # fill up camera frame if requested (default is False)
