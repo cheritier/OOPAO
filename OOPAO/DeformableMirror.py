@@ -607,7 +607,7 @@ class DeformableMirror:
 
     def properties(self) -> dict:
         self.prop = dict()
-        self.prop['controlled_act'] = f"{'Controlled Actuators':<25s}|{self.nValidAct:^9d}"
+        self.prop['controlled_act'] = f"{'Controlled Actuators':<25s}|{self.nValidAct:^9.0f}"
         self.prop['is_m4'] = f"{'M4':<25s}|{str(self.isM4):^9s}"
         self.prop['pitch'] = f"{'Pitch [m]':<25s}|{self.pitch:^9.2f}"
         self.prop['mechanical_coupling'] = f"{'Mechnical coupling [%]':<25s}|{self.mechCoupling*100:^9.0f}"
