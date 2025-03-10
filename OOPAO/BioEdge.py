@@ -26,7 +26,7 @@ except:
 
 class BioEdge:
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
-    def __init__(self,nSubap,telescope,modulation,grey_width,lightRatio, postProcessing='slopesMaps',psfCentering=True, n_pix_separation = 2, calibModulation=50, n_pix_edge=None,extraModulationFactor=0,zeroPadding=None,pupilSeparationRatio=None,edgePixel = None,binning =1,nTheta_user_defined=None,userValidSignal=None,old_mask=False,rooftop = None,delta_theta = 0, user_modulation_path = None):
+    def __init__(self,nSubap,telescope,modulation,grey_width,lightRatio, grey_length=False, postProcessing='slopesMaps',psfCentering=True, n_pix_separation = 2, calibModulation=50, n_pix_edge=None,extraModulationFactor=0,zeroPadding=None,pupilSeparationRatio=None,edgePixel = None,binning =1,nTheta_user_defined=None,userValidSignal=None,old_mask=False,rooftop = None,delta_theta = 0, user_modulation_path = None):
         """
         A Bi-O Edge object consists in defining a 2D phase mask located at the focal plane of the telescope to perform the Fourier Filtering of the EM-Field. 
         By default the Bi-O Edge detector is considered to be noise-free (for calibration purposes). These properties can be switched on and off on the fly (see properties)
@@ -156,7 +156,7 @@ class BioEdge:
         self.old_mask = old_mask
         # half width of the grey area of the mask in [l/D]
         self.grey_width                 = grey_width                                        # half width of the grey area of the mask
-        
+        self.grey_length                = grey_length                                       # half length of the grey area of the mask (set to false by default -> traditional Grey Bi-O-Edge)
         self.random_state_photon_noise  = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
         self.random_state_readout_noise = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
         self.random_state_background    = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
@@ -299,6 +299,14 @@ class BioEdge:
         if self.grey_width == 0:
             BW                                = np.zeros([self.nRes])
             BW[0:self.nRes//2]                = 1.
+            
+        elif self.grey_length != False:
+            r_grey              = self.zeroPaddingFactor
+            x                   = (np.asarray(range(self.nRes))-self.nRes//2)/self.grey_width
+            r                                 =  int(np.round(r_grey*self.grey_width))
+            BW                                = np.zeros([self.nRes])
+            BW[0:self.nRes//2]                = 1.
+            BW[self.nRes//2-r:self.nRes//2+r] = -1.*x[self.nRes//2-r:self.nRes//2+r]*1/(2.*r_grey)+0.5
         else:
             r_grey              = self.zeroPaddingFactor
             x                   = (np.asarray(range(self.nRes))-self.nRes//2)/self.grey_width
