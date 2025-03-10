@@ -315,8 +315,8 @@ class BioEdge:
             r_length =  int(np.round(r_grey*self.grey_length))
             A[0:self.nRes//2-r_length, 0:self.nRes//2] = 1.
             A[self.nRes//2+r_length:, 0:self.nRes//2] = 1.
-            A[0:self.nRes//2-r_length, self.nRes//2:] = 0.
-            A[self.nRes//2+r_length:, self.nRes//2:] = 0.
+            A[0:self.nRes//2-r_length, self.nRes//2+1:] = 0.
+            A[self.nRes//2+r_length:, self.nRes//2+1:] = 0.
         
         B       = np.sqrt(1-A**2)
         C       = np.copy(A.T)
