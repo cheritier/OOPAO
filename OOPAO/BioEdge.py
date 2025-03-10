@@ -299,14 +299,6 @@ class BioEdge:
         if self.grey_width == 0:
             BW                                = np.zeros([self.nRes])
             BW[0:self.nRes//2]                = 1.
-            
-        elif self.grey_length != False:
-            r_grey              = self.zeroPaddingFactor
-            x                   = (np.asarray(range(self.nRes))-self.nRes//2)/self.grey_width
-            r                                 =  int(np.round(r_grey*self.grey_width))
-            BW                                = np.zeros([self.nRes])
-            BW[0:self.nRes//2]                = 1.
-            BW[self.nRes//2-r:self.nRes//2+r] = -1.*x[self.nRes//2-r:self.nRes//2+r]*1/(2.*r_grey)+0.5
         else:
             r_grey              = self.zeroPaddingFactor
             x                   = (np.asarray(range(self.nRes))-self.nRes//2)/self.grey_width
@@ -317,6 +309,15 @@ class BioEdge:
         
         [X,Y]   = np.meshgrid(BW,BW)
         A[:,:]  = np.sqrt(X)
+        
+        if self.grey_length != False:
+            r_grey = self.zeroPaddingFactor
+            r_length =  int(np.round(r_grey*self.grey_length))
+            A[0:self.nRes//2-r_length, 0:self.nRes//2] = 1.
+            A[self.nRes//2+r_length:, 0:self.nRes//2] = 1.
+            A[0:self.nRes//2-r_length, self.nRes//2:] = 0.
+            A[self.nRes//2+r_length:, self.nRes//2:] = 0.
+        
         B       = np.sqrt(1-A**2)
         C       = np.copy(A.T)
         D       = np.copy(B.T)
