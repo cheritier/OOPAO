@@ -551,3 +551,14 @@ def gaussian_2D(resolution, fwhm, position = None, theta = 0,centered = True):
 
 def warning(string):
     print('\033[01m\033[33m'+'OOPAO Warning: \n' + string + '\033[0m')
+
+
+class OopaoError(Exception):
+    """Exception raised for errors related to OOPAO objects.
+    Attributes:
+    """
+
+    def __init__(self, string):
+        self.string = string
+        self.message = (string)
+        super().__init__(self.message)
