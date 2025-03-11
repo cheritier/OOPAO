@@ -8,7 +8,7 @@ Created on Thu May 20 17:52:09 2021
 import time
 import numpy as np
 from .Detector import Detector
-from .tools.tools import bin_ndarray, gaussian_2D, warning
+from .tools.tools import bin_ndarray, gaussian_2D, warning, OopaoError
 from joblib import Parallel, delayed
 import scipy as sp
 import sys
@@ -141,7 +141,7 @@ class ShackHartmann:
         self.tag = 'shackHartmann'
         self.telescope = telescope
         if self.telescope.src is None:
-            raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
+            raise OopaoError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
         if telescope.src.type == 'LGS':
             self.is_LGS = True
             self.convolution_tag = 'FFT'
@@ -193,7 +193,7 @@ class ShackHartmann:
             self.n_pix_subap = self.n_pix_subap_init
         else:
             if n_pixel_per_subaperture % 2 != 0:
-                raise ValueError('n_pixel_per_subaperture can only be an even number.')
+                raise OopaoError('n_pixel_per_subaperture can only be an even number.')
             self.n_pix_subap = n_pixel_per_subaperture
             if n_pixel_per_subaperture*self.pixel_scale > self.n_pix_subap_init*self.pixel_scale_init*self.zero_padding and self.is_LGS is False:
                 warning('The requested number of pixel per subaperture is too large!\n' +
@@ -707,7 +707,7 @@ class ShackHartmann:
                     if self.pixel_scale == self.pixel_scale_init:
                         intensity = intensity
                     elif self.pixel_scale < self.pixel_scale_init:
-                        raise ValueError('The smallest pixel scale value is ' + str(self.pixel_scale_init) + ' "')
+                        raise OopaoError('The smallest pixel scale value is ' + str(self.pixel_scale_init) + ' "')
                     else:
                         # pad the intensity to provide the right number of pixel before binning
                         self.extra_pixel = (self.binning_pixel_scale*self.n_pix_subap_init - intensity.shape[1])//2
@@ -737,7 +737,7 @@ class ShackHartmann:
                                                       self.n_pix_subap//self.binning_factor], operation='sum')
                 else:
                     if self.binning_factor != 1:
-                        raise ValueError('The binning factor must be a scalar >= 1')
+                        raise OopaoError('The binning factor must be a scalar >= 1')
 
                 # fill camera frame with computed intensity (only valid subapertures)
                 def joblib_fill_raw_data():
@@ -809,36 +809,6 @@ class ShackHartmann:
                 self.signal_2D = np.asarray(maps)/self.slopes_units
                 self.signal = self.signal_2D[:, self.valid_slopes_maps].T
 
-    def print_properties(self):
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SHACK HARTMANN WFS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        print('{: ^20s}'.format('Subapertures') +
-              '{: ^18s}'.format(str(self.nSubap)))
-        print('{: ^20s}'.format('Subaperture Size') + '{: ^18s}'.format(
-            str(np.round(self.telescope.D/self.nSubap, 2))) + '{: ^18s}'.format('[m]'))
-        print('{: ^20s}'.format('Pixel FoV') + '{: ^18s}'.format(
-            str(np.round(self.pixel_scale, 2))) + '{: ^18s}'.format('[arcsec]'))
-        print('{: ^20s}'.format('Subapertue FoV') + '{: ^18s}'.format(
-            str(np.round(self.pixel_scale*self.n_pix_subap, 2))) + '{: ^18s}'.format('[arcsec]'))
-        print('{: ^20s}'.format('Valid Subaperture') +
-              '{: ^18s}'.format(str(str(self.nValidSubaperture))))
-        print('{: ^20s}'.format('Binning Factor') +
-              '{: ^18s}'.format(str(str(self.binning_factor))))
-
-        if self.is_LGS:
-            print('{: ^20s}'.format('Max Spot Elungation') + '{: ^18s}'.format(str(np.round(self.max_elongation_arcsec, 3))) + '{: ^18s}'.format('[arcsec]'))
-            print('{: ^20s}'.format('Spot Sampling') +
-                  '{: ^18s}'.format(str(np.round(self.telescope.src.FWHM_spot_up/self.pixel_scale, 3))) + '{: ^18s}'.format('[pix/FWHM]'))
-        else:
-            print('{: ^20s}'.format('Spot Sampling') +
-                  '{: ^18s}'.format(str(self.zero_padding*self.pixel_scale_init/self.pixel_scale)) + '{: ^18s}'.format('[pix/FWHM]'))
-
-        print('{: ^20s}'.format('Geometric WFS') +
-              '{: ^18s}'.format(str(self.is_geometric)))
-
-        print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        if self.is_geometric:
-            warning('THE PHOTON AND READOUT NOISE ARE NOT CONSIDERED FOR GEOMETRIC SH-WFS')
-
     @property
     def is_geometric(self):
         return self._is_geometric
@@ -887,9 +857,37 @@ class ShackHartmann:
             obj._integrated_time += self.telescope.samplingTime
             obj.integrate(self.raw_data)
         else:
-            raise AttributeError('The light is propagated to the wrong type of object')
+            raise OopaoError('The light is propagated to the wrong type of object')
         return -1
 
+    # for backward compatibility
+    def print_properties(self):
+        print(self)
+
+    def properties(self) -> dict:
+        self.prop = dict()
+        self.prop['subapertures'] = f"{'Subapertures [lenslets]':<25s}|{self.nSubap:^9d}"
+        self.prop['subapertures_sky'] = f"{'Subaperture Pitch [m]':<25s}|{self.telescope.D/self.nSubap:^9.2f}"
+        self.prop['fov'] = f"{'Subaperture FoV [arcsec]':<25s}|{self.pixel_scale*self.n_pix_subap:^9.2f}"
+        self.prop['fov_pix'] = f"{'Pixel Scale [arcsec]':<25s}|{self.pixel_scale:^9.1f}"
+        self.prop['n_valid_pixels'] = f"{'Valid Subapertures':<25s}|{self.nSignal:^9.0f}"
+        if self.is_LGS:
+            self.prop['spot_sampling'] = f"{'Spot Sampling [pix]':<25s}|{self.telescope.src.FWHM_spot_up/self.pixel_scale:^9.3f}"
+            self.prop['spot_elongation'] = f"{'Max Elongation [arcsec]':<25s}|{self.max_elongation_arcsec:^9.3f}"
+        else:
+            self.prop['spot_sampling'] = f"{'Spot Sampling [pix]':<25s}|{self.zero_padding*self.pixel_scale_init/self.pixel_scale:^9.2f}"
+        self.prop['geometric'] = f"{'Geometric WFS':<25s}|{str(self.is_geometric):^9s}"
+        if self.is_geometric:
+            warning('All Detector Noises are disables with the geometric WFS')
+        return self.prop
+
     def __repr__(self):
-        self.print_properties()
-        return ' '
+        self.properties()
+        str_prop = str()
+        n_char = len(max(self.prop.values(), key=len))
+        for i in range(len(self.prop.values())):
+            str_prop += list(self.prop.values())[i] + '\n'
+        title = f'\n{" Shack-Hartmann WFS ":-^{n_char}}\n'
+        end_line = f'{"":-^{n_char}}\n'
+        table = title + str_prop + end_line
+        return table
