@@ -15,7 +15,7 @@ import matplotlib.gridspec as gridspec
 from .phaseStats import ft_phase_screen, ft_sh_phase_screen, makeCovarianceMatrix
 from .tools.displayTools import makeSquareAxes
 from .tools.interpolateGeometricalTransformation import interpolate_cube, interpolate_image
-from .tools.tools import createFolder, emptyClass, globalTransformation, pol2cart, translationImageMatrix
+from .tools.tools import createFolder, emptyClass, globalTransformation, pol2cart, translationImageMatrix, OopaoError
 try:
     import cupy as xp
     global_gpu_flag = True
@@ -156,15 +156,16 @@ class Atmosphere:
         # default value to update phase screens at each iteration
         self.user_defined_opd = False
         if self.telescope.src is None:
-            raise AttributeError(
-                'The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
+            raise OopaoError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
         self.mode = mode              # DEBUG -> first phase screen generation mode
         self.seeingArcsec = 206265*(self.wavelength/self.r0)
         # case when multiple sources are considered (LGS and NGS)
         self.asterism = asterism
         self.param = param
 
-    def initializeAtmosphere(self, telescope, compute_covariance=True):
+    def initializeAtmosphere(self, telescope=None, compute_covariance=True):
+        if telescope is not None:
+            self.telescope = telescope
         self.compute_covariance = compute_covariance
         phase_support = self.initialize_phase_support()
         self.fov = telescope.fov
@@ -340,8 +341,7 @@ class Atmosphere:
                     if len(self.telescope.src.chromatic_shift) == self.nLayer:
                         chromatic_shift = self.telescope.src.chromatic_shift[i_layer]
                     else:
-                        raise ValueError(
-                            'The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')
+                        raise OopaoError('The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')
                 else:
                     chromatic_shift = 0
                 [x_z, y_z] = pol2cart(layer.altitude*xp.tan((self.telescope.src.coordinates[0]+chromatic_shift)/206265)
@@ -376,8 +376,7 @@ class Atmosphere:
 
     def updateLayer(self, layer, shift=None):
         if self.compute_covariance is False:
-            raise AttributeError(
-                'The computation of the covariance matrices was set to False in the atmosphere initialisation. Set it to True to provide moving layers.')
+            raise OopaoError('The computation of the covariance matrices was set to False in the atmosphere initialisation. Set it to True to provide moving layers.')
         self.ps_loop = layer.D / (layer.resolution)
         ps_turb_x = layer.vX*self.telescope.samplingTime
         ps_turb_y = layer.vY*self.telescope.samplingTime
@@ -438,6 +437,8 @@ class Atmosphere:
                 layer.mapShift, shiftMatrix)[1:-1, 1:-1]
 
     def update(self, OPD=None):
+        if self.hasNotBeenInitialized:
+            raise OopaoError('The Atmosphere object needs to be initialised using the initialiseAtmosphere()')
         if OPD is None:
             self.user_defined_opd = False
 
@@ -615,8 +616,7 @@ class Atmosphere:
             tmpLayer = getattr(self, 'layer_'+str(i_layer+1))
 
             if self.mode == 1:
-                raise DeprecationWarning(
-                    "The dependency to the aotools package has been deprecated.")
+                raise DeprecationWarning("The dependency to the aotools package has been deprecated.")
             else:
                 if self.mode == 2:
                     # with subharmonics
@@ -673,7 +673,7 @@ class Atmosphere:
                     obj = self.telescope
                     self.asterism = None
                 else:
-                    raise ValueError('The source object zenith ('+str(obj.coordinates[0])+'") is outside of the telescope fov ('+str(
+                    raise OopaoError('The source object zenith ('+str(obj.coordinates[0])+'") is outside of the telescope fov ('+str(
                         self.fov//2)+'")! You can:\n - Reduce the zenith of the source \n - Re-initialize the atmosphere object using a telescope with a larger fov')
             elif obj.tag == 'asterism':
                 c_ = xp.asarray(obj.coordinates)
@@ -682,7 +682,7 @@ class Atmosphere:
                     self.asterism = obj
                     obj = self.telescope
                 else:
-                    raise ValueError('One of the source is outside of the telescope fov ('+str(self.fov//2) +
+                    raise OopaoError('One of the source is outside of the telescope fov ('+str(self.fov//2) +
                                      '")! You can:\n - Reduce the zenith of the source \n - Re-initialize the atmosphere object using a telescope with a larger fov')
             if self.user_defined_opd is False:
                 self.set_pupil_footprint()
@@ -705,8 +705,7 @@ class Atmosphere:
             obj.isPaired = True
             return obj
         else:
-            raise AttributeError(
-                'The atmosphere can be multiplied only with a Telescope or a Source object!')
+            raise OopaoError('The atmosphere can be multiplied only with a Telescope or a Source object!')
 
     def display_atm_layers(self, layer_index=None, fig_index=None, list_src=None):
         display_cn2 = False
@@ -720,7 +719,7 @@ class Atmosphere:
             display_cn2 = True
 
         if type(layer_index) is not list:
-            raise TypeError(' layer_index should be a list')
+            raise OopaoError('layer_index should be a list')
         normalized_speed = xp.asarray(self.windSpeed)/max(self.windSpeed)
 
         if self.telescope.src.tag == 'asterism':
@@ -776,8 +775,7 @@ class Atmosphere:
                         if len(list_src[i_source].chromatic_shift) == self.nLayer:
                             chromatic_shift = list_src[i_source].chromatic_shift[i_l]
                         else:
-                            raise ValueError(
-                                'The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')
+                            raise OopaoError('The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')
                     else:
                         chromatic_shift = 0
                     [x_z, y_z] = pol2cart(tmpLayer.altitude*xp.tan((list_src[i_source].coordinates[0] +
@@ -807,8 +805,7 @@ class Atmosphere:
                     if len(self.telescope.src.chromatic_shift) == self.nLayer:
                         chromatic_shift = self.telescope.src.chromatic_shift[i_l]
                     else:
-                        raise ValueError(
-                            'The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')
+                        raise OopaoError('The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')
                 else:
                     chromatic_shift = 0
                 [x_z, y_z] = pol2cart((self.telescope.src.coordinates[0]+chromatic_shift)*xp.tan((self.telescope.src.coordinates[0]+chromatic_shift)/206265) * tmpLayer.resolution / tmpLayer.D,
@@ -893,7 +890,7 @@ class Atmosphere:
 
         if self.hasNotBeenInitialized is False:
             if len(val) != self.nLayer:
-                raise ValueError('Wrong value for the wind-speed! Make sure that you inpute a wind-speed for each layer')
+                raise OopaoError('Wrong value for the wind-speed! Make sure that you inpute a wind-speed for each layer')
             else:
                 print('Updating the wind speed...')
                 self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5)  # computation of equivalent wind speed, Roddier 1982
@@ -921,7 +918,7 @@ class Atmosphere:
 
         if self.hasNotBeenInitialized is False:
             if len(val) != self.nLayer:
-                raise ValueError('Wrong value for the wind-speed! Make sure that you inpute a wind-direction for each layer')
+                raise OopaoError('Wrong value for the wind-speed! Make sure that you inpute a wind-direction for each layer')
             else:
                 print('Updating the wind direction...')
                 for i_layer in range(self.nLayer):
@@ -946,7 +943,7 @@ class Atmosphere:
         self._fractionalR0 = val
         if self.hasNotBeenInitialized is False:
             if len(val) != self.nLayer:
-                raise ValueError('Wrong value for the fractional r0 ! Make sure that you inpute a fractional r0 for each layer!' +
+                raise OopaoError('Wrong value for the fractional r0 ! Make sure that you inpute a fractional r0 for each layer!' +
                                  ' If you want to change the number of layer, re-generate a new atmosphere object.')
             else:
                 print('Updating the fractional R0...BEWARE COMPLETE THE RECOMPUTATION...NOT ONLY V0 and Tau0 !')

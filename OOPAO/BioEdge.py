@@ -9,7 +9,7 @@ import inspect
 import multiprocessing
 import sys
 import time
-from .tools.tools import warning
+from .tools.tools import warning, OopaoError
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.ndimage as sp
@@ -126,13 +126,13 @@ class BioEdge:
             self.precision_complex = xp.complex64
         else:
             self.precision_complex = xp.complex128
-        
-        # initialize the Bi-O Edge Object 
-        self.telescope                  = telescope                                         # telescope attached to the wfs
-        if self.telescope.resolution/nSubap <2 or (self.telescope.resolution/nSubap)%2 !=0:
-            raise ValueError('The resolution should be an even number and be a multiple of 2**i where i>=2')
+
+        # initialize the Bi-O Edge Object
+        self.telescope = telescope                                         # telescope attached to the wfs
+        if self.telescope.resolution/nSubap < 2 or (self.telescope.resolution/nSubap) % 2 != 0:
+            raise OopaoError('The resolution should be an even number and be a multiple of 2**i where i>=2')
         if self.telescope.src is None:
-            raise AttributeError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
+            raise OopaoError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
         # delta theta in degree to change the position of the modulation point (default is 0 <=> modulation point on the edge of two sides of the pyramid)
         self.delta_theta = delta_theta
         # user defined number of modulation point
@@ -155,22 +155,20 @@ class BioEdge:
         self.binning = binning
         self.old_mask = old_mask
         # half width of the grey area of the mask in [l/D]
-        self.grey_width                 = grey_width                                        # half width of the grey area of the mask
-        self.grey_length                = grey_length                                       # half length of the grey area of the mask (set to false by default -> traditional Grey Bi-O-Edge)
-        self.random_state_photon_noise  = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
-        self.random_state_readout_noise = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
-        self.random_state_background    = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise 
-        self.user_modulation_path       = user_modulation_path                              # user defined modulation path
-        self.pupilSeparationRatio       = pupilSeparationRatio                              # Separation ratio of the PWFS pupils (Diameter/Distance Center to Center) -- DEPRECATED -> use n_pix_separation instead)
-        self.joblib_prefer_masks        = 'threads'
-        self.nJobs_masks                = 1 
+        self.grey_width = grey_width                                        # half width of the grey area of the mask
+        self.grey_length = grey_length                                       # half length of the grey area of the mask (set to false by default -> traditional Grey Bi-O-Edge)
+        self.random_state_photon_noise = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise
+        self.random_state_readout_noise = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise
+        self.random_state_background = np.random.RandomState(seed=int(time.time()))      # random states to reproduce sequences of noise
+        self.user_modulation_path = user_modulation_path                              # user defined modulation path
+        self.pupilSeparationRatio = pupilSeparationRatio                              # Separation ratio of the PWFS pupils (Diameter/Distance Center to Center) -- DEPRECATED -> use n_pix_separation instead)
+        self.joblib_prefer_masks = 'threads'
+        self.nJobs_masks = 1
         self.weight_vector = None
         if edgePixel is not None:
-            raise AttributeError(
-                'The use of the edgePixel property has been deprecated. Consider using n_pix_edge instead')
+            raise OopaoError('The use of the edgePixel property has been deprecated. Consider using n_pix_edge instead')
         if pupilSeparationRatio is not None:
-            raise AttributeError(
-                'The use of the pupilSeparationRatio property has been deprecated. Consider using n_pix_separation instead')
+            raise OopaoError('The use of the pupilSeparationRatio property has been deprecated. Consider using n_pix_separation instead')
         else:
             self.n_pix_separation = n_pix_separation
             self.sx = [0, 0, 0, 0]
@@ -180,17 +178,14 @@ class BioEdge:
         else:
             self.n_pix_edge = n_pix_edge
             if n_pix_edge != self.n_pix_separation//2:
-                warning('The recommanded value for n_pix_edge is ' +
-                      str(self.n_pix_separation//2) + ' instead of ' + str(n_pix_edge))
+                warning('The recommanded value for n_pix_edge is ' + str(self.n_pix_separation//2) + ' instead of ' + str(n_pix_edge))
         if self.gpu_available:
             self.joblib_setting = 'processes'
         else:
             self.joblib_setting = 'threads'
-        self.rooftop = rooftop    
-
+        self.rooftop = rooftop
         if zeroPadding is not None:
-            raise AttributeError(
-                'The use of the zeroPadding property has been deprecated')
+            raise OopaoError('The use of the zeroPadding property has been deprecated')
         # Case where the zero-padding is not specificed => taking the smallest value ensuring to get edgePixel space from the edge.
         self.nRes = int((self.nSubap*2+self.n_pix_separation +
                         self.n_pix_edge*2)*self.telescope.resolution/self.nSubap)
@@ -369,7 +364,7 @@ class BioEdge:
                 [shift_x.append(i_x*factor) for i_x in sx]
                 [shift_y.append(i_y*factor) for i_y in sy]
             else:
-                raise ValueError('Wrong size for sx and/or sy, a list of 4 values is expected.')
+                raise OopaoError('Wrong size for sx and/or sy, a list of 4 values is expected.')
         if np.max(np.abs(shift_x))>self.n_pix_edge or np.max(np.abs(shift_y))>self.n_pix_edge:
             warning('The Bi-O Edge pupils have been shifted outside of the detector!! Wrapping of the signal is currently occuring!!')
 
@@ -923,7 +918,7 @@ class BioEdge:
     def modulation(self,val):
         self._modulation = val
         if self._modulation>=(self.telescope.resolution//2):
-            raise ValueError('Error the modulation radius is too large for this resolution! Consider using a larger telescope resolution!')
+            raise OopaoError('Error the modulation radius is too large for this resolution! Consider using a larger telescope resolution!')
         if val !=0:
             self.modulation_path = []
             if self.user_modulation_path is not None:

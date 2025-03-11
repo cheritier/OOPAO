@@ -15,7 +15,7 @@ try:
 except ImportError or ModuleNotFoundError:
     xp = np
 
-from OOPAO.tools.tools import set_binning, warning
+from OOPAO.tools.tools import set_binning, warning, OopaoError
 
 
 class Telescope:
@@ -217,7 +217,7 @@ class Telescope:
         self.pupil = self.pupil
 
     def computeCoronoPSF(self, zeroPaddingFactor=2, display=False, coronagraphDiameter=4.5):
-        raise NameError("The method computeCoronoPSF has been deprecated and is now integrated within the computePSF method setting the tel.coronograph_diameter property (default value is None and means no coronograph considered)")
+        raise OopaoError("The method computeCoronoPSF has been deprecated and is now integrated within the computePSF method setting the tel.coronograph_diameter property (default value is None and means no coronograph considered)")
 
     def computePSF(self, zeroPaddingFactor=2, detector=None, img_resolution=None):
         conversion_constant = (180/xp.pi)*3600
@@ -231,8 +231,7 @@ class Telescope:
             img_resolution = zeroPaddingFactor*self.resolution
         if self.src is None:
             # raise an error if no source is coupled to the telescope
-            raise AttributeError(
-                'The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
+            raise OopaoError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
         elif self.src.tag == 'asterism':
             # case with multiple sources
             input_source = self.src.src
@@ -258,8 +257,7 @@ class Telescope:
             if input_wavelenght == input_source[i_src].wavelength:
                 input_wavelenght = input_source[i_src].wavelength
             else:
-                raise AttributeError(
-                    'The asterism contains sources with different wavelengths. Summing up PSFs with different wavelength is not implemented.')
+                raise OopaoError('The asterism contains sources with different wavelengths. Summing up PSFs with different wavelength is not implemented.')
             if self.spatialFilter is None:
                 amp_mask = 1
                 phase = input_source[i_src].phase
@@ -316,8 +314,7 @@ class Telescope:
             oversampling = oversampling
         if img_resolution is not None:
             if img_resolution > zeroPaddingFactor * resolution:
-                raise ValueError(
-                    'Error: image has too many pixels for this pupil sampling. Try using a pupil mask with more pixels')
+                raise OopaoError('Error: image has too many pixels for this pupil sampling. Try using a pupil mask with more pixels')
         else:
             img_resolution = zeroPaddingFactor * resolution
         # If PSF is undersampled apply the integer oversampling
@@ -481,8 +478,7 @@ class Telescope:
                             self.src.src[i].phase = self._OPD * \
                                 2*xp.pi/self.src.src[i].wavelength
                     else:
-                        raise TypeError(
-                            'The wrong object was attached to the telescope')
+                        raise OopaoError('The wrong object was attached to the telescope')
             else:
                 if self.src.tag == 'asterism':
                     if len(self._OPD) == self.src.n_source:
@@ -490,8 +486,7 @@ class Telescope:
                             self.src.src[i].phase = self._OPD[i] * \
                                 2*xp.pi/self.src.src[i].wavelength
                     else:
-                        raise TypeError(
-                            'A list of OPD cannnot be propagated to a single source')
+                        raise OopaoError('A list of OPD cannnot be propagated to a single source')
 
     @property
     def OPD_no_pupil(self):
@@ -511,8 +506,7 @@ class Telescope:
                             self.src.src[i].phase_no_pupil = self._OPD_no_pupil * \
                                 2*xp.pi/self.src.src[i].wavelength
                     else:
-                        raise TypeError(
-                            'The wrong object was attached to the telescope')
+                        raise OopaoError('The wrong object was attached to the telescope')
             else:
                 if self.src.tag == 'asterism':
                     if len(self._OPD_no_pupil) == self.src.n_source:
@@ -520,7 +514,7 @@ class Telescope:
                             self.src.src[i].phase_no_pupil = self._OPD_no_pupil[i] * \
                                 2*xp.pi/self.src.src[i].wavelength
                     else:
-                        raise TypeError('The lenght of the OPD list ('+str(len(self._OPD_no_pupil)) +
+                        raise OopaoError('The lenght of the OPD list ('+str(len(self._OPD_no_pupil)) +
                                         ') does not match the number of sources ('+str(self.src.n_source)+')')
 
     def __mul__(self, obj):
@@ -538,7 +532,7 @@ class Telescope:
                         wfs_signal.append(obj[i_obj].signal)
                     obj[i_obj].signal = xp.mean(wfs_signal, axis=0)
                 else:
-                    raise ValueError('Error! There is a mis-match between the number of Sources ('+str(
+                    raise OopaoError('Error! There is a mis-match between the number of Sources ('+str(
                         len(self.OPD))+') and the number of WFS ('+str(len(obj))+')')
             else:
                 for i_obj in range(len(obj)):
@@ -590,8 +584,7 @@ class Telescope:
                 obj.fov_rad = self.xPSF_rad[1] - self.xPSF_rad[0]
                 if obj.integrationTime is not None:
                     if obj.integrationTime < self.samplingTime:
-                        raise ValueError(
-                            'The Detector integration time is smaller than the AO loop sampling Time. ')
+                        raise OopaoError('The Detector integration time is smaller than the AO loop sampling Time. ')
                 obj._integrated_time += self.samplingTime
                 if xp.ndim(self.PSF) == 3:
                     obj.integrate(xp.sum(self.PSF, axis=0))
@@ -662,11 +655,10 @@ class Telescope:
                             self.OPD = self.OPD
                             self.OPD_no_pupil = self.OPD_no_pupil
                         else:
-                            raise TypeError('The lenght of the OPD list ('+str(len(self._OPD_no_pupil)) +
-                                            ') does not match the number of sources ('+str(self.src.n_source)+')')
+                            raise OopaoError('The lenght of the OPD list ('+str(len(self._OPD_no_pupil))
+                                             + ') does not match the number of sources ('+str(self.src.n_source)+')')
                     else:
-                        raise TypeError(
-                            'The wrong object was attached to the telescope')
+                        raise OopaoError('The wrong object was attached to the telescope')
         return self
 
     # Combining with an atmosphere object

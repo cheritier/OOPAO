@@ -8,6 +8,7 @@ Created on Fri Nov  8 09:31:46 2024
 import numpy as np
 from numpy.fft import fftn, fftshift, ifftn, fft2, ifft2
 from tqdm import tqdm
+from .tools.tools import OopaoError
 
 
 class GainSensingCamera:
@@ -112,7 +113,7 @@ class GainSensingCamera:
 
         """
         if self.calibration_ready is False:
-            raise AttributeError('Optical gains must be initialized first!')
+            raise OopaoError('Optical gains must be initialized first!')
         else:
             frame = frame/frame.sum()
             self.IR_sky = impulse_response(self.mask, frame)
@@ -142,7 +143,7 @@ def padder(array: np.array, size_out: int) -> np.array:
         pad = (size_out - array.shape[0]) // 2
         array_padded = np.pad(array, ((pad, pad), (pad, pad), (0, 0)))
     else:
-        raise ValueError(
+        raise OopaoError(
             f'Output size {size_out} should be higher than input size {array.shape[0]}')
     return array_padded
 

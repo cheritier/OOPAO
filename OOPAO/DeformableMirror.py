@@ -17,7 +17,7 @@ except ImportError or ModuleNotFoundError:
 from joblib import Parallel, delayed
 from .MisRegistration import MisRegistration
 from .tools.interpolateGeometricalTransformation import interpolate_cube
-from .tools.tools import emptyClass, pol2cart, print_
+from .tools.tools import emptyClass, pol2cart, print_, OopaoError
 
 
 class DeformableMirror:
@@ -258,8 +258,7 @@ class DeformableMirror:
         self.telescope = telescope
         self.altitude = altitude
         if mechCoupling <= 0:
-            raise ValueError(
-                'The value of mechanical coupling should be positive.')
+            raise OopaoError('The value of mechanical coupling should be positive.')
         if altitude is None:
             # Resolution of the DM influence Functions
             self.resolution = telescope.resolution
@@ -322,8 +321,7 @@ class DeformableMirror:
 
         else:
             if np.shape(coordinates)[1] != 2:
-                raise AttributeError(
-                    'Wrong size for the DM coordinates, the (x,y) coordinates should be input as a 2D array of dimension [nAct,2]')
+                raise OopaoError('Wrong size for the DM coordinates, the (x,y) coordinates should be input as a 2D array of dimension [nAct,2]')
 
             print_('Coordinates loaded...', print_dm_properties)
 

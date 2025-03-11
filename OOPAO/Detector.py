@@ -7,7 +7,7 @@ Created on Wed Apr  3 14:18:03 2024
 
 import numpy as np
 import time
-from OOPAO.tools.tools import set_binning, warning
+from OOPAO.tools.tools import set_binning, warning, OopaoError
 
 
 class Detector:
@@ -102,7 +102,7 @@ class Detector:
         self.sensor = sensor
         self.psf_sampling = psf_sampling
         if self.sensor not in ['EMCCD', 'CCD', 'CMOS']:
-            raise ValueError("Sensor must be 'EMCCD', 'CCD', or 'CMOS'")
+            raise OopaoError("Sensor must be 'EMCCD', 'CCD', or 'CMOS'")
         self.QE = QE
         self.binning = binning
         self.darkCurrent = darkCurrent
@@ -138,6 +138,7 @@ class Detector:
             seed=int(time.time()))      # random states to reproduce sequences of noise
         self.random_state_dark_shot_noise = np.random.RandomState(
             seed=int(time.time()))      # random states to reproduce sequences of noise
+        self.print_properties()
 
     def rebin(self, arr, new_shape):
         shape = (new_shape[0], arr.shape[0] // new_shape[0],
@@ -209,8 +210,7 @@ class Detector:
 
     def set_background_noise(self, frame):
         if hasattr(self, 'backgroundFlux') is False or self.backgroundFlux is None:
-            raise ValueError(
-                'The background map backgroundFlux is not properly set. A map of shape '+str(frame.shape)+' is expected')
+            raise OopaoError('The background map backgroundFlux is not properly set. A map of shape '+str(frame.shape)+' is expected')
         else:
             self.backgroundNoiseAdded = self.random_state_background.poisson(
                 self.backgroundFlux)
@@ -237,8 +237,7 @@ class Detector:
             frame -= self.backgroundMap
             return frame
         except:
-            raise AttributeError(
-                'The shape of the backgroun map does not match the ')
+            raise OopaoError('The shape of the backgroun map does not match the ')
 
     def readout(self):
         frame = np.sum(self.buffer_frame, axis=0)
@@ -350,8 +349,7 @@ class Detector:
             else:
                 obj.compute_optical_gains(self.frame)
         else:
-            raise AttributeError(
-                f'Coupled object should be a "GSC" but is {obj.tag}')
+            raise OopaoError(f'Coupled object should be a "GSC" but is {obj.tag}')
 
     @property
     def backgroundNoise(self):

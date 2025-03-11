@@ -5,6 +5,7 @@ Created on Wed Feb 19 10:32:15 2020
 @author: cheritie
 """
 import numpy as np
+from .tools.tools import OopaoError
 import sys
 
 
@@ -181,8 +182,7 @@ class Source:
                                        '('+self.optBand+')', id(self)]
             return obj
         else:
-            raise AttributeError(
-                'The Source can only be paired to a Telescope!')
+            raise OopaoError('The Source can only be paired to a Telescope!')
 
     def photometry(self, arg):
         # photometry object [wavelength, bandwidth, zeroPoint]
@@ -271,9 +271,9 @@ class Source:
             if hasattr(phot, arg):
                 return getattr(phot, arg)
             else:
-                raise ValueError('Wrong name for the photometry object')
+                raise OopaoError('Wrong name for the photometry object')
         else:
-            raise ValueError('The photometry object takes a scalar as an input')
+            raise OopaoError('The photometry object takes a scalar as an input')
 
     @property
     def nPhoton(self):
