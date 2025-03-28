@@ -237,7 +237,7 @@ class Detector:
             frame -= self.backgroundMap
             return frame
         except:
-            raise OopaoError('The shape of the backgroun map does not match the ')
+            raise OopaoError('The shape of the backgroun map does not match the detector frame resolution')
 
     def readout(self):
         frame = np.sum(self.buffer_frame, axis=0)
@@ -308,6 +308,7 @@ class Detector:
         if self.integrationTime is None:
             self.readout()
         else:
+            self.frame = self.perfect_frame.copy()*0
             if self._integrated_time >= self.integrationTime:
                 self.readout()
 
