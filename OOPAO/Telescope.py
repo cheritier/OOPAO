@@ -269,7 +269,7 @@ class Telescope:
             # add a Tip/Tilt for off-axis sources
             [Tip, Tilt] = xp.meshgrid(xp.linspace(-xp.pi, xp.pi, self.resolution, dtype=self.precision()),
                                       xp.linspace(-xp.pi, xp.pi, self.resolution, dtype=self.precision()))
-            self.delta_TT = input_source[i_src].coordinates[0]*(1/conversion_constant)*(self.D/input_source[i_src].wavelength)*(xp.cos(input_source[i_src].coordinates[1])*Tip+xp.sin(input_source[i_src].coordinates[1])*Tilt)*self.pupil
+            self.delta_TT = input_source[i_src].coordinates[0]*(1/conversion_constant)*(self.D/input_source[i_src].wavelength)*(xp.cos(np.deg2rad(input_source[i_src].coordinates[1]))*Tip+xp.sin(np.deg2rad(input_source[i_src].coordinates[1]))*Tilt)*self.pupil
 
             # axis in arcsec
             self.xPSF_arcsec = [-conversion_constant*(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor),
