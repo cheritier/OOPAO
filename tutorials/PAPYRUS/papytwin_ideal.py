@@ -59,6 +59,7 @@ src_vis_calib = Source(optBand   = 'R',
                        magnitude = -2.5)  # Magnitude to get 80% of saturation on OCAM in calibration @ 500 fps, gain=1
 src_vis_calib.nPhoton *= BS2PyWFS
 
+
 src_vis_sky = Source(optBand   = 'R',
                      magnitude = star_magnitude_vis)
 src_vis_sky.nPhoton *= BS2PyWFS * R2QE * param['m1_reflectivity'] # Flux adjusted with respect to the transmittivity of T152+PAPYRUS
@@ -161,7 +162,7 @@ calib = InteractionMatrix(ngs            = src_vis_calib,
 
 # Science imagery camera (will be CRED3 soon...)
 CRED2 = Detector(nRes            = CRED2_param['resolution'],
-                 integrationTime = 0.006,
+                 integrationTime = tel.samplingTime,
                  bits            = CRED2_param['quantization'],
                  FWC             = CRED2_param['FWC'],
                  gain            = 1,
@@ -175,7 +176,7 @@ CRED2 = Detector(nRes            = CRED2_param['resolution'],
 
 #Gain Sensing Camera
 CS165CU = Detector(nRes            = 200,
-                   integrationTime = 0.006,
+                   integrationTime = tel.samplingTime,
                    bits            = CS165CU_param['quantization'],
                    FWC             = CS165CU_param['FWC'],
                    gain            = 1,
