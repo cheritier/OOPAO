@@ -309,13 +309,16 @@ class Source:
 
     def properties(self) -> dict:
         self.prop = dict()
-        self.prop['type'] = f"{'Source':<20s}|{self.type:^9s}"
-        self.prop['wavelength'] = f"{'Wavelength [m]':<20s}|{self.wavelength:^9.1e}"
-        self.prop['zenith'] = f"{'Zenith [arcsec]':<20s}|{self.coordinates[0]:^9.2f}"
-        self.prop['azimuth'] = f"{'Azimuth [°]':<20s}|{self.coordinates[1]:^9.2f}"
-        self.prop['altitude'] = f"{'Altitude [m]':<20s}|{self.altitude:^9.2f}"
-        self.prop['magnitude'] = f"{'Magnitude':<20s}|{self._magnitude:^9.2f}"
-        self.prop['flux'] = f"{'Flux [photon/m²/s]':<20s}|{self._nPhoton:^9.1e}"
+        self.prop['type'] = f"{'Source':<25s}|{self.type:^9s}"
+        self.prop['wavelength'] = f"{'Wavelength [m]':<25s}|{self.wavelength:^9.1e}"
+        self.prop['zenith'] = f"{'Zenith [arcsec]':<25s}|{self.coordinates[0]:^9.2f}"
+        self.prop['azimuth'] = f"{'Azimuth [°]':<25s}|{self.coordinates[1]:^9.2f}"
+        self.prop['altitude'] = f"{'Altitude [m]':<25s}|{self.altitude:^9.2f}"
+        self.prop['magnitude'] = f"{'Magnitude':<25s}|{self._magnitude:^9.2f}"
+        self.prop['flux'] = f"{'Flux [photon/m²/s]':<25s}|{self._nPhoton:^9.1e}"
+        self.prop['coordinates'] = f"{'Coordinates [arcsec,deg]':<25s}|{' ['+str(self.coordinates[0])+','+str(self.coordinates[1])+']':s}"
+        # self.prop['binning'] = f"{'Binning':<25s}|{str(self.binning)+'x'+str(self.binning):^9s}"
+
         return self.prop
 
     def __repr__(self):
