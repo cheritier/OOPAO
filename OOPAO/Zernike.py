@@ -14,7 +14,7 @@ class Zernike:
         self.centralObstruction = telObject.centralObstruction
         self.nModes = J
 
-    def zernike_tel(self, tel, j):
+    def zernike_tel(self, tel, j, remove_piston):
         """
          ADAPTED FROM AOTOOLS PACKAGE:https://github.com/AOtools/aotools
 
@@ -40,7 +40,7 @@ class Zernike:
         out = np.zeros([tel.pixelArea, j])
         outFullRes = np.zeros([tel.resolution**2, j])
 
-        for i in range(1, j+1):
+        for i in range(remove_piston,j+remove_piston):
             n, m = self.zernIndex(i+1)
             if m == 0:
                 Z = np.sqrt(n+1) * self.zernikeRadialFunc(n, 0, R)
@@ -52,21 +52,21 @@ class Zernike:
                     m = abs(m)
                     Z = np.sqrt(2*(n+1)) * self.zernikeRadialFunc(n,
                                                                   m, R) * np.sin(m * theta)
-
-            Z -= Z.mean()
-            Z *= (1/np.std(Z))
+            if n!=0 and m!=0:
+                Z -= Z.mean()
+                Z *= (1/np.std(Z))
 
             # clip
-            out[:, i-1] = Z
-            outFullRes[tel.pupilLogical, i-1] = Z
+            out[:, i-remove_piston] = Z
+            outFullRes[tel.pupilLogical, i-remove_piston] = Z
 
         outFullRes = np.reshape(
             outFullRes, [tel.resolution, tel.resolution, j])
         return out, outFullRes
 
-    def computeZernike(self, telObject2):
+    def computeZernike(self, telObject2,remove_piston=1):
         self.modes, self.modesFullRes = self.zernike_tel(
-            telObject2, self.nModes)
+            telObject2, self.nModes,remove_piston=remove_piston)
         # normalize modes
 
     def modeName(self, index):

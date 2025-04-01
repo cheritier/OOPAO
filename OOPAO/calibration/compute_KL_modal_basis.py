@@ -109,7 +109,11 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
     GEO = aou.mkp(telescope.resolution/telescope.resolution*diameter,telescope.resolution,diameter,0.)
     
     if nZer is not None and SpM_2D is None:
-        SpM_2D = aou.give_zernike(GEO, diameter, nZer)
+        # SpM_2D = aou.give_zernike(GEO, diameter, nZer) --> 01/042024 Deprecated due to deprecation of the eval function in Python 3.13
+        from OOPAO.Zernike import Zernike
+        Z = Zernike(telescope,J=nZer)
+        Z.computeZernike(telescope,remove_piston=0)
+        SpM_2D = Z.modesFullRes
         nspm = nZer
     if SpM_2D is not None:
         nspm=SpM_2D.shape[2]
