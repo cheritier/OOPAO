@@ -52,8 +52,10 @@ class ShackHartmann:
             The default is 0.01.
         is_geometric : bool, optional
             Flag to enable the geometric WFS.
-            If True, enables the geometric Shack Hartmann (direct measurement of gradient).
-            If False, the diffractive computation is considered.
+            - If True, enables the geometric Shack Hartmann (direct measurement of gradient).
+               The signal units are in units of pixel-scale (see wfs.pixel_scale).
+            - If False, the diffractive computation is considered.
+                The signal units are in units of pixel-scale (see wfs.pixel_scale).
             The default is False.
         binning_factor : int, optional
             Binning factor of the detector.
@@ -62,7 +64,7 @@ class ShackHartmann:
                 Pixel scale in [arcsec] requested by the user. The spots will be either zero-padded and binned accordingly to provide the closest pixel-scale available.
                 The default is the shannon sampling of the spots.
         threshold_convolution : float, optional
-            Threshold considered to force the gaussian spots (elungated spots) to go to zero on the edges.
+            Threshold considered to force the gaussian spots (elungated spots) to go to zero on the edges (to speed up the concvolution operations).
             The default is 0.05.
         shannon_sampling : bool, optional
             This parameter is only used if the pixel_scale parameter is set to None.
@@ -80,11 +82,14 @@ class ShackHartmann:
                 If n_pixel_per_subaperture > n_pix_subap_init, the subapertures are zero-padded to provide the right number of pixels.
                     A warning is displayed as only the FoV defined by n_pix_subap_init contains signal and wrapping effects may occur.
                 The default is None and corresponds to n_pixel_per_subaperture = n_pixel_per_subap_init.
+        pixel_scale : float, optional
+                sampling of the detector pixels in [arcsec]. This parameter overwrites the shannon_sampling parameter.
+                The effective pixel_scale value is obtained by taking the closest value after considering the FFT sampling
+                and the possible binning factor:
+                    - If the pixel-scale is too large for the lenslet FoV, the diffractive spots are zero-padded. 
+                    A warning is displayed in this situation.
         padding_extension_factor : int, optional
-            DEPRECATED - Zero-padding factor on the spots intensity images.
-            This is a fast way to provide a larger field of view before the convolution
-            with LGS spots is achieved and allow to prevent wrapping effects.
-            The default is 1.
+            DEPRECATED
 
         Raises
         ------
@@ -104,6 +109,9 @@ class ShackHartmann:
             _ addition of eventual photon noise and readout noise
             _ computation of the Shack Hartmann signals
 
+        ************************** WEIGHTED CENTER OF GRAVITY **************************
+        The weighted center of gravity can be set using the wfs.set_weighted_centroiding_map method.
+        Once set, the units of the shack-hartman are re-calibrated using the wfs.set_slopes_units method.
 
         ************************** PROPERTIES **************************
 
@@ -158,8 +166,9 @@ class ShackHartmann:
         self.shannon_sampling = shannon_sampling
         self.unit_P2V = unit_P2V
         self.weighting_map = 1
+        self.rad2arcsec = 1 / (np.pi / 180 / 3600)
         # original pixel scale assuming a zropadding factor of 2
-        self.pixel_scale_init = 206265*self.telescope.src.wavelength/self.d_subap / self.zero_padding
+        self.pixel_scale_init = self.rad2arcsec*self.telescope.src.wavelength/self.d_subap / self.zero_padding
         if padding_extension_factor is not None:
             raise DeprecationWarning('The use of the the padding_extension_factor parameter is deprecated. ' +
                                      'The pixel scale and FoV of the subaperture can be set using the pixel_scale and the n_pixel_per_subaperture parameters.')
@@ -174,7 +183,7 @@ class ShackHartmann:
             if binning_pixel_scale < 0.95:
                 while binning_pixel_scale < 0.95:
                     self.zero_padding += 1
-                    self.pixel_scale_init = 206265*self.telescope.src.wavelength/self.d_subap / self.zero_padding
+                    self.pixel_scale_init = self.rad2arcsec*self.telescope.src.wavelength/self.d_subap / self.zero_padding
                     binning_pixel_scale = pixel_scale/self.pixel_scale_init
 
             binning_pixel_scale = [np.floor(pixel_scale/self.pixel_scale_init), np.ceil(pixel_scale/self.pixel_scale_init)]
@@ -183,8 +192,9 @@ class ShackHartmann:
 
             self.pixel_scale = self.pixel_scale_init*binning_pixel_scale
             self.binning_pixel_scale = int(binning_pixel_scale)
-            print('The effective pixel-scale is: '+str(self.pixel_scale)+' arcsec')
-            # print(self.binning_pixel_scale)
+            if pixel_scale != self.pixel_scale:
+                warning('The requested pixel-scale is: '+str(pixel_scale)+' arcsec\n' +
+                        'The effective pixel-scale is: '+str(self.pixel_scale)+' arcsec')
 
         # different resolutions needed:
         # 1) The number of pixel per subaperture
@@ -269,12 +279,9 @@ class ShackHartmann:
 
         # number of valid lenslet
         self.nValidSubaperture = int(np.sum(self.valid_subapertures))
-
         self.nSignal = 2*self.nValidSubaperture
-
         if self.is_LGS:
             self.shift_x_buffer, self.shift_y_buffer, self.spot_kernel_elongation_fft, self.spot_kernel_elongation = self.get_convolution_spot(compute_fft_kernel=True)
-
         # WFS initialization
         self.initialize_wfs()
 
@@ -301,43 +308,44 @@ class ShackHartmann:
         self.reference_slopes_maps = np.copy(self.signal_2D)
         self.isInitialized = True
         print('Done!')
-
-        print('Setting slopes units..')
-
-        # normalize to pi p2v
-        [Tilt, Tip] = np.meshgrid(np.linspace(-np.pi, np.pi, self.telescope.resolution, endpoint=False),
-                                  np.linspace(-np.pi, np.pi, self.telescope.resolution, endpoint=False))
-        # make sur it is zero-mean
-        Tip -= np.mean(Tip)
-        Tilt -= np.mean(Tilt)
-        if self.unit_P2V is False:
-            # normalize to 1 m RMS in the pupil
-            Tilt *= 1/np.std(Tilt[self.telescope.pupil])
-
-        mean_slope = np.zeros(5)
-        amp = 10e-9
-        input_std = np.zeros(5)
-
-        for i in range(5):
-            self.telescope.OPD = self.telescope.pupil*Tilt*(i-2)*amp
-            # self.telescope.OPD_no_pupil = Tilt*(i-2)*amp
-
-            self.wfs_measure(self.telescope.src.phase)
-            mean_slope[i] = np.mean(self.signal[:self.nValidSubaperture])
-            input_std[i] = np.std(self.telescope.OPD[self.telescope.pupil])*2*np.pi/self.telescope.src.wavelength
-
-        self.p = np.polyfit(np.linspace(-2, 2, 5)*amp, mean_slope, deg=1)
-        self.slopes_units = np.abs(
-            self.p[0])*(self.telescope.src.wavelength/2/np.pi)
-        print('Done!')
+        if self.is_geometric:
+            self.slopes_units = self.nSubap*np.pi/2/2/self.zero_padding  # units in self.pixel_scale unit
+        else:
+            self.slopes_units = self.pixel_scale_init/self.pixel_scale
         self.cam.photonNoise = readoutNoise
         self.cam.readoutNoise = photonNoise
         self.telescope.OPD = tmp_opd
-        # self.telescope.OPD_no_pupil = tmp_opd_no_pupil
         self.print_properties()
 
-    def set_weighted_centroiding_map(self, is_lgs, is_gaussian, fwhm_factor):
-        
+    def set_weighted_centroiding_map(self, is_lgs: bool, is_gaussian: bool, fwhm_factor):
+        """
+        This function allows to compute a 2D map to perform a weighted center of gravity.
+        The ShackHartmann property weighting_map is set after the execution of the function
+        Parameters
+        ----------
+        is_lgs : bool
+            Flag to make use of the LGS spots properties to compute the weighting map.
+            If set to True, the map computed is based on the LGS spot elongation profile and
+            can be based on the Na Profile or assymetric 2D gaussian (see is_gaussian parameter).
+            If set to False, the map computed is a gaussian function that is the same for each lenslet
+        is_gaussian : bool
+            Flag used when the is_lgs flag is set to True.
+            If set to True, a gaussian map is computed for each lenslet based on the elongation of each LGS spot.
+            If set to False, a map based on the LGS Na Profile is computed for each lenslet.
+            In both cases, the fwhm_factor is used as a multiplicative factor for the fwhm of the weighting map.
+        fwhm_factor : scalar/list
+            fwhm of the weighting map.
+            if is_lgs is True:
+                - fwhm_factor must be a scalar to be used as a multiplicative factor based
+                    on the LGS spots elongation
+            if is_lgs is False:
+                - fwhm_factor can be a scalar (symmetric gaussian) or a list (assymetric)
+                    expressed in fraction of pixel scale
+        Returns
+        -------
+        None.
+
+        """
         if is_lgs:
             print('The weighting map is based on the LGS spots kernel')
             _, _, _, weighting_map = self.get_convolution_spot(fwhm_factor=fwhm_factor, compute_fft_kernel=False, is_gaussian=is_gaussian)
@@ -352,12 +360,49 @@ class ShackHartmann:
             if n_crop > 0:
                 weighting_map = weighting_map[:, n_crop:-n_crop, n_crop:-n_crop]
         else:
-            print('The weighting map is a uniform gaussian 2D function')
+            if np.isscalar(fwhm_factor):
+                fwhm_factor = [fwhm_factor, fwhm_factor]
+            print('The weighting map is a centerd gaussian 2D function with a FWHM of ' + str(fwhm_factor) + ' px')
             weighting_map = np.tile(gaussian_2D(resolution=self.n_pix_subap, fwhm=fwhm_factor), [self.nValidSubaperture, 1, 1])
-        warning('A new weighting map is now considered.' +
-                'The units must be re-calibrated')
+        warning('A new weighting map is now considered.')
         self.weighting_map = weighting_map
-        return weighting_map
+        self.set_slopes_units()
+        return
+
+    def set_slopes_units(self):
+        print('Recalibrating the slopes units')
+        tmp_opd = self.telescope.OPD.copy()
+
+        self.isInitialized = False
+        readoutNoise = np.copy(self.cam.readoutNoise)
+        photonNoise = np.copy(self.cam.photonNoise)
+
+        self.cam.photonNoise = 0
+        self.cam.readoutNoise = 0
+
+        # reference signal
+        self.SX = np.zeros([self.nSubap, self.nSubap])
+        self.SY = np.zeros([self.nSubap, self.nSubap])
+        # flux per subaperture
+        self.reference_slopes_maps = np.zeros([self.nSubap*2, self.nSubap])
+        self.slopes_units = 1
+        print('Acquiring reference slopes..')
+        self.telescope.resetOPD()
+        self.wfs_measure(self.telescope.src.phase)
+        self.reference_slopes_maps = np.copy(self.signal_2D)
+        self.isInitialized = True
+        print('Done!')
+        [Tip, Tilt] = np.meshgrid(np.linspace(-np.pi, np.pi, self.telescope.resolution, endpoint=False),
+                                  np.linspace(-np.pi, np.pi, self.telescope.resolution, endpoint=False))
+        self.telescope.OPD = ((Tip+Tilt)*self.telescope.src.wavelength/2/np.pi) \
+            * self.pixel_scale / (self.telescope.src.wavelength / self.telescope.D) / self.rad2arcsec
+        self.wfs_measure(self.telescope.src.phase)
+        self.slopes_units = np.mean(self.signal)
+        self.cam.photonNoise = readoutNoise
+        self.cam.readoutNoise = photonNoise
+        self.telescope.OPD = tmp_opd
+        print('Done')
+        return
 
     def centroid(self, image, threshold=0.01):
 
@@ -519,8 +564,8 @@ class ShackHartmann:
             delta_dx[1, i] = coordinates_3D_ref[2, i] * (np.sqrt(3)*(4/self.telescope.D)**2) * x_max
             delta_dy[1, i] = coordinates_3D_ref[2, i] * (np.sqrt(3)*(4/self.telescope.D)**2) * y_max
             # resulting shift + conversion from radians to arcsec
-            shift_X[i] = 206265*(delta_dx[0, i] + delta_dx[1, i])/self.pixel_scale_init
-            shift_Y[i] = 206265*(delta_dy[0, i] + delta_dy[1, i])/self.pixel_scale_init
+            shift_X[i] = self.rad2arcsec*(delta_dx[0, i] + delta_dx[1, i])/self.pixel_scale_init
+            shift_Y[i] = self.rad2arcsec*(delta_dy[0, i] + delta_dy[1, i])/self.pixel_scale_init
 
         # maximum elongation in number of pixel
         r_max = np.sqrt((shift_X[0]-shift_X[-1])**2+(shift_Y[0]-shift_Y[-1])**2)
@@ -555,8 +600,8 @@ class ShackHartmann:
                         delta_dx[1, i] = coordinates_3D_ref[2, i] * (np.sqrt(3)*(4/self.telescope.D)**2) * x_subap[i_subap]
                         delta_dy[1, i] = coordinates_3D_ref[2, i] * (np.sqrt(3)*(4/self.telescope.D)**2) * y_subap[j_subap]
                         # resulting shift + conversion from radians to arcsec
-                        shift_X[i] = 206265*(delta_dx[0, i] + delta_dx[1, i])/self.pixel_scale_init
-                        shift_Y[i] = 206265*(delta_dy[0, i] + delta_dy[1, i])/self.pixel_scale_init
+                        shift_X[i] = self.rad2arcsec*(delta_dx[0, i] + delta_dx[1, i])/self.pixel_scale_init
+                        shift_Y[i] = self.rad2arcsec*(delta_dy[0, i] + delta_dy[1, i])/self.pixel_scale_init
                         # sum the 2D spots
                         if is_gaussian is False:
                             intensity += self.telescope.src.Na_profile[1, :][i] * gaussian_2D(resolution=n_pix,
@@ -869,7 +914,7 @@ class ShackHartmann:
         self.prop['subapertures'] = f"{'Subapertures [lenslets]':<25s}|{self.nSubap:^9d}"
         self.prop['subapertures_sky'] = f"{'Subaperture Pitch [m]':<25s}|{self.telescope.D/self.nSubap:^9.2f}"
         self.prop['fov'] = f"{'Subaperture FoV [arcsec]':<25s}|{self.pixel_scale*self.n_pix_subap:^9.2f}"
-        self.prop['fov_pix'] = f"{'Pixel Scale [arcsec]':<25s}|{self.pixel_scale:^9.1f}"
+        self.prop['fov_pix'] = f"{'Pixel Scale [arcsec]':<25s}|{self.pixel_scale:^9.3f}"
         self.prop['n_valid_pixels'] = f"{'Valid Subapertures':<25s}|{self.nSignal:^9.0f}"
         if self.is_LGS:
             self.prop['spot_sampling'] = f"{'Spot Sampling [pix]':<25s}|{self.telescope.src.FWHM_spot_up/self.pixel_scale:^9.3f}"
