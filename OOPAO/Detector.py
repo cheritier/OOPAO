@@ -114,7 +114,7 @@ class Detector:
         if self.resolution is not None:
             self.frame = np.zeros([self.resolution, self.resolution])
         else:
-            self.frame = np.zeros([2, 2])
+            self.frame = None
 
         self.saturation = 0
         self.tag = 'detector'
@@ -307,8 +307,9 @@ class Detector:
 
         if self.integrationTime is None:
             self.readout()
-        else:
-            self.frame = self.perfect_frame.copy()*0
+        else:            
+            if self.frame is None:
+               self.frame =  self.perfect_frame.copy()*0
             if self._integrated_time >= self.integrationTime:
                 self.readout()
 
