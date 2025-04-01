@@ -722,9 +722,11 @@ class Atmosphere:
             raise OopaoError('layer_index should be a list')
         normalized_speed = xp.asarray(self.windSpeed)/max(self.windSpeed)
 
-        if self.telescope.src.tag == 'asterism':
-            list_src = self.telescope.src.src
-
+        if list_src is None:
+            if self.telescope.src.tag == 'asterism':
+                list_src = self.telescope.src.src
+            else:
+                list_src = [self.telescope.src]
         plt.figure(fig_index, figsize=[
                    n_sp*4, 3*(1+display_cn2)], edgecolor=None)
         if display_cn2:
@@ -755,67 +757,40 @@ class Atmosphere:
             center = tmpLayer.D/2
             [x_tel, y_tel] = pol2cart(
                 tmpLayer.D_fov/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
-            if list_src is not None:
-                cm = plt.get_cmap('gist_rainbow')
-                col = []
-                for i_source in range(len(list_src)):
-                    col.append(cm(1.*i_source/len(list_src)))
-                    [x_c, y_c] = pol2cart(
-                        self.telescope.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
-                    alpha_cone = xp.arctan(
-                        self.telescope.D/2/list_src[i_source].altitude)
-                    h = list_src[i_source].altitude-tmpLayer.altitude
-                    if xp.isinf(h):
-                        r = self.telescope.D/2
-                    else:
-                        r = h*xp.tan(alpha_cone)
-                    [x_cone, y_cone] = pol2cart(
-                        r, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
-                    if list_src[i_source].chromatic_shift is not None:
-                        if len(list_src[i_source].chromatic_shift) == self.nLayer:
-                            chromatic_shift = list_src[i_source].chromatic_shift[i_l]
-                        else:
-                            raise OopaoError('The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')
-                    else:
-                        chromatic_shift = 0
-                    [x_z, y_z] = pol2cart(tmpLayer.altitude*xp.tan((list_src[i_source].coordinates[0] +
-                                          chromatic_shift)/206265), xp.deg2rad(list_src[i_source].coordinates[1]))
-                    center = 0
-                    [x_c, y_c] = pol2cart(
-                        tmpLayer.D_fov/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
-                    nm = (list_src[i_source].type) + '@' + \
-                        str(list_src[i_source].coordinates[0])+'"'
-                    ax.plot(x_cone+x_z+center, y_cone+y_z+center,
-                            '-', color=col[i_source], label=nm)
-                    ax.fill(x_cone+x_z+center, y_cone+y_z+center,
-                            y_z+center, alpha=0.25, color=col[i_source])
-            else:
+            # if list_src is not None:
+            cm = plt.get_cmap('gist_rainbow')
+            col = []
+            for i_source in range(len(list_src)):
+                col.append(cm(1.*i_source/len(list_src)))
                 [x_c, y_c] = pol2cart(
                     self.telescope.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
                 alpha_cone = xp.arctan(
-                    self.telescope.D/2/self.telescope.src.altitude)
-                h = self.telescope.src.altitude-tmpLayer.altitude
+                    self.telescope.D/2/list_src[i_source].altitude)
+                h = list_src[i_source].altitude-tmpLayer.altitude
                 if xp.isinf(h):
                     r = self.telescope.D/2
                 else:
                     r = h*xp.tan(alpha_cone)
                 [x_cone, y_cone] = pol2cart(
                     r, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
-                if self.telescope.src.chromatic_shift is not None:
-                    if len(self.telescope.src.chromatic_shift) == self.nLayer:
-                        chromatic_shift = self.telescope.src.chromatic_shift[i_l]
+                if list_src[i_source].chromatic_shift is not None:
+                    if len(list_src[i_source].chromatic_shift) == self.nLayer:
+                        chromatic_shift = list_src[i_source].chromatic_shift[i_l]
                     else:
                         raise OopaoError('The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')
                 else:
                     chromatic_shift = 0
-                [x_z, y_z] = pol2cart((self.telescope.src.coordinates[0]+chromatic_shift)*xp.tan((self.telescope.src.coordinates[0]+chromatic_shift)/206265) * tmpLayer.resolution / tmpLayer.D,
-                                      xp.deg2rad(self.telescope.src.coordinates[1]))
+                [x_z, y_z] = pol2cart(tmpLayer.altitude*xp.tan((list_src[i_source].coordinates[0] +
+                                      chromatic_shift)/206265), xp.deg2rad(list_src[i_source].coordinates[1]))
                 center = 0
                 [x_c, y_c] = pol2cart(
                     tmpLayer.D_fov/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
-                ax.plot(x_cone+x_z+center, y_cone+y_z+center, '-')
-                ax.fill(x_cone+x_z+center, y_cone+y_z +
-                        center, y_z+center, alpha=0.6)
+                nm = (list_src[i_source].type) + '@' + \
+                    str(list_src[i_source].coordinates[0])+'"'
+                ax.plot(x_cone+x_z+center, y_cone+y_z+center,
+                        '-', color=col[i_source], label=nm)
+                ax.fill(x_cone+x_z+center, y_cone+y_z+center,
+                        y_z+center, alpha=0.25, color=col[i_source])
             ax.set_xlabel('[m]')
             ax.set_ylabel('[m]')
             ax.set_title('Altitude '+str(tmpLayer.altitude)+' m')
@@ -831,7 +806,7 @@ class Atmosphere:
                      normalized_speed[i_l]*(tmpLayer.D_fov/2) *
                      xp.sin(xp.deg2rad(tmpLayer.direction)),
                      length_includes_head=True,
-                     width=0.25,
+                     width=0.5,
                      facecolor=[0, 0, 0],
                      alpha=0.3,
                      edgecolor=None)
