@@ -34,8 +34,7 @@ class Atmosphere:
                  windDirection: list,
                  altitude: list,
                  mode: float = 2,
-                 param=None,
-                 asterism=None):
+                 param=None):
         """ ATMOSPHERE.
         An Atmosphere is made of one or several layer of turbulence that follow the Van Karmann statistics.
         Each layer is considered to be independant to the other ones and has its own properties (direction, speed, etc.)
@@ -160,7 +159,10 @@ class Atmosphere:
         self.mode = mode              # DEBUG -> first phase screen generation mode
         self.seeingArcsec = 206265*(self.wavelength/self.r0)
         # case when multiple sources are considered (LGS and NGS)
-        self.asterism = asterism
+        if telescope.src.type == 'asterism':
+            self.asterism = telescope.src
+        else:
+            self.asterism = None    
         self.param = param
 
     def initializeAtmosphere(self, telescope=None, compute_covariance=True):
