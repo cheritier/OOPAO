@@ -58,18 +58,20 @@ class Asterism:
             self.coordinates.append(self.src[i].coordinates)
             self.altitude.append(self.src[i].altitude)
             self.nPhoton += self.src[i].nPhoton/self.n_source
-        
+
     def __mul__(self, telescope):
         if type(telescope.OPD) is not list:
-            tmp_OPD = telescope.OPD.copy()
-            telescope.OPD = [tmp_OPD for i in range(self.n_source)]
-            tmp_OPD = telescope.OPD_no_pupil.copy()
-            telescope.OPD_no_pupil = [tmp_OPD for i in range(self.n_source)]
+            telescope.OPD = [telescope.OPD.copy() for i in range(self.n_source)]
+
+        if len(telescope.OPD) != self.n_source:
+            telescope.src = self
+            telescope.OPD = [telescope.pupil.copy() for i in range(self.n_source)]
+
         for i in range(self.n_source):
             # update the phase of the source
             self.src[i].phase = telescope.OPD[i]*2*np.pi/self.src[i].wavelength
-            self.src[i].phase_no_pupil = telescope.OPD_no_pupil[i] * \
-                2*np.pi/self.src[i].wavelength
+            self.src[i].fluxMap = telescope.pupilReflectivity*self.nPhoton * \
+                telescope.samplingTime*(telescope.D/telescope.resolution)**2
         # assign the source object to the telescope object
         telescope.src = self
         return telescope
