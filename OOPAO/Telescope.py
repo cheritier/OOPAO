@@ -240,13 +240,18 @@ class Telescope:
             theta = xp.squeeze(xp.asarray(self.src.coordinates))[:, 1]
             x_max = max(xp.abs(r * xp.cos(theta)))
             y_max = max(xp.abs(r * xp.sin(theta)))
-            # check if the source is outside the fov of the detector to aplply a Tip/Tilt or not
-            if max(x_max, y_max) > max(self.xPSF_arcsec):
-                factor = 0
-            else:
-                factor = 1
         else:
             input_source = [self.src]
+            r = xp.squeeze(xp.asarray(self.src.coordinates))[0]
+            theta = xp.squeeze(xp.asarray(self.src.coordinates))[1]
+            x_max = (xp.abs(r * xp.cos(theta)))
+            y_max = (xp.abs(r * xp.sin(theta)))
+        maximum_fov = conversion_constant*(input_source[0].wavelength/self.D)*(img_resolution/2/zeroPaddingFactor)
+        n_det = int(1.1 * np.ceil(max(x_max, y_max) / maximum_fov))
+        n_det = max(n_det, 1)
+        center = n_det*img_resolution//2
+        self.support_PSF = np.zeros([n_det*img_resolution, n_det*img_resolution])
+        pixel_scale = conversion_constant*(input_source[0].wavelength/self.D)/zeroPaddingFactor
         input_wavelenght = input_source[0].wavelength
         output_PSF = []
         output_PSF_norma = []
@@ -269,8 +274,16 @@ class Telescope:
             # add a Tip/Tilt for off-axis sources
             [Tip, Tilt] = xp.meshgrid(xp.linspace(-xp.pi, xp.pi, self.resolution, dtype=self.precision()),
                                       xp.linspace(-xp.pi, xp.pi, self.resolution, dtype=self.precision()))
-            self.delta_TT = input_source[i_src].coordinates[0]*(1/conversion_constant)*(self.D/input_source[i_src].wavelength)*(xp.cos(np.deg2rad(input_source[i_src].coordinates[1]))*Tip+xp.sin(np.deg2rad(input_source[i_src].coordinates[1]))*Tilt)*self.pupil
 
+            r = (input_source[i_src].coordinates[0])
+            x_shift = r*xp.cos(np.deg2rad(input_source[i_src].coordinates[1]))
+            y_shift = r*xp.sin(np.deg2rad(input_source[i_src].coordinates[1]))
+            delta_x = int(np.floor(np.abs(x_shift)/pixel_scale)*np.sign(x_shift))
+            delta_y = int(np.floor(np.abs(y_shift)/pixel_scale)*np.sign(y_shift))
+
+            delta_Tip = (np.abs(x_shift) % pixel_scale)*np.sign(x_shift)
+            delta_Tilt = (np.abs(y_shift) % pixel_scale)*np.sign(y_shift)
+            self.delta_TT = (delta_Tip*Tip + delta_Tilt*Tilt)*self.pupil*(self.D/input_source[i_src].wavelength)*(1/conversion_constant)
             # axis in arcsec
             self.xPSF_arcsec = [-conversion_constant*(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor),
                                 conversion_constant*(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
@@ -299,13 +312,14 @@ class Telescope:
             self.PSF_norma = self.PSF/self.PSF.max()
             output_PSF.append(self.PSF.copy())
             output_PSF_norma.append(self.PSF.copy())
-
+            self.support_PSF[center+delta_x-img_resolution//2:center+delta_x+img_resolution//2,
+                             center+delta_y-img_resolution//2:center+delta_y+img_resolution//2] += self.PSF.copy()
         if len(output_PSF) == 1:
             output_PSF = output_PSF[0]
             output_PSF_norma = output_PSF_norma[0]
 
-        self.PSF = output_PSF.copy()
-        self.PSF_norma = output_PSF_norma.copy()
+        self.PSF = self.support_PSF
+        self.PSF_norma = self.PSF/self.PSF.max()
 
     def PropagateField(self, amplitude, phase, zeroPaddingFactor, img_resolution=None):
         oversampling = 1
@@ -486,7 +500,7 @@ class Telescope:
                             self.src.src[i].phase = self._OPD[i] * \
                                 2*xp.pi/self.src.src[i].wavelength
                     else:
-                        raise OopaoError('A list of OPD cannnot be propagated to a single source')
+                        raise OopaoError('The number of sources does not match the length of tel.OPD.')
 
     @property
     def OPD_no_pupil(self):
@@ -676,9 +690,9 @@ class Telescope:
     # Separating from an atmosphere object
     def __sub__(self, obj):
         if obj.tag == 'atmosphere':
-            self.optical_path = [
-                [self.src.type + '('+self.src.optBand+')', id(self.src)]]
-            self.optical_path.append([self.tag, id(self)])
+            # self.optical_path = [
+            #     [self.src.type + '('+self.src.optBand+')', id(self.src)]]
+            # self.optical_path.append([self.tag, id(self)])
             self.isPaired = False
             self.resetOPD()
             print('Telescope and Atmosphere separated!')
