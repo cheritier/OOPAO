@@ -225,7 +225,11 @@ class Telescope:
         # case when a detector is provided to the telescope (tel*det)
         if detector is not None:
             zeroPaddingFactor = detector.psf_sampling
-            img_resolution = detector.resolution
+            if detector.resolution is not None:
+                img_resolution = detector.resolution
+            else:
+                img_resolution = int(zeroPaddingFactor*self.resolution)
+                detector.resolution = img_resolution
         # case where the image should be cropped to img_resolution (used in tel*det as well using det.resolution property)
         if img_resolution is None:
             img_resolution = zeroPaddingFactor*self.resolution
@@ -238,25 +242,24 @@ class Telescope:
             # check where is located the source in the focal plane
             r = xp.squeeze(xp.asarray(self.src.coordinates))[:, 0]
             theta = xp.squeeze(xp.asarray(self.src.coordinates))[:, 1]
-            x_max = max(xp.abs(r * xp.cos(theta)))
-            y_max = max(xp.abs(r * xp.sin(theta)))
+            x_max = max(xp.abs(r * xp.cos(np.deg2rad(theta))))
+            y_max = max(xp.abs(r * xp.sin(np.deg2rad(theta))))
         else:
             input_source = [self.src]
             r = xp.squeeze(xp.asarray(self.src.coordinates))[0]
             theta = xp.squeeze(xp.asarray(self.src.coordinates))[1]
             x_max = (xp.abs(r * xp.cos(theta)))
             y_max = (xp.abs(r * xp.sin(theta)))
-        maximum_fov = conversion_constant*(input_source[0].wavelength/self.D)*(img_resolution/2/zeroPaddingFactor)
-        n_det = int(1.1 * np.ceil(max(x_max, y_max) / maximum_fov))
-        n_det = max(n_det, 1)
-        center = n_det*img_resolution//2
-        self.support_PSF = np.zeros([n_det*img_resolution, n_det*img_resolution])
+
         pixel_scale = conversion_constant*(input_source[0].wavelength/self.D)/zeroPaddingFactor
+        maximum_fov = pixel_scale*img_resolution/2
+        n_extra = np.abs(np.floor((maximum_fov - max(x_max, y_max))/pixel_scale) - img_resolution//2)
+        n_pix = max(int(img_resolution/2 + n_extra)*2, img_resolution)
+        center = n_pix//2
+        self.support_PSF = np.zeros([n_pix, n_pix])
         input_wavelenght = input_source[0].wavelength
         output_PSF = []
         output_PSF_norma = []
-        # warning flag for off-axis targets outside of the fov
-        warning_src = False
         # iterate for each source
         for i_src in range(len(input_source)):
             if input_wavelenght == input_source[i_src].wavelength:
@@ -285,22 +288,16 @@ class Telescope:
             delta_Tilt = (np.abs(y_shift) % pixel_scale)*np.sign(y_shift)
             self.delta_TT = (delta_Tip*Tip + delta_Tilt*Tilt)*self.pupil*(self.D/input_source[i_src].wavelength)*(1/conversion_constant)
             # axis in arcsec
-            self.xPSF_arcsec = [-conversion_constant*(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor),
-                                conversion_constant*(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
-            self.yPSF_arcsec = [-conversion_constant*(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor),
-                                conversion_constant*(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
+            self.xPSF_arcsec = [-conversion_constant*(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor),
+                                conversion_constant*(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor)]
+            self.yPSF_arcsec = [-conversion_constant*(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor),
+                                conversion_constant*(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor)]
 
             # axis in radians
-            self.xPSF_rad = [-(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor),
-                             (input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
-            self.yPSF_rad = [-(input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor),
-                             (input_source[i_src].wavelength/self.D) * (img_resolution/2/zeroPaddingFactor)]
-
-            # raise warning if the src is outside of the fov
-            if input_source[i_src].coordinates[0] > max(self.xPSF_arcsec):
-                if warning_src is False:
-                    warning('At leaste one Source is outside of the field of view of the detector (' + str(self.xPSF_arcsec[1])+' arcsec) -- Wrapping effects will appear')
-                    warning_src = True
+            self.xPSF_rad = [-(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor),
+                             (input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor)]
+            self.yPSF_rad = [-(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor),
+                             (input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor)]
 
             # propagate the EM Field
             self.PropagateField(amplitude=amp,
