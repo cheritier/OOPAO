@@ -248,8 +248,8 @@ class Telescope:
             input_source = [self.src]
             r = xp.squeeze(xp.asarray(self.src.coordinates))[0]
             theta = xp.squeeze(xp.asarray(self.src.coordinates))[1]
-            x_max = (xp.abs(r * xp.cos(theta)))
-            y_max = (xp.abs(r * xp.sin(theta)))
+            x_max = (xp.abs(r * xp.cos(np.deg2rad(theta))))
+            y_max = (xp.abs(r * xp.sin(np.deg2rad(theta))))
 
         pixel_scale = conversion_constant*(input_source[0].wavelength/self.D)/zeroPaddingFactor
         maximum_fov = pixel_scale*img_resolution/2
@@ -317,6 +317,7 @@ class Telescope:
 
         self.PSF = self.support_PSF
         self.PSF_norma = self.PSF/self.PSF.max()
+        self.PSF_list = output_PSF
 
     def PropagateField(self, amplitude, phase, zeroPaddingFactor, img_resolution=None):
         oversampling = 1
