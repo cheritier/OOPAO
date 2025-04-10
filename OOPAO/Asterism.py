@@ -6,8 +6,8 @@ Created on Tue Aug 23 14:35:32 2022
 """
 
 import numpy as np
-
-
+import matplotlib.pyplot as plt
+from OOPAO.tools.displayTools import makeSquareAxes
 class Asterism:
     def __init__(self,
                  list_src: list):
@@ -79,7 +79,32 @@ class Asterism:
     # for backward compatibility
     def print_properties(self):
         print(self)
-    
+    def display_asterism(self):
+        
+        plt.figure()
+        x = np.linspace(0,2*np.pi,100,endpoint=True)
+        r = np.linspace(0,max(self.coordinates)[0],6,endpoint=True)
+        for i_circle in range(1,6):
+            plt.plot(r[i_circle]*np.cos(x),
+                     r[i_circle]*np.sin(x),'--k')    
+        cm = plt.get_cmap('gist_rainbow')
+        for i_src in range(self.n_source):
+            if self.src[i_src].type == "NGS":
+                marker = '*'
+                size_marker=20
+            else:
+                marker = '*'
+                size_marker=10
+                
+            plt.plot(self.src[i_src].coordinates[0]*np.cos(np.deg2rad(self.src[i_src].coordinates[1])),
+                     self.src[i_src].coordinates[0]*np.sin(np.deg2rad(self.src[i_src].coordinates[1])),
+                     marker, markersize=size_marker, color = cm(1.*i_src/self.n_source),markeredgecolor = 'k',
+                     label = self.src[i_src].type+'_'+str(i_src))
+        makeSquareAxes()
+        plt.xlabel('[Arcsec]')
+        plt.ylabel('[Arcsec]')
+        plt.legend()
+        
     def properties(self) -> dict:
         self.prop = dict()
         self.prop['parameters'] = f"{'Source':^8s}|{'Wavelength':^12s}|{'Zenith':^8s}|{'Azimuth':^9s}|{'Altitude':^10s}|{'Magnitude':^11s}|{'Flux':^11s}|"
