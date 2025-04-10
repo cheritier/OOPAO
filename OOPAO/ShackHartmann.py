@@ -120,6 +120,10 @@ class ShackHartmann:
         _ wfs.signal_2D                  : 2D map of the signal measured by the Shack Hartmann
         _ wfs.fov_lenslet_arcsec         : Field of View of the subapertures in arcsec
         _ wfs.fov_pixel_binned_arcsec    : Field of View of the pixel in arcsec
+        _ wfs.slopes_units               : normalisation factor to provide cog in pixel-scale units.
+                                           For example, a wfs.signal value of 1 corresponds to a shift of 1 pixel at the lenslet level.
+                                           For the Geometric WFS, the units are calibrated to provide the same values as for a diffractive WFS
+                                           As such, they also depends on the wfs.pixel_scale value.
 
         The main properties of the object can be displayed using :
             wfs.print_properties()
@@ -308,10 +312,11 @@ class ShackHartmann:
         self.reference_slopes_maps = np.copy(self.signal_2D)
         self.isInitialized = True
         print('Done!')
-        if self.is_geometric:
-            self.slopes_units = self.nSubap*np.pi/2/2/self.zero_padding  # units in self.pixel_scale unit
-        else:
-            self.slopes_units = self.pixel_scale_init/self.pixel_scale
+        # if self.is_geometric:
+        #     self.slopes_units = self.nSubap*np.pi/2/self.zero_padding  # units in self.pixel_scale unit
+        # else:
+        #     self.slopes_units = self.pixel_scale_init/self.pixel_scale
+        self.set_slopes_units()
         self.cam.photonNoise = readoutNoise
         self.cam.readoutNoise = photonNoise
         self.telescope.OPD = tmp_opd
