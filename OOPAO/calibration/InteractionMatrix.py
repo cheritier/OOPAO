@@ -11,12 +11,12 @@ from .CalibrationVault import CalibrationVault
 
 
 def InteractionMatrix(ngs,
-                      atm,
                       tel,
                       dm,
                       wfs,
                       M2C,
                       stroke,
+                      atm = None,
                       phaseOffset = 0,
                       nMeasurements = 50,
                       noise = 'off',
