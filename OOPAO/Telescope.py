@@ -279,8 +279,9 @@ class Telescope:
                                       xp.linspace(-xp.pi, xp.pi, self.resolution, dtype=self.precision()))
 
             r = (input_source[i_src].coordinates[0])
-            x_shift = r*xp.cos(np.deg2rad(input_source[i_src].coordinates[1]))
-            y_shift = r*xp.sin(np.deg2rad(input_source[i_src].coordinates[1]))
+            # X/Y shift inversion to match convention for atmosphere
+            x_shift = r*xp.sin(np.deg2rad(input_source[i_src].coordinates[1]))
+            y_shift = r*xp.cos(np.deg2rad(input_source[i_src].coordinates[1]))
             delta_x = int(np.floor(np.abs(x_shift)/pixel_scale)*np.sign(x_shift))
             delta_y = int(np.floor(np.abs(y_shift)/pixel_scale)*np.sign(y_shift))
 
