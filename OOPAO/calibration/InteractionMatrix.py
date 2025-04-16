@@ -11,16 +11,17 @@ from .CalibrationVault import CalibrationVault
 
 
 def InteractionMatrix(ngs,
-                      atm,
                       tel,
                       dm,
                       wfs,
                       M2C,
                       stroke,
+                      atm = None,
                       phaseOffset = 0,
                       nMeasurements = 50,
                       noise = 'off',
                       invert = True,
+                      nTrunc = 0,
                       print_time = False,
                       display = False,
                       single_pass = True):
@@ -161,7 +162,7 @@ def InteractionMatrix(ngs,
             b=time.time()
             print('Time elapsed: '+str(b-a)+' s' )
     
-    out=CalibrationVault(factor*intMat,invert=invert)
+    out = CalibrationVault(factor*intMat, invert=invert, nTrunc=nTrunc)
        
     return out
 
