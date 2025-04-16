@@ -12,7 +12,6 @@ class MisRegistration:
 
         self.tag = 'misRegistration'
         self.isInitialized = False
-
         if param is None:
             self.rotationAngle = 0                    # rotation angle in degrees
             self.shiftX = 0                           # shift X in m
@@ -69,7 +68,6 @@ class MisRegistration:
                 'anam_' + str('%.2f' % self.anamorphosisAngle) + '_'\
                 'mR_' + str('%.4f' % (self.radialScaling+1.)) + '_'\
                 'mT_' + str('%.4f' % (self.tangentialScaling+1.))
-
         _ = self.properties()
         self.isInitialized = True
 
@@ -262,13 +260,14 @@ class MisRegistration:
 
     def properties(self) -> dict:
         self.prop = dict()
-        self.prop['rotation'] = f"{'Rotation [°]':<25s}|{self.rotationAngle:^9.2f}"
-        self.prop['shift_x'] = f"{'Shift X [m]':<25s}|{self.shiftX:^9.1e}"
-        self.prop['shift_y'] = f"{'Shift Y [m]':<25s}|{self.shiftY:^9.1e}"
-        self.prop['anamophosis_angle'] = f"{'Anamorphosis angle [°]':<25s}|{self.anamorphosisAngle:^9.2f}"
-        self.prop['tengential_scaling'] = f"{'Tangential scaling [%]':<25s}|{self.tangentialScaling*100:^9.2f}"
-        self.prop['radial_scaling'] = f"{'Radial scaling [%]':<25s}|{self.radialScaling*100:^9.2f}"
+        self.prop['rotation'] = f"{'Rotation [°]':<25s}|{self.rotationAngle:^9.3f}"
+        self.prop['shift_x'] = f"{'Shift X [m]':<25s}|{self.shiftX:^9.3e}"
+        self.prop['shift_y'] = f"{'Shift Y [m]':<25s}|{self.shiftY:^9.3e}"
+        self.prop['anamophosis_angle'] = f"{'Anamorphosis angle [°]':<25s}|{self.anamorphosisAngle:^9.3f}"
+        self.prop['tengential_scaling'] = f"{'Tangential scaling [%]':<25s}|{self.tangentialScaling*100:^9.3f}"
+        self.prop['radial_scaling'] = f"{'Radial scaling [%]':<25s}|{self.radialScaling*100:^9.3f}"
         return self.prop
+        
 
     def __repr__(self):
         self.properties()

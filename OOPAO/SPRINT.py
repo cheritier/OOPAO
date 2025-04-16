@@ -14,7 +14,17 @@ from .mis_registration_identification_algorithm.estimateMisRegistration import e
 from .tools.tools import warning
 
 class SPRINT:
-    def __init__(self, obj, basis, nameFolder=None, nameSystem=None, mis_registration_zero_point=None, wfs_mis_registered=None, fast_algorithm=False, n_mis_reg=3, recompute_sensitivity=False, dm_input=None):
+    def __init__(self,
+                 obj,
+                 basis,
+                 nameFolder=None,
+                 nameSystem=None,
+                 mis_registration_zero_point=None,
+                 wfs_mis_registered=None,
+                 fast_algorithm=False,
+                 n_mis_reg=3,
+                 recompute_sensitivity=False,
+                 dm_input=None):
         print('Setting up SPRINT..')
         # modal basis considered
         self.basis = basis
@@ -45,8 +55,13 @@ class SPRINT:
 
         # folder name to save the sensitivity matrices
         if nameFolder is None:
-            self.nameFolder_sensitivity_matrice = obj.param['pathInput'] + \
-                '/' + obj.param['name']+'/s_mat/'
+            try:
+                self.nameFolder_sensitivity_matrice = obj.param['pathInput'] + \
+                    '/' + obj.param['name']+'/s_mat/'
+            except:
+                obj.param = None
+                self.nameFolder_sensitivity_matrice = '/'
+                    
         else:
             self.nameFolder_sensitivity_matrice = nameFolder
 
@@ -79,7 +94,15 @@ class SPRINT:
         self.mis_registration_zero_point_init = self.mis_registration_zero_point        
         print('Done!')
 
-    def estimate(self, obj, on_sky_slopes, n_iteration=3, n_update_zero_point=0, precision=3, gain_estimation=1, dm_input=None):
+    def estimate(self, 
+                 obj,
+                 on_sky_slopes,
+                 n_iteration=3,
+                 n_update_zero_point=0,
+                 precision=3,
+                 gain_estimation=1,
+                 dm_input=None,
+                 tolerance = 1/50):
         """
         Method of SPRINT to estimate the mis-registrations parameters
             - obj           : a class containing the different objects, tel, dm, atm, ngs and wfs
@@ -100,7 +123,7 @@ class SPRINT:
         self.mis_registration_zero_point = self.mis_registration_zero_point_init
         print('SPRINT was setup around the following working point:')
         self.mis_registration_zero_point.print_()
-
+        self.mis_registration_buffer = None
 
         for i_update in range(n_update_zero_point+1):
             if i_update > 0:
@@ -136,7 +159,7 @@ class SPRINT:
                 print('Done!')
 
             # estimate mis-registrations
-            [self.mis_registration_out, self.scaling_factor, self.mis_registration_buffer, self.validity_flag] = estimateMisRegistration(nameFolder=self.nameFolder_sensitivity_matrice,
+            [self.mis_registration_out, self.scaling_factor, self.mis_registration_buffer, self.validity_flag, self.calib_last] = estimateMisRegistration(nameFolder=self.nameFolder_sensitivity_matrice,
                                                                                                                                          nameSystem=self.name_system,
                                                                                                                                          tel=obj.tel,
                                                                                                                                          atm=obj.atm,
@@ -155,7 +178,9 @@ class SPRINT:
                                                                                                                                          sensitivity_matrices=self.metaMatrix,
                                                                                                                                          precision=precision,
                                                                                                                                          gainEstimation=gain_estimation,
-                                                                                                                                         dm_input=dm_input)
+                                                                                                                                         dm_input=dm_input,
+                                                                                                                                         tolerance=tolerance,
+                                                                                                                                         previous_estimate = self.mis_registration_buffer)
 
         print('----------------------------------')
 
