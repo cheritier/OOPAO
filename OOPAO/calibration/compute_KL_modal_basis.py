@@ -11,7 +11,7 @@ from astropy.io import fits as pfits
 import OOPAO.calibration.ao_cockpit_psim as aou
 from ..tools.tools import createFolder
 
-def compute_KL_basis(tel,atm,dm,lim = 1e-3,remove_piston = True):
+def compute_KL_basis(tel,atm,dm,lim = 1e-3,remove_piston = True, n_batch = 1):
     
     M2C_KL = compute_M2C(telescope            = tel,\
                         atmosphere         = atm,\
@@ -28,7 +28,7 @@ def compute_KL_basis(tel,atm,dm,lim = 1e-3,remove_piston = True):
                         ortho_spm          = True,\
                         SZ                 = int(2*tel.OPD.shape[0]),\
                         nZer               = 3,\
-                        NDIVL              = 1,\
+                        NDIVL              = n_batch,\
                         recompute_cov=True,\
                         save_output= False, lim_inversion=lim,display=False)
         
