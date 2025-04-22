@@ -50,12 +50,28 @@ def computeMetaSensitivityMatrix(nameFolder,nameSystem,tel,atm,ngs,dm_0,pitch,wf
 """
 
 
-def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pitch, wfs, basis, misRegistrationZeroPoint, epsilonMisRegistration, param, wfs_mis_registrated = None,save_sensitivity_matrices=True,fast = False, n_mis_reg = 3, recompute_sensitivity = False,dm_input = None):
+def computeMetaSensitivityMatrix(nameFolder, 
+                                 nameSystem, 
+                                 tel, 
+                                 atm, 
+                                 ngs,
+                                 dm_0,
+                                 pitch,
+                                 wfs,
+                                 basis, 
+                                 misRegistrationZeroPoint,
+                                 epsilonMisRegistration, 
+                                 param, wfs_mis_registrated = None,
+                                 save_sensitivity_matrices=True,
+                                 fast = False, 
+                                 n_mis_reg = 3,
+                                 recompute_sensitivity = False,
+                                 dm_input = None,
+                                 ind_mis_reg = None):
     #%% --------------------  CREATION OF THE DESTINATION FOLDER --------------------
     homeFolder = misRegistrationZeroPoint.misRegName+'/'
     intMat_name = 'im'
     if basis.modes.shape == np.shape(np.eye(dm_0.nValidAct)):
-        
         comparison = basis.modes == np.eye(dm_0.nValidAct)
         if comparison.all():
             foldername  = nameFolder+nameSystem+homeFolder+'zon/'
@@ -76,8 +92,11 @@ def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pi
     #%% --------------------  COMPUTATION OF THE INTERACTION MATRICES FOLDER --------------------
     epsilonMisRegistration_name  = ['dX','dY','dRot','dmX','dmY']
     epsilonMisRegistration_field = ['shiftX','shiftY','rotationAngle','radialScaling','tangentialScaling']
+    epsilonMisRegistration_name = list(np.asarray(epsilonMisRegistration_name)[ind_mis_reg])
+    epsilonMisRegistration_field = list(np.asarray(epsilonMisRegistration_field)[ind_mis_reg])
     epsilonMisRegistration_name  = epsilonMisRegistration_name[:n_mis_reg]
     epsilonMisRegistration_field = epsilonMisRegistration_field[:n_mis_reg]
+    
     try:
         meta_matrix =np.zeros([wfs.nSignal*basis.modes.shape[1],int(len(epsilonMisRegistration_name))])
     except:
@@ -107,7 +126,7 @@ def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pi
                 hdu = pfits.open(name_0+'_volontary_error')                
 
         except:
-            calib_0 = InteractionMatrix(ngs, atm, tel, dm_0, wfs, basis.modes ,stroke, phaseOffset=0, nMeasurements=50,invert=False,print_time=False)
+            calib_0 = InteractionMatrix(ngs, atm, tel, dm_0, wfs, basis.modes ,stroke, phaseOffset=0, nMeasurements=1,invert=False,print_time=False)
             
             # save output in fits file
             if save_sensitivity_matrices:
@@ -137,13 +156,13 @@ def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pi
                 input_modes_cp = input_modes_0.copy()
                 input_modes_cp = tel.pupil*apply_mis_reg(tel,input_modes_0, misRegistration_tmp) 
 
-                calib_tmp_p =  InteractionMatrixFromPhaseScreen(ngs,atm,tel,wfs,input_modes_cp,stroke,phaseOffset=0,nMeasurements=50,invert=False,print_time=False)
+                calib_tmp_p =  InteractionMatrixFromPhaseScreen(ngs,atm,tel,wfs,input_modes_cp,stroke,phaseOffset=0,nMeasurements=1,invert=False,print_time=False)
 
             else:
                 # compute new deformable mirror
                 dm_tmp      = applyMisRegistration(tel,misRegistration_tmp,param, wfs = wfs_mis_registrated,print_dm_properties=False, floating_precision=dm_0.floating_precision, dm_input = dm_input)
                 # compute the interaction matrix for the positive mis-registration
-                calib_tmp_p = InteractionMatrix(ngs, atm, tel, dm_tmp, wfs, basis.modes, stroke, phaseOffset=0, nMeasurements=50,invert=False,print_time=False)
+                calib_tmp_p = InteractionMatrix(ngs, atm, tel, dm_tmp, wfs, basis.modes, stroke, phaseOffset=0, nMeasurements=1,invert=False,print_time=False)
                 del dm_tmp
 
             # save output in fits file
@@ -173,12 +192,12 @@ def computeMetaSensitivityMatrix(nameFolder, nameSystem, tel, atm, ngs, dm_0, pi
                 input_modes_cp = input_modes_0.copy()
                 input_modes_cp = tel.pupil*apply_mis_reg(tel,input_modes_0, misRegistration_tmp) 
 
-                calib_tmp_n =  InteractionMatrixFromPhaseScreen(ngs,atm,tel,wfs,input_modes_cp,stroke,phaseOffset=0,nMeasurements=50,invert=False,print_time=False)
+                calib_tmp_n =  InteractionMatrixFromPhaseScreen(ngs,atm,tel,wfs,input_modes_cp,stroke,phaseOffset=0,nMeasurements=1,invert=False,print_time=False)
             else:
                 # compute new deformable mirror
                 dm_tmp      = applyMisRegistration(tel,misRegistration_tmp,param, wfs = wfs_mis_registrated,print_dm_properties=False, floating_precision=dm_0.floating_precision, dm_input = dm_input)
                 # compute the interaction matrix for the negative mis-registration
-                calib_tmp_n = InteractionMatrix(ngs, atm, tel, dm_tmp, wfs, basis.modes, stroke, phaseOffset=0, nMeasurements=50,invert=False,print_time=False)
+                calib_tmp_n = InteractionMatrix(ngs, atm, tel, dm_tmp, wfs, basis.modes, stroke, phaseOffset=0, nMeasurements=1,invert=False,print_time=False)
                 del dm_tmp
 
             # save output in fits file

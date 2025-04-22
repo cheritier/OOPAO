@@ -24,12 +24,18 @@ class SPRINT:
                  fast_algorithm=False,
                  n_mis_reg=3,
                  recompute_sensitivity=False,
-                 dm_input=None):
+                 dm_input=None,
+                 ind_mis_reg = None):
         print('Setting up SPRINT..')
         # modal basis considered
         self.basis = basis
         self.n_mis_reg = n_mis_reg
         self.recompute_sensitivity = recompute_sensitivity
+        if ind_mis_reg is None:
+            self.ind_mis_reg = np.arange(5)
+        else:
+            self.ind_mis_reg = ind_mis_reg
+                
 
         # Case where the shifts are applied in the WFS space
         self.wfs_mis_registered = wfs_mis_registered
@@ -88,7 +94,8 @@ class SPRINT:
                                                                        n_mis_reg=self.n_mis_reg,
                                                                        fast=self.fast_algorithm,
                                                                        recompute_sensitivity=self.recompute_sensitivity,
-                                                                       dm_input=dm_input)
+                                                                       dm_input=dm_input,
+                                                                       ind_mis_reg = self.ind_mis_reg)
 
         self.metaMatrix_init = CalibrationVault(self.metaMatrix.D)
         self.mis_registration_zero_point_init = self.mis_registration_zero_point        
@@ -180,7 +187,8 @@ class SPRINT:
                                                                                                                                          gainEstimation=gain_estimation,
                                                                                                                                          dm_input=dm_input,
                                                                                                                                          tolerance=tolerance,
-                                                                                                                                         previous_estimate = self.mis_registration_buffer)
+                                                                                                                                         previous_estimate = self.mis_registration_buffer,
+                                                                                                                                         ind_mis_reg =  self.ind_mis_reg)
 
         print('----------------------------------')
 

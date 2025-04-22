@@ -326,10 +326,16 @@ dm_mis_registered.coefs = Sprint.basis.modes * 1e-9
 # Acquire corresponding WFS signals 
 ngs*tel*dm_mis_registered*wfs
 
-#%
+#%%
 plt.close('all')
 
-Sprint.estimate(obj,wfs.signal/1e-9,dm_input=dm,n_iteration=3,gain_estimation=0.9,n_update_zero_point=3,tolerance = 100)
+Sprint.estimate(obj,
+                on_sky_slopes = wfs.signal/1e-9,
+                dm_input=dm,
+                n_iteration=10,
+                gain_estimation=1,
+                n_update_zero_point=3,
+                tolerance = 1/10)
 
 
 

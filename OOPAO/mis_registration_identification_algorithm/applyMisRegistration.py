@@ -41,7 +41,7 @@ def applyMisRegistration(tel,
             
         if dm_input is None:
             # case synthetic DM - with user-defined coordinates                
-            try:
+            # try:
                 if param['isM4'] is True:
                     # case with M4
                     dm_tmp = DeformableMirror(telescope    = tel,\
@@ -59,7 +59,11 @@ def applyMisRegistration(tel,
             
                 elif param['isLBT'] is True:
                     # case with LBT asm model
-                    from lbt_tools import get_influence_functions
+                    if param['new_IF']:
+                        from lbt_tools import get_influence_functions_new as get_influence_functions
+                    else:
+                        from lbt_tools import get_influence_functions as get_influence_functions
+
                     modes, coord, M2C, validAct =  get_influence_functions(telescope             = tel,\
                                                                             misReg               = misRegistration_tmp + extra_dm_mis_registration,\
                                                                             filename_IF          = param['filename_if'],\
@@ -82,15 +86,15 @@ def applyMisRegistration(tel,
                         print('Mis-Registrations Applied on user-defined DM!')
                         
                     
-            except:
-                # default case => use of param['dm_ccordinates']
-                dm_tmp = DeformableMirror(telescope    = tel,\
-                        nSubap       = param['nSubaperture'],\
-                        mechCoupling = param['mechanicalCoupling'],\
-                        coordinates  = coordinates,\
-                        pitch        = pitch,\
-                        misReg       = misRegistration_tmp + extra_dm_mis_registration,\
-                        print_dm_properties = print_dm_properties)
+            # except:
+            #     # default case => use of param['dm_ccordinates']
+            #     dm_tmp = DeformableMirror(telescope    = tel,\
+            #             nSubap       = param['nSubaperture'],\
+            #             mechCoupling = param['mechanicalCoupling'],\
+            #             coordinates  = coordinates,\
+            #             pitch        = pitch,\
+            #             misReg       = misRegistration_tmp + extra_dm_mis_registration,\
+            #             print_dm_properties = print_dm_properties)
                 if print_dm_properties:
                     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
                     print('Mis-Registrations Applied on Synthetic DM!')
@@ -143,4 +147,5 @@ def applyMisRegistration(tel,
                                           param,
                                           wfs=None,
                                           dm_input=dm_input)
+    _ = dm_tmp.misReg.properties()
     return dm_tmp
