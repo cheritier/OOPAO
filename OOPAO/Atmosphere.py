@@ -649,7 +649,7 @@ class Atmosphere:
 
     def print_atm_at_wavelength(self, wavelength):
 
-        r0_wvl = self.r0*((wavelength/self.wavelength)**(5/3))
+        r0_wvl = self.r0*((wavelength/self.wavelength)**(6/5))
         seeingArcsec_wvl = 206265*(wavelength/r0_wvl)
 
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE AT ' +
