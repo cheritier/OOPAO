@@ -317,8 +317,8 @@ class ShackHartmann:
         # else:
         #     self.slopes_units = self.pixel_scale_init/self.pixel_scale
         self.set_slopes_units()
-        self.cam.photonNoise = readoutNoise
-        self.cam.readoutNoise = photonNoise
+        self.cam.photonNoise = photonNoise
+        self.cam.readoutNoise = readoutNoise
         self.telescope.OPD = tmp_opd
         self.print_properties()
 
@@ -403,8 +403,8 @@ class ShackHartmann:
             * self.pixel_scale / (self.telescope.src.wavelength / self.telescope.D) / self.rad2arcsec
         self.wfs_measure(self.telescope.src.phase)
         self.slopes_units = np.mean(self.signal)
-        self.cam.photonNoise = readoutNoise
-        self.cam.readoutNoise = photonNoise
+        self.cam.photonNoise =  photonNoise
+        self.cam.readoutNoise = readoutNoise
         self.telescope.OPD = tmp_opd
         print('Done')
         return
