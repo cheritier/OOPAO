@@ -443,7 +443,6 @@ class Atmosphere:
             raise OopaoError('The Atmosphere object needs to be initialised using the initialiseAtmosphere()')
         if OPD is None:
             self.user_defined_opd = False
-
             phase_support = self.initialize_phase_support()
             for i_layer in range(self.nLayer):
                 tmpLayer = getattr(self, 'layer_'+str(i_layer+1))
@@ -455,7 +454,10 @@ class Atmosphere:
             self.user_defined_opd = True
             # case where the OPD is input
             self.OPD_no_pupil = OPD
-            self.OPD = OPD*self.telescope.pupil
+            if type(OPD) is not list:
+                self.OPD = OPD*self.telescope.pupil
+            else:
+                self.OPD = OPD
 
         if self.telescope.isPaired:
             self*self.telescope
@@ -799,26 +801,6 @@ class Atmosphere:
             ax.plot(x_tel+center, y_tel+center, '--', color='k')
             ax.legend(loc='upper left')
             makeSquareAxes(plt.gca())
-            ax.arrow(center,
-                     center,
-                     center +
-                     normalized_speed[i_l]*(tmpLayer.D_fov/2) *
-                     xp.cos(xp.deg2rad(tmpLayer.direction)),
-                     center +
-                     normalized_speed[i_l]*(tmpLayer.D_fov/2) *
-                     xp.sin(xp.deg2rad(tmpLayer.direction)),
-                     length_includes_head=True,
-                     width=0.5,
-                     facecolor=[0, 0, 0],
-                     alpha=0.3,
-                     edgecolor=None)
-            ax.text(center+tmpLayer.D_fov/8*xp.cos(xp.deg2rad(tmpLayer.direction)),
-                    center+tmpLayer.D_fov/8 *
-                    xp.sin(xp.deg2rad(tmpLayer.direction)),
-                    str(self.windSpeed[i_l])+' m/s',
-                    fontweight=100,
-                    color=[1, 1, 1],
-                    fontsize=18)
 
     @property
     def r0(self):
