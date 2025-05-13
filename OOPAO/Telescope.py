@@ -285,8 +285,9 @@ class Telescope:
             delta_x = int(np.floor(np.abs(x_shift)/pixel_scale)*np.sign(x_shift))
             delta_y = int(np.floor(np.abs(y_shift)/pixel_scale)*np.sign(y_shift))
 
-            delta_Tip = (np.abs(x_shift) % pixel_scale)*np.sign(x_shift)
-            delta_Tilt = (np.abs(y_shift) % pixel_scale)*np.sign(y_shift)
+            delta_Tilt = (np.abs(x_shift) % pixel_scale)*np.sign(x_shift)
+            delta_Tip = (np.abs(y_shift) % pixel_scale)*np.sign(y_shift)
+            # print([delta_Tip,delta_Tilt])
             self.delta_TT = (delta_Tip*Tip + delta_Tilt*Tilt)*self.pupil*(self.D/input_source[i_src].wavelength)*(1/conversion_constant)
             # axis in arcsec
             self.xPSF_arcsec = [-conversion_constant*(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor),
