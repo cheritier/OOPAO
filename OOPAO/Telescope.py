@@ -232,7 +232,7 @@ class Telescope:
                 detector.resolution = img_resolution
         # case where the image should be cropped to img_resolution (used in tel*det as well using det.resolution property)
         if img_resolution is None:
-            img_resolution = zeroPaddingFactor*self.resolution
+            img_resolution = int(zeroPaddingFactor*self.resolution)
         if self.src is None:
             # raise an error if no source is coupled to the telescope
             raise OopaoError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
@@ -254,7 +254,7 @@ class Telescope:
         pixel_scale = conversion_constant*(input_source[0].wavelength/self.D)/zeroPaddingFactor
         maximum_fov = pixel_scale*img_resolution/2
         n_extra = np.abs(np.floor((maximum_fov - max(x_max, y_max))/pixel_scale) - img_resolution//2)
-        n_pix = max(int(img_resolution/2 + n_extra)*2, img_resolution)
+        n_pix = np.ceil(max(int(img_resolution/2 + n_extra)*2, img_resolution)).astype('int')
         center = n_pix//2
         self.support_PSF = np.zeros([n_pix, n_pix])
         input_wavelenght = input_source[0].wavelength
