@@ -140,6 +140,32 @@ class Detector:
             seed=int(time.time()))      # random states to reproduce sequences of noise
         self.print_properties()
 
+    def relay(self, src):
+        if src.tag == 'source':
+            src.optical_path.append([self.tag, self])
+            tel = next(obj for tag, obj in src.optical_path if tag == "telescope")
+
+        elif src.tag == 'asterism':
+            for _src in src.src:
+                _src.optical_path.append([self.tag, self])
+
+            tel = next(obj for tag, obj in _src.optical_path if tag == "telescope")
+
+        tel.computePSF(detector=self)
+        self.fov_arcsec = tel.xPSF_arcsec[1] - tel.xPSF_arcsec[0]
+        self.fov_rad = tel.xPSF_rad[1] - tel.xPSF_rad[0]
+        if self.integrationTime is not None:
+            if self.integrationTime < tel.samplingTime:
+                raise OopaoError('The Detector integration time is smaller than the AO loop sampling Time. ')
+        self._integrated_time += tel.samplingTime
+        if np.ndim(tel.PSF) == 3:
+            self.integrate(np.sum(tel.PSF, axis=0))
+        else:
+            self.integrate(tel.PSF)
+
+        tel.PSF = self.frame
+
+
     def rebin(self, arr, new_shape):
         shape = (new_shape[0], arr.shape[0] // new_shape[0],
                  new_shape[1], arr.shape[1] // new_shape[1])

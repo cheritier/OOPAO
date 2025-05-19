@@ -8,7 +8,11 @@ Created on Mon May  6 14:01:52 2024
 
 import time
 
+import matplotlib
+matplotlib.use('Qt5Agg')
+
 import matplotlib.pyplot as plt
+
 import numpy as np
 
 from OOPAO.calibration.CalibrationVault import CalibrationVault
@@ -32,7 +36,7 @@ tel = Telescope(resolution           = 6*n_subaperture,                         
                 samplingTime         = 1/1000,                                   # Sampling time in [s] of the AO loop
                 centralObstruction   = 0.1,                                      # Central obstruction in [%] of a diameter 
                 display_optical_path = False,                                    # Flag to display optical path
-                fov                  = 10 )                                     # field of view in [arcsec]. If set to 0 (default) this speeds up the computation of the phase screens but is uncompatible with off-axis targets
+                fov                  = 20 )                                     # field of view in [arcsec]. If set to 0 (default) this speeds up the computation of the phase screens but is uncompatible with off-axis targets
 
 # # Apply spiders to the telescope pupil
 # thickness_spider    = 0.05                                                       # thickness of the spiders in m
@@ -60,7 +64,7 @@ ngs*tel
 # create the Scientific Target object located at 10 arcsec from the  ngs
 src = Source(optBand     = 'K',           # Optical band (see photometry.py)
              magnitude   = 8,              # Source Magnitude
-             coordinates = [2,0])        # Source coordinated [arcsec,deg]
+             coordinates = [10,0])        # Source coordinated [arcsec,deg]
 
 # combine the SRC to the telescope using '*'
 src*tel
@@ -145,53 +149,59 @@ plt.imshow(cam.frame,extent=[-cam.fov_arcsec/2,cam.fov_arcsec/2,-cam.fov_arcsec/
 plt.xlabel('Angular separation [arcsec]')
 plt.ylabel('Angular separation [arcsec]')
 plt.title('Pixel size: '+str(np.round(cam.pixel_size_arcsec,3))+'"')
+plt.show()
 
 plt.figure()
 plt.imshow(cam_binned.frame,extent=[-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2,-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2])
 plt.xlabel('Angular separation [arcsec]')
 plt.ylabel('Angular separation [arcsec]')
 plt.title('Pixel size: '+str(np.round(cam_binned.pixel_size_arcsec,3))+'"')
+plt.show()
 
 #%%         PROPAGATE THE LIGHT THROUGH THE ATMOSPHERE
 # The Telescope and Atmosphere can be combined using the '+' operator (Propagation through the atmosphere): 
 tel+atm # This operations makes that the tel.OPD is automatically over-written by the value of atm.OPD when atm.OPD is updated. 
 
 # It is possible to print the optical path: 
-tel.print_optical_path()
+ngs.print_optical_path()
 
 # computation of a PSF on the detector using the '*' operator
-atm*ngs*tel*cam*cam_binned
+ngs**tel*cam*cam_binned
 
 plt.figure()
 plt.imshow(cam.frame,extent=[-cam.fov_arcsec/2,cam.fov_arcsec/2,-cam.fov_arcsec/2,cam.fov_arcsec/2])
 plt.xlabel('Angular separation [arcsec]')
 plt.ylabel('Angular separation [arcsec]')
 plt.title('Pixel size: '+str(np.round(cam.pixel_size_arcsec,3))+'"')
+plt.show()
 
 plt.figure()
 plt.imshow(cam_binned.frame,extent=[-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2,-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2])
 plt.xlabel('Angular separation [arcsec]')
 plt.ylabel('Angular separation [arcsec]')
 plt.title('Pixel size: '+str(np.round(cam_binned.pixel_size_arcsec,3))+'"')
+plt.show()
 
 # The Telescope and Atmosphere can be separated using the '-' operator (Free space propagation) 
 tel-atm
-tel.print_optical_path()
+ngs.print_optical_path()
 
 # computation of a PSF on the detector using the '*' operator
-ngs*tel*cam*cam_binned
+ngs**tel*cam*cam_binned
 
 plt.figure()
 plt.imshow(cam.frame,extent=[-cam.fov_arcsec/2,cam.fov_arcsec/2,-cam.fov_arcsec/2,cam.fov_arcsec/2])
 plt.xlabel('Angular separation [arcsec]')
 plt.ylabel('Angular separation [arcsec]')
 plt.title('Pixel size: '+str(np.round(cam.pixel_size_arcsec,3))+'"')
+plt.show()
 
 plt.figure()
 plt.imshow(cam_binned.frame,extent=[-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2,-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2])
 plt.xlabel('Angular separation [arcsec]')
 plt.ylabel('Angular separation [arcsec]')
 plt.title('Pixel size: '+str(np.round(cam_binned.pixel_size_arcsec,3))+'"')
+plt.show()
 
 #%% -----------------------     DEFORMABLE MIRROR   ----------------------------------
 from OOPAO.DeformableMirror import DeformableMirror
@@ -222,6 +232,7 @@ plt.plot(dm.coordinates[:,0],dm.coordinates[:,1],'rx')
 plt.xlabel('[m]')
 plt.ylabel('[m]')
 plt.title('DM Actuator Coordinates')
+plt.show()
 
 
 #%% -----------------------     SHACK-HARTMANN WFS   ----------------------------------
@@ -230,38 +241,43 @@ from OOPAO.ShackHartmann import ShackHartmann
 # make sure tel and atm are separated to initialize the PWFS
 tel.isPaired = False
 tel.resetOPD()
-
+ngs.resetOPD()
 wfs = ShackHartmann(nSubap      = n_subaperture,
+                    src=ngs,
                     telescope   = tel,
                     lightRatio      = 0.5,
                     shannon_sampling = True)
 
 # propagate the light to the Wave-Front Sensor
-tel*wfs
+ngs*wfs
 
 plt.close('all')
 plt.figure()
 plt.imshow(wfs.cam.frame)
 plt.title('WFS Camera Frame')
+plt.show()
 
 plt.figure()
 plt.imshow(wfs.signal_2D)
 plt.title('WFS Signal')
+plt.show()
 
 # The photon Noise of the detector can be disabled the same way than for a Detector class
 wfs.cam.photonNoise = True
 
-ngs*tel*wfs
+ngs*wfs
 
 plt.figure()
 plt.imshow(wfs.cam.frame)
 plt.title('WFS Camera Frame - Without Noise')
+plt.show()
 
 wfs.cam.photonNoise = False
-ngs*tel*wfs
+ngs*wfs
 plt.figure()
 plt.imshow(wfs.cam.frame)
 plt.title('WFS Camera Frame - With Noise')
+plt.show()
 
 #%% -----------------------     Modal Basis - Zernike  ----------------------------------
 # from OOPAO.Zernike import Zernike
@@ -285,15 +301,18 @@ plt.title('WFS Camera Frame - With Noise')
 
 from OOPAO.calibration.compute_KL_modal_basis import compute_KL_basis
 # use the default definition of the KL modes with forced Tip and Tilt. For more complex KL modes, consider the use of the compute_KL_basis function. 
-M2C_KL = compute_KL_basis(tel, atm, dm,lim = 1e-2) # matrix to apply modes on the DM
+M2C_KL = compute_KL_basis(ngs, tel, atm, dm, lim = 1e-2) # matrix to apply modes on the DM
 
 # apply the 10 first KL modes
 dm.coefs = M2C_KL[:,:10]
 # propagate through the DM
-ngs*tel*dm
+ngs**tel*dm
 # show the first 10 KL modes applied on the DM
-displayMap(tel.OPD)
+displayMap(ngs.OPD)
+plt.show()
+
 #%% -----------------------     Calibration: Interaction Matrix  ----------------------------------
+
 
 # amplitude of the modes in m
 stroke=1e-9
@@ -321,6 +340,7 @@ plt.figure()
 plt.plot(np.std(calib_modal.D,axis=0))
 plt.xlabel('Mode Number')
 plt.ylabel('WFS slopes STD')
+plt.show()
 
 #%% Define instrument and WFS path detectors
 from OOPAO.Detector import Detector
@@ -339,8 +359,9 @@ ngs_cam.integrationTime = tel.samplingTime
 
 # initialize Telescope DM commands
 tel.resetOPD()
+ngs.resetOPD()
 dm.coefs=0
-ngs*tel*dm*wfs
+ngs**tel*dm*wfs
 # Update the r0 parameter, generate a new phase screen for the atmosphere and combine it with the Telescope
 # atm.r0 = 0.15
 atm.generateNewPhaseScreen(seed = 10)
@@ -358,8 +379,8 @@ M2C_CL      = M2C_modal
 tel+atm
 
 # initialize DM commands
-atm*ngs*tel*ngs_cam
-atm*src*tel*src_cam
+ngs**tel*ngs_cam
+src**tel*src_cam
 
 
 plt.show()
@@ -375,8 +396,8 @@ residual_NGS                = np.zeros(nLoop)
 wfsSignal               = np.arange(0,wfs.nSignal)*0
 
 plot_obj = cl_plot(list_fig          = [atm.OPD,
-                                        tel.mean_removed_OPD,
-                                        tel.mean_removed_OPD,
+                                        ngs.OPD,
+                                        src.OPD,
                                         wfs.cam.frame,
                                         [dm.coordinates[:,0],np.flip(dm.coordinates[:,1]),dm.coefs],
                                         [[0,0],[0,0],[0,0]],
@@ -415,23 +436,25 @@ for i in range(nLoop):
     # update phase screens => overwrite tel.OPD and consequently tel.src.phase
     atm.update()
     # save phase variance
-    total[i]=np.std(tel.OPD[np.where(tel.pupil>0)])*1e9
+    ngs ** tel
+    total[i]=np.std(ngs.OPD[np.where(tel.pupil>0)])*1e9
     # propagate light from the NGS through the atmosphere, telescope, DM to the WFS and NGS camera with the CL commands applied
-    atm*ngs*tel*dm*wfs*ngs_cam
+    ngs * dm * wfs * ngs_cam
     # save residuals corresponding to the NGS
-    residual_NGS[i] = np.std(tel.OPD[np.where(tel.pupil>0)])*1e9
-    OPD_NGS         = tel.mean_removed_OPD.copy()
-
+    residual_NGS[i] = np.std(ngs.OPD[np.where(ngs.mask>0)])*1e9
+    # OPD_NGS         = tel.mean_removed_OPD.copy()
+    OPD_NGS = ngs.OPD.copy()
     if display==True:        
         NGS_PSF = np.log10(np.abs(ngs_cam.frame))
     
     # propagate light from the SRC through the atmosphere, telescope, DM to the Instrument camera
-    atm*src*tel*dm*src_cam
+    src**tel*dm*src_cam
     
     # save residuals corresponding to the NGS
-    residual_SRC[i] = np.std(tel.OPD[np.where(tel.pupil>0)])*1e9
-    OPD_SRC         = tel.mean_removed_OPD.copy()
-    if frame_delay ==1:        
+    residual_SRC[i] = np.std(src.OPD[np.where(src.mask>0)])*1e9
+    # OPD_SRC         = tel.mean_removed_OPD.copy()
+    OPD_SRC         = src.OPD.copy()
+    if frame_delay ==1:
         wfsSignal=wfs.signal
     
     # apply the commands on the DM

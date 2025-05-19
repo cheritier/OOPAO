@@ -47,38 +47,162 @@ class Asterism:
         """
         self.n_source = len(list_src)
         self.src = list_src
-        self.coordinates = []
-        self.altitude = []
-        self.nPhoton = 0
+
+        for i, src in enumerate(self.src):
+            src.inAsterism = True
+            src.ast_idx = i
+
+
         self.chromatic_shift = None
         print(self)
         self.tag = 'asterism'
         self.type = 'asterism'
-        for i in range(self.n_source):
-            self.coordinates.append(self.src[i].coordinates)
-            self.altitude.append(self.src[i].altitude)
-            self.nPhoton += self.src[i].nPhoton/self.n_source
 
-    def __mul__(self, telescope):
-        if type(telescope.OPD) is not list:
-            telescope.OPD = [telescope.OPD.copy() for i in range(self.n_source)]
+        # for i in range(self.n_source):
+        #     self.coordinates.append(self.src[i].coordinates)
+        #     self.altitude.append(self.src[i].altitude)
+        #     self.nPhoton += self.src[i].nPhoton/self.n_source
+            # self.phase.append(self.src[i].phase)
+            # self.fluxMap.append(self.src[i].phase)
 
-        if len(telescope.OPD) != self.n_source:
-            telescope.src = self
-            telescope.OPD = [telescope.pupil.copy() for i in range(self.n_source)]
+        # self.phase = np.asarray(self.phase)
+        # self.fluxMap = np.asarray(self.fluxMap)
 
-        for i in range(self.n_source):
-            # update the phase of the source
-            self.src[i].phase = telescope.OPD[i]*2*np.pi/self.src[i].wavelength
-            self.src[i].fluxMap = telescope.pupilReflectivity*self.nPhoton * \
-                telescope.samplingTime*(telescope.D/telescope.resolution)**2
-        # assign the source object to the telescope object
-        telescope.src = self
-        return telescope
+        self.wavelength = self.src[0].wavelength
+
+    @property
+    def fluxMap(self):
+        _fluxMap = []
+        for src in self.src:
+            _fluxMap.append(src.fluxMap)
+        return _fluxMap
+
+    @property
+    def phase(self):
+        _phase = []
+        for src in self.src:
+            _phase.append(src.phase)
+        return _phase
+
+    @phase.setter
+    def phase(self, val):
+        for src in self.src:
+            src.phase = val[src.ast_idx]
+            # src.OPD = (val[src.ast_idx]*self.wavelength) / (2*np.pi)
+
+
+    @property
+    def phase_no_pupil(self):
+        _phase_no_pupil = []
+        for src in self.src:
+            _phase_no_pupil.append(src.phase_no_pupil)
+        return _phase_no_pupil
+
+    @property
+    def coordinates(self):
+        _coordinates = []
+        for src in self.src:
+            _coordinates.append(src.coordinates)
+        return _coordinates
+
+    @property
+    def altitude(self):
+        _altitude = []
+        for src in self.src:
+            _altitude.append(src.altitude)
+        return _altitude
+
+    @property
+    def nPhoton(self):
+        _nPhoton = []
+        for src in self.src:
+            _nPhoton.append(src.nPhoton)
+        return _nPhoton
+
+    @property
+    def OPD(self):
+        _OPD = []
+        for src in self.src:
+            _OPD.append(src.OPD)
+        return _OPD
+
+    @property
+    def OPD_no_pupil(self):
+        _OPD_no_pupil = []
+        for src in self.src:
+            _OPD_no_pupil.append(src.OPD_no_pupil)
+        return _OPD_no_pupil
+
+
+
+
+
+    def __pow__(self, obj):
+        obj.src = self
+        obj.resetOPD()
+
+        if obj.isPaired:
+            atm = obj.atm
+            obj-atm
+            self.resetOPD()
+            self*obj
+            obj+atm
+
+        else:
+            self * obj
+            # for src in self.src:
+            #     src.optical_path = [[src.type + '('+src.optBand+')', src]]
+            #     src.resetOPD()
+            #     src*obj
+
+        return self
+
+
+
+    def __mul__(self, obj):
+
+        obj.relay(self)
+        return self
+
+        # for src in self.src:
+        #     src * obj
+        #
+        # if obj.tag == 'telescope':
+        #     obj.src = self
+        #
+        # if obj.tag == 'shackHartmann':
+        #     obj.signal = obj.signal_list
+        #     obj.signal_list = []
+
+        # if obj.tag == 'telescope':
+        #     obj.src = self
+        #     for src in self.src:
+        #         src*obj
+        #
+        # if obj.tag == 'deformableMirror':
+        #     for src in self.src:
+        #         src*obj
+        #
+        # if obj.tag == 'shackHartmann':
+        #     for src in self.src:
+        #         src*obj
+
+
+
+    def resetOPD(self):
+        for src in self.src:
+            src.resetOPD()
+
+
+    def print_optical_path(self):
+        for src in self.src:
+            src.print_optical_path()
+
 
     # for backward compatibility
     def print_properties(self):
         print(self)
+
     def display_asterism(self):
         
         plt.figure()

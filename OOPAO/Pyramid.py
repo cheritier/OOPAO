@@ -25,6 +25,7 @@ except:
 class Pyramid:
     def __init__(self,
                  nSubap: float,
+                 src,
                  telescope,
                  modulation: float,
                  lightRatio: float,
@@ -198,6 +199,9 @@ class Pyramid:
         # initialize the Pyramid Object
         # telescope attached to the wfs
         self.telescope = telescope
+
+        self.src = src
+
         if (self.telescope.resolution/nSubap) % 2 != 0:
             raise OopaoError('The resolution should be an even number and be a multiple of 2**i where i>=2')
         if self.telescope.src is None:
@@ -262,6 +266,7 @@ class Pyramid:
         self.tag = 'pyramid'
         # WFS detector object (see Detector class)
         self.cam = Detector(round(nSubap*self.zeroPaddingFactor))
+
         # WFS focal plane detector object (see Detector class)
         self.focal_plane_camera = Detector(int(
             (modulation*4+12)*self.zeroPaddingFactor), psf_sampling=self.zeroPaddingFactor)
@@ -333,7 +338,7 @@ class Pyramid:
 
         # Select the valid pixels
         print('Selection of the valid pixels...')
-        self.initialization(self.telescope)
+        self.initialization(self.src, self.telescope)
         print('Acquisition of the reference slopes and units calibration...')
         # set the modulation radius and propagate light
         self.modulation = modulation
@@ -348,6 +353,7 @@ class Pyramid:
             self.m = self.get_phase_mask(resolution=self.nRes, n_subap=self.nSubap, n_pix_separation=self.n_pix_separation,
                                          n_pix_edge=self.n_pix_edge, psf_centering=self.psfCentering, sx=self.sx, sy=self.sy)
             self.initial_m = self.m.copy()
+
             # compute the PWFS mask)
             self.mask = self.convert_for_gpu(np.complex64(np.exp(1j*self.m)))
             # Save a copy of the initial mask
@@ -452,8 +458,9 @@ class Pyramid:
 
         return -m  # sign convention for backward compatibility
 
-    def initialization(self, telescope):
-        telescope.resetOPD()
+    def initialization(self, src, telescope):
+        src.resetOPD()
+
         if self.userValidSignal is None:
             if self.lightRatio == 0:
                 self.cam.frame = np.ones(
@@ -462,7 +469,7 @@ class Pyramid:
                 print('The valid pixel are selected on flux considerations')
                 # set the modulation to a large value
                 self.modulation = self.calibModulation
-                self.wfs_measure(phase_in=self.telescope.src.phase)
+                self.wfs_measure(phase_in=self.src.phase)
             # save initialization frame
             self.initFrame = self.cam.frame
 

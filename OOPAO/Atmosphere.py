@@ -376,6 +376,7 @@ class Atmosphere:
                                     2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
                     layer.pupil_footprint.append(pupil_footprint)
 
+
     def updateLayer(self, layer, shift=None):
         if self.compute_covariance is False:
             raise OopaoError('The computation of the covariance matrices was set to False in the atmosphere initialisation. Set it to True to provide moving layers.')
@@ -517,6 +518,7 @@ class Atmosphere:
         return phase_support
 
     def set_OPD(self, phase_support):
+        # TODO
         if self.asterism is None:
             self.OPD_no_pupil = phase_support*self.wavelength/2/xp.pi
             self.OPD = self.OPD_no_pupil*self.telescope.pupil
@@ -669,6 +671,7 @@ class Atmosphere:
                         'Re-initializing the atmosphere to match the new telescope fov')
                     self.hasNotBeenInitialized = True
                     self.initializeAtmosphere(obj)
+
             elif obj.tag == 'source':
                 if obj.coordinates[0] <= self.fov/2:
                     self.telescope.src = obj
@@ -689,21 +692,34 @@ class Atmosphere:
             if self.user_defined_opd is False:
                 self.set_pupil_footprint()
                 phase_support = self.initialize_phase_support()
+
                 for i_layer in range(self.nLayer):
                     tmpLayer = getattr(self, 'layer_'+str(i_layer+1))
                     phase_support = self.fill_phase_support(
                         tmpLayer, phase_support, i_layer)
+
                 self.set_OPD(phase_support)
 
+
             if obj.src.tag == 'source':
-                obj.optical_path = [
-                    [obj.src.type + '('+obj.src.optBand+')', id(obj.src)]]
-            else:
-                obj.optical_path = [[obj.src.type, id(obj.src)]]
-            obj.optical_path.append([self.tag, id(self)])
-            obj.optical_path.append([obj.tag, id(obj)])
+                # obj.src.OPD = self.OPD.copy()
+                obj.src.OPD_no_pupil = self.OPD_no_pupil.copy()
+                obj.src.optical_path = [[obj.src.type + '(' + obj.src.optBand + ')', obj.src]]
+                obj.src.optical_path.append([self.tag, self])
+                obj.src.optical_path.append([obj.tag, obj])
+
+
+            elif obj.src.tag == 'asterism':
+                for i, src in enumerate(obj.src.src):
+                    # src.OPD = self.OPD[i].copy()
+                    src.OPD_no_pupil = self.OPD_no_pupil[i].copy()
+                    src.optical_path = [[src.type + '(' + src.optBand + ')', src]]
+                    src.optical_path.append([self.tag, self])
+                    src.optical_path.append([obj.tag, obj])
+
             obj.OPD = self.OPD.copy()
-            obj.OPD_no_pupil = self.OPD_no_pupil.copy()
+
+
             obj.isPaired = True
             return obj
         else:

@@ -265,6 +265,7 @@ class DeformableMirror:
             self.mechCoupling = mechCoupling
             self.tag = 'deformableMirror'
             self.D = telescope.D
+
         else:
             if telescope.src.tag == 'asterism':
                 self.oversampling_factor = np.max((np.asarray(self.telescope.src.coordinates)[
@@ -392,6 +393,22 @@ class DeformableMirror:
         if self.print_dm_properties:
             print(self)
 
+
+    def relay(self, src):
+
+        if src.tag == 'source':
+            src.optical_path.append([self.tag, self])
+            src.OPD_no_pupil = self.dm_propagation(src)
+
+        elif src.tag == 'asterism':
+            src_list = src.src
+            for src in src_list:
+                src.optical_path.append([self.tag, self])
+                src.OPD_no_pupil = self.dm_propagation(src)
+
+
+
+
     def buildLayer(self, telescope, altitude):
         # initialize layer object
         layer = emptyClass()
@@ -476,23 +493,35 @@ class DeformableMirror:
 
         return OPD
 
-    def dm_propagation(self, telescope, OPD_in=None, i_source=None):
+    def dm_propagation(self, src, OPD_in=None, i_source=None):
         if self.coefs.all() == self.current_coefs.all():
             self.coefs = self.coefs
+
+        # <JM @ SpaceODT>
+
+        #TODO: Não percebo esta parte. A altitude é do espelho ou das fontes?
+        if src.inAsterism and self.altitude is not None:
+            i_source = src.ast_idx
+
         if OPD_in is None:
-            OPD_in = telescope.OPD_no_pupil
+            OPD_in = src.OPD_no_pupil
 
         if i_source is not None:
             dm_OPD = self.get_OPD_altitude(i_source)
         else:
             dm_OPD = self.OPD
 
+        # <\JM @ SpaceODT>
+
+
         # case where the telescope is paired to an atmosphere
-        if telescope.isPaired:
-            if telescope.isPetalFree:
-                telescope.removePetalling()
+        if self.telescope.isPaired:
+            if self.telescope.isPetalFree:
+                self.telescope.removePetalling()
+
             # case with single OPD
             if np.ndim(self.OPD) == 2:
+
                 OPD_out_no_pupil = OPD_in + dm_OPD
             # case with multiple OPD
             else:

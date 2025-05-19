@@ -120,9 +120,9 @@ class Source:
         self.bandwidth = tmp[1]
         self.zeroPoint = tmp[2]/368                            # zero point
         self._magnitude = magnitude                            # magnitude
-        self.phase = []                                    # phase of the source
+        # self.phase = []                                    # phase of the source
         # phase of the source (no pupil)
-        self.phase_no_pupil = []
+        # self.phase_no_pupil = []
         self.fluxMap = []                                    # 2D flux map of the source
         # number of photon per m2 per s
         self._nPhoton = self.zeroPoint*10**(-0.4*magnitude)
@@ -150,39 +150,126 @@ class Source:
             print(self)
 
         self.is_initialized = True
-        
+
+        # <JM @ SpaceODT>
+
+        self._OPD = None    # set the initial OPD
+        self._OPD_no_pupil = None  # set the initial OPD
+
+        self.mask = 1
+
+        self.optical_path = [[self.type + '('+self.optBand+')', self]]
+
+        self.inAsterism = False
+        self.ast_idx = -1
+
+        # <\JM @ SpaceODT>
+
+    def __pow__(self, obj):
+        if obj.isPaired:
+            atm = obj.atm
+            obj-atm
+            self.optical_path = [[self.type + '(' + self.optBand + ')', self]]
+            self.resetOPD()
+            self*obj
+            obj+atm
+
+        return self
+
     def __mul__(self, obj):
-        if obj.tag == 'telescope':
-            obj.src = self
-            if type(obj.OPD) is list:
-                obj.resetOPD()
 
-            if np.ndim(obj.OPD) == 3:
-                obj.resetOPD()
+        obj.relay(self)
+        return self
 
-            obj.OPD = obj.OPD*obj.pupil  # here to ensure that a new pupil is taken into account
+        # self.optical_path.append([obj.tag, obj])
 
-            # update the phase of the source
-            self.phase = obj.OPD*2*np.pi/self.wavelength
-            self.phase_no_pupil = obj.OPD_no_pupil*2*np.pi/self.wavelength
+        # if obj.tag == 'telescope':
+        #     if obj.src == None:
+        #         obj.src = self
 
-            # compute the variance in the pupil
-            self.var = np.var(self.phase[np.where(obj.pupil == 1)])
-            # assign the source object to the obj object
 
-            self.fluxMap = obj.pupilReflectivity*self.nPhoton * \
-                obj.samplingTime*(obj.D/obj.resolution)**2
-            if obj.optical_path is None:
-                obj.optical_path = []
-                obj.optical_path.append(
-                    [self.type + '('+self.optBand+')', id(self)])
-                obj.optical_path.append([obj.tag, id(obj)])
-            else:
-                obj.optical_path[0] = [self.type +
-                                       '('+self.optBand+')', id(self)]
-            return obj
+
+
+
+        # if obj.tag == 'telescope':
+        #     self.tel = obj
+        #     if obj.src is None:
+        #         obj.src = self
+        #     obj.relay(self)
+        #     return self
+        #
+        # elif obj.tag == 'deformableMirror':
+        #     self.dm = obj
+        #     obj.relay(self)
+        #     return self
+        #
+        # elif obj.tag == 'shackHartmann':
+        #     self.wfs = obj
+        #     obj.relay(self)
+        #     return self
+
+
+    def resetOPD(self):
+        # self.OPD = None
+        # self.OPD_no_pupil = None
+        # self.OPD = 0*self.OPD
+        # TODO: Does not work the first time someone resets the OPD
+        self.OPD_no_pupil = 0*self.OPD_no_pupil
+
+    def print_optical_path(self):
+        if self.optical_path is not None:
+            tmp_path = ''
+            for i in range(len(self.optical_path)):
+                tmp_path += self.optical_path[i][0]
+                if i < len(self.optical_path)-1:
+                    tmp_path += ' ~~> '
+            print(tmp_path)
+
+    @property
+    def OPD(self):
+        return self._OPD
+        # if self._OPD is not None:
+        #     return self._OPD
+        #
+        # if len(self._OPD_no_pupil.shape) > 2:
+        #     for i in range(self._OPD_no_pupil.shape[-1]):
+        #         self._OPD_no_pupil[:, :, i] = self._OPD_no_pupil[:, :, i]*self.mask
+        #     return self._OPD_no_pupil
+        #
+        # return self.OPD_no_pupil*self.mask
+
+
+    @OPD.setter
+    def OPD(self, val):
+        self._OPD = val
+
+    @property
+    def OPD_no_pupil(self):
+        return self._OPD_no_pupil
+
+    @OPD_no_pupil.setter
+    def OPD_no_pupil(self, val):
+        self._OPD_no_pupil = val
+        self._OPD = val
+        if len(self._OPD.shape) > 2:
+            for i in range(self._OPD.shape[-1]):
+                self._OPD[:, :, i] = self._OPD[:, :, i] * self.mask
         else:
-            raise OopaoError('The Source can only be paired to a Telescope!')
+            self._OPD = val*self.mask
+
+    @property
+    def phase(self):
+        return self.OPD*2*np.pi/self.wavelength
+
+    @phase.setter
+    def phase(self, val):
+        self._OPD = (val * self.wavelength) / (2 * np.pi)
+
+
+    @property
+    def phase_no_pupil(self):
+        return self.OPD_no_pupil*2*np.pi/self.wavelength
+
 
     def photometry(self, arg):
         # photometry object [wavelength, bandwidth, zeroPoint]

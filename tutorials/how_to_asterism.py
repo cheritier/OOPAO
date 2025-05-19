@@ -33,7 +33,7 @@ conversion_constant = (180/np.pi)*3600
 fov = conversion_constant*ngs.wavelength/tel.D *tel.resolution/2
 
 src_obj = []
-n_source = 5
+n_source = 2
 
 x_science = np.linspace(-10,10,n_source,endpoint=True)
 for i in range(len(x_science)):
@@ -64,6 +64,11 @@ atm = Atmosphere(telescope     = tel,                               # Telescope
 
 # initialize atmosphere with current Telescope
 atm.initializeAtmosphere(tel)
+
+# %%
+
+atm.display_atm_layers()
+
 #%%
 
 from OOPAO.DeformableMirror import DeformableMirror
@@ -84,6 +89,7 @@ dm.coefs = -np.linalg.pinv(dm.modes)@tel.OPD.reshape(tel.resolution**2)
 
 # re-propagate through the DM to get the "AO corrected" PSF
 atm*ast*tel*dm*cam
+
 #%%
 # Display the PSFs at their exact location in the field using the tel.PSF property
 plt.figure()

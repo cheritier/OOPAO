@@ -12,38 +12,10 @@ import numpy as np
 
 
 class CalibrationVault():
-    def __init__(self,
-                 D,
-                 nTrunc: int  = 0,
-                 display: bool = False,
-                 print_details: bool = False,
-                 invert: bool = True):
-
-        """
-        This function allows to calculate the pseudo-inverse of the matrix D in case invert == True.
-        The inversion is computed using the single value decomposition (SVD).
-
-        Usually D is the Interaction matrix of our AO system. Usually not a square matrix, so pseudo-inverse is needed
-
-        :param D: matrix we wish to invert
-        :param nTrunc: Number of singular values we wish to truncate
-        :param display: if True, we display a plot with the singular values from the SVD
-        :param print_details: if True, we print some information during the calculations
-        :param invert: if True, we invert D. Otherwise, we do not compute the pseudo-inverse
-
-        Outputs:
-
-        -- self.M is the pseudo-inverse of D without truncation in case invert == True. Otherwise, no inversion is done
-        -- self.Mtrunc is the pseudo-inverse of D with truncation.
-        -- self.cond is the conditioning number: ratio between the highest singular value and the lowest singular value.
-
-        """
-
+    def __init__(self,D,nTrunc=0,display=False, print_details = False,invert= True):
         if print_details:
             print('Computing the SVD...')
-
         if invert:
-
             U,s,V=np.linalg.svd(D,full_matrices=False)
             self.s=s
             self.S=np.diag(s)
@@ -68,10 +40,8 @@ class CalibrationVault():
             self.Dtrunc=self.UtruncT@np.diag(self.eigenValues[:nEigenValues])@self.Vtrunc
             
             self.cond=self.eigenValues[0]/self.eigenValues[(-nTrunc-1)]
-
             if print_details:
                 print('Done! The conditionning number is ' + str(self.cond))
-
             if display:
                 
                 plt.figure()
@@ -85,7 +55,6 @@ class CalibrationVault():
                 plt.plot([0,nEigenValues],[self.eigenValues[nEigenValues-1],self.eigenValues[nEigenValues-1]])
         else:                
             self.D=D
-
     @property
     def nTrunc(self):
         return self._nTrunc
