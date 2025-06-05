@@ -52,7 +52,8 @@ class Zernike:
                     m = abs(m)
                     Z = np.sqrt(2*(n+1)) * self.zernikeRadialFunc(n,
                                                                   m, R) * np.sin(m * theta)
-            if n!=0 and m!=0:
+            # if n!=0 and m!=0:
+            if n != 0:
                 Z -= Z.mean()
                 Z *= (1/np.std(Z))
 
