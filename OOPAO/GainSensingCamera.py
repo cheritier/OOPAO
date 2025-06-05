@@ -7,7 +7,6 @@ Created on Fri Nov  8 09:31:46 2024
 
 import numpy as np
 from numpy.fft import fftn, fftshift, ifftn, fft2, ifft2
-from tqdm import tqdm
 from .tools.tools import OopaoError
 
 
@@ -86,15 +85,15 @@ class GainSensingCamera:
             frame from the focal plane camera.
         """
         frame = frame/frame.sum()
-        print('\nCalibration started')
+        print('\nGain Scheduling camera calibration:')
         self.basis_product = split_basis_product(
             padder(self.basis, self.mask.shape[0]), self.n_jobs)
         self.IR_calib = impulse_response(self.mask, frame)
         self.sensi_calib = sensitivity(
             self.IR_calib, self.IR_calib, self.basis_product)
-        print('GSC is calibrated')
         self.calibration_ready = True
-
+        self.og = np.ones(self.n_modes)
+        
     def reset_calibration(self) -> None:
         """
         Reset the calibration and set vector of optical gains to 1
@@ -158,10 +157,19 @@ def ifft3(array: np.array) -> np.array:
 
 def split_basis_product(basis: np.array, n_jobs: int) -> np.array:
     n_chunks = int(np.ceil(basis.shape[-1] / n_jobs))
+    splits = np.array_split(basis, n_chunks, axis=-1)
     basis_product = np.zeros(basis.shape, dtype='complex128')
-    for i in tqdm(range(n_chunks)):
-        split = np.array_split(basis, n_chunks, axis=-1)[i]
-        basis_product[:, :, i*n_jobs:(i+1)*n_jobs] = fft3(split) * ifft3(split)
+    start = 0
+    for i, split in enumerate(splits):
+        progress_bar = '\033[1;31m\u2501\033[1;00m' * (int(25*i/n_chunks)) + \
+                       '\u2501' * (25 - int(25*i/n_chunks)-2) + \
+                       ' %3.1f%%'%((i+1)/n_chunks*100)
+        print(progress_bar, end="\r", flush=True)
+        end = start + split.shape[-1]
+        # split = np.array_split(basis, n_chunks, axis=-1)[i]
+        basis_product[:, :, start:end] = fft3(split) * ifft3(split)
+        start = end
+    print('\n')
     return basis_product
 
 
