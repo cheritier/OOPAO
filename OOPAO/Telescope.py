@@ -722,7 +722,7 @@ class Telescope:
         self.prop['diameter'] = f"{'Diameter [m]':<25s}|{self.D:^10.2f}"
         self.prop['resolution'] = f"{'Resolution [px]':<25s}|{self.resolution:^10.0f}"
         self.prop['pixel_size'] = f"{'Pixel size [m]':<25s}|{self.pixelSize:^10.2f}"
-        self.prop['surface'] = f"{'Surface [m²]':<25s}|{self.pixelSize:^10.2f}"
+        self.prop['surface'] = f"{'Surface [m²]':<25s}|{np.pi*(self.D/2)**2:^10.2f}"
         self.prop['obstruction'] = f"{'Central obstruction [%]':<25s}|{self.centralObstruction*100:^10.0f}"
         self.prop['n_pix_pupil'] = f"{'Pixels in pupil':<25s}|{self.pixelArea:^10.0f}"
         self.prop['fov'] = f"{'Field of view [arcsec]':<25s}|{self.fov:^10.2f}"
