@@ -198,7 +198,7 @@ class Pyramid:
         # initialize the Pyramid Object
         # telescope attached to the wfs
         self.telescope = telescope
-        if (self.telescope.resolution/nSubap) % 2 != 0:
+        if (self.telescope.resolution/nSubap) % 2 != 0 and self.telescope.resolution/nSubap != 1:
             raise OopaoError('The resolution should be an even number and be a multiple of 2**i where i>=2')
         if self.telescope.src is None:
             raise OopaoError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
@@ -384,8 +384,8 @@ class Pyramid:
             warning('The Pyramid pupils have been shifted outside of the detector!' +
                     'Wrapping of the signal is currently occuring!!')
 
-        self.sx = shift_x
-        self.sy = shift_y
+        self.sx = np.asarray(shift_x)/factor
+        self.sy = np.asarray(shift_y)/factor
         self.m = self.get_phase_mask(resolution=self.nRes, n_subap=self.nSubap, n_pix_separation=self.n_pix_separation,
                                      n_pix_edge=self.n_pix_edge, psf_centering=self.psfCentering, sx=shift_x, sy=shift_y)
         self.mask = self.convert_for_gpu(np.complex64(np.exp(1j*self.m)))
