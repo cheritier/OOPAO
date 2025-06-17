@@ -86,15 +86,15 @@ def applyMisRegistration(tel,
                         print('Mis-Registrations Applied on user-defined DM!')
                         
                     
-            # except:
-            #     # default case => use of param['dm_ccordinates']
-            #     dm_tmp = DeformableMirror(telescope    = tel,\
-            #             nSubap       = param['nSubaperture'],\
-            #             mechCoupling = param['mechanicalCoupling'],\
-            #             coordinates  = coordinates,\
-            #             pitch        = pitch,\
-            #             misReg       = misRegistration_tmp + extra_dm_mis_registration,\
-            #             print_dm_properties = print_dm_properties)
+                else:
+                        # default case => use of param['dm_ccordinates']
+                        dm_tmp = DeformableMirror(telescope    = tel,\
+                                                  nSubap       = param['nSubaperture'],\
+                                                  mechCoupling = param['mechanicalCoupling'],\
+                                                  coordinates  = coordinates,\
+                                                  pitch        = pitch,\
+                                                  misReg       = misRegistration_tmp + extra_dm_mis_registration,\
+                                                  print_dm_properties = print_dm_properties)
                 if print_dm_properties:
                     print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
                     print('Mis-Registrations Applied on Synthetic DM!')

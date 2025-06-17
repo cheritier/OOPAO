@@ -161,7 +161,9 @@ class SPRINT:
                                                                                n_mis_reg=self.n_mis_reg,
                                                                                fast=self.fast_algorithm,
                                                                                recompute_sensitivity=self.recompute_sensitivity,
-                                                                               dm_input=dm_input)
+                                                                               dm_input=dm_input,
+                                                                               ind_mis_reg = self.ind_mis_reg)
+
 
                 print('Done!')
 

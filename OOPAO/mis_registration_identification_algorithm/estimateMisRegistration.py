@@ -18,7 +18,7 @@ from ..tools.interpolateGeometricalTransformation import (anamorphosisImageMatri
                                                           translationImageMatrix)
 
 """
-def estimateMisRegistration(nameFolder, nameSystem, tel, atm, ngs, dm_0, wfs, basis, calib_in, misRegistrationZeroPoint, epsilonMisRegistration, param, precision = 3, gainEstimation = 1, return_all = False):
+def estimateMisRegistration(nameFolder, nameSystem, tel,  ngs, dm_0, wfs, basis, calib_in, misRegistrationZeroPoint, epsilonMisRegistration, param, precision = 3, gainEstimation = 1, return_all = False):
 
     Compute the set of sensitivity matrices required to identify the mis-registrations.
 
@@ -64,6 +64,7 @@ def estimateMisRegistration(nameFolder,
                             wfs,
                             basis,
                             calib_in,
+                            calib_0,
                             misRegistrationZeroPoint,
                             epsilonMisRegistration,
                             param,
@@ -77,7 +78,7 @@ def estimateMisRegistration(nameFolder,
                             dm_input=None,
                             display=True,
                             tolerance=1/50,
-                            plot = True,
+                            plot = False,
                             previous_estimate=None,
                             ind_mis_reg = None):
 
@@ -108,7 +109,7 @@ def estimateMisRegistration(nameFolder,
     #  ---------- ITERATIVE ESTIMATION OF THE PARAMETERS --------------------
     epsilonMisRegistration_field = ['shiftX', 'shiftY', 'rotationAngle', 'radialScaling', 'tangentialScaling']
     epsilonMisRegistration_field = list(np.asarray(epsilonMisRegistration_field)[ind_mis_reg])
-    stroke = 1e-12
+    stroke = 1e-9
     criteria = 0
     n_mis_reg = metaMatrix.M.shape[0]
     misRegEstBuffer = np.zeros(n_mis_reg)
@@ -195,7 +196,7 @@ def estimateMisRegistration(nameFolder,
                 
         
             # temporary interaction matrix
-            calib_tmp =  InteractionMatrixFromPhaseScreen(ngs,atm,tel,wfs,input_modes_cp,stroke,phaseOffset=0,nMeasurements=1,invert=False,print_time=False)
+            calib_tmp =  InteractionMatrixFromPhaseScreen(ngs,tel,wfs,input_modes_cp,stroke,phaseOffset=0,nMeasurements=1,invert=False,print_time=False)
             # temporary scaling factor    
             try:
                 scalingFactor_tmp   = np.round(np.diag(calib_tmp.D.T@calib_in.D)/ np.diag(calib_tmp.D.T@calib_tmp.D),precision)
@@ -256,13 +257,16 @@ def estimateMisRegistration(nameFolder,
     else:
         while criteria ==0:
             i_iter=i_iter+1
-            # temporary deformable mirror
-            dm_tmp = applyMisRegistration(tel,misRegistration_out,param, wfs = wfs_mis_registrated,print_dm_properties=False,floating_precision=dm_0.floating_precision,dm_input=dm_input)
+            if i_iter>1:
+                # temporary deformable mirror
+                dm_tmp = applyMisRegistration(tel,misRegistration_out,param, wfs = wfs_mis_registrated,print_dm_properties=False,floating_precision=dm_0.floating_precision,dm_input=dm_input)
             
-            # temporary interaction matrix
-            calib_tmp =  InteractionMatrix(ngs,atm,tel,dm_tmp,wfs,basis.modes,stroke,phaseOffset=0,nMeasurements=1,invert=False,print_time=False)
-            # erase dm_tmp to free memory
-            del dm_tmp
+                # temporary interaction matrix
+                calib_tmp =  InteractionMatrix(ngs,tel,dm_tmp,wfs,basis.modes,stroke,phaseOffset=0,nMeasurements=1,invert=False,print_time=False)
+                # erase dm_tmp to free memory
+                del dm_tmp
+            else:
+                calib_tmp = calib_0
             # temporary scaling factor            
             try:
                 scalingFactor_tmp   = np.round(np.diag(calib_tmp.D.T@calib_in.D)/ np.diag(calib_tmp.D.T@calib_tmp.D),precision)
@@ -326,30 +330,32 @@ def estimateMisRegistration(nameFolder,
     misRegistration_out.radialScaling       = np.round(misRegistration_out.radialScaling,precision)
     misRegistration_out.tangentialScaling   = np.round(misRegistration_out.tangentialScaling,precision)
 
-    # values for validity
-    
-    tolerance = [np.rad2deg(np.arctan((dm_0.pitch*tolerance)/(tel.D/2))),dm_0.pitch*tolerance,dm_0.pitch*tolerance,0.05,0.05]                
-    
-    diff      =  np.abs(misRegistration_values[-1]-misRegistration_values[-2])
-    
-    # in case of nan
-    diff[np.where(np.isnan(diff))] = 10000
-    # print(tolerance)
-    # print(diff)
-    if np.argwhere(diff-tolerance[:n_mis_reg]>0).size==0 or contain_nan:    
-        # validity of the mis-reg
-        validity_flag = True
+    if nIteration ==1:
+         validity_flag = True   
     else:
-        validity_flag = False
-        misRegistration_out.shiftX              = 0*np.round(misRegistration_out.shiftX,precision)
-        misRegistration_out.shiftY              = 0*np.round(misRegistration_out.shiftY,precision)
-        misRegistration_out.rotationAngle       = 0*np.round(misRegistration_out.rotationAngle,precision)
-        misRegistration_out.radialScaling       = 0*np.round(misRegistration_out.radialScaling,precision)
-        misRegistration_out.tangentialScaling   = 0*np.round(misRegistration_out.tangentialScaling,precision)
+            # values for validity
+        tolerance = [np.rad2deg(np.arctan((dm_0.pitch*tolerance)/(tel.D/2))),dm_0.pitch*tolerance,dm_0.pitch*tolerance,0.05,0.05]                
+        
+        diff      =  np.abs(misRegistration_values[-1]-misRegistration_values[-2])
+        
+        # in case of nan
+        diff[np.where(np.isnan(diff))] = 10000
+        # print(tolerance)
+        # print(diff)
+        if np.argwhere(diff-tolerance[:n_mis_reg]>0).size==0 or contain_nan:    
+            # validity of the mis-reg
+            validity_flag = True
+        else:
+            validity_flag = False
+            misRegistration_out.shiftX              = 0*np.round(misRegistration_out.shiftX,precision)
+            misRegistration_out.shiftY              = 0*np.round(misRegistration_out.shiftY,precision)
+            misRegistration_out.rotationAngle       = 0*np.round(misRegistration_out.rotationAngle,precision)
+            misRegistration_out.radialScaling       = 0*np.round(misRegistration_out.radialScaling,precision)
+            misRegistration_out.tangentialScaling   = 0*np.round(misRegistration_out.tangentialScaling,precision)
     
     tel.isPaired = flag_paired
     # set back the system to its initial working point
-    dm_0 = applyMisRegistration(tel,misRegistrationZeroPoint,param, wfs = wfs_mis_registrated,print_dm_properties=False, floating_precision=dm_0.floating_precision, dm_input = dm_input)
+    # dm_0 = applyMisRegistration(tel,misRegistrationZeroPoint,param, wfs = wfs_mis_registrated,print_dm_properties=False, floating_precision=dm_0.floating_precision, dm_input = dm_input)
     
     if return_all:
         return misRegistration_out, scalingFactor_values, misRegistration_values,validity_flag,calib_tmp
