@@ -97,11 +97,13 @@ def compute_M2C(src, telescope, atmosphere, deformableMirror, param = None, name
         if display:
             print('COMPUTING TEL*DM...')
             print(' ')
-        src*telescope*deformableMirror    # propagate to get the OPD of the IFS after reflection
+        src**telescope*deformableMirror    # propagate to get the OPD of the IFS after reflection
         if display:
             print('PREPARING IF_2D...')
             print(' ')
         IF_2D = np.moveaxis(src.OPD,-1,0)
+
+
 
     nact = IF_2D.shape[0]
     if display:

@@ -124,14 +124,14 @@ class Asterism:
         _OPD = []
         for src in self.src:
             _OPD.append(src.OPD)
-        return _OPD
+        return np.array(_OPD)
 
     @property
     def OPD_no_pupil(self):
         _OPD_no_pupil = []
         for src in self.src:
             _OPD_no_pupil.append(src.OPD_no_pupil)
-        return _OPD_no_pupil
+        return np.array(_OPD_no_pupil)
 
 
 
@@ -139,17 +139,23 @@ class Asterism:
 
     def __pow__(self, obj):
         obj.src = self
-        obj.resetOPD()
+        # obj.resetOPD()
+
+        for src in self.src:
+            src.optical_path = [[src.type + '('+src.optBand+')', src]]
+
+        self.resetOPD()
 
         if obj.isPaired:
             atm = obj.atm
             obj-atm
-            self.resetOPD()
             self*obj
+            atm.asterism=self
             obj+atm
 
         else:
             self * obj
+
             # for src in self.src:
             #     src.optical_path = [[src.type + '('+src.optBand+')', src]]
             #     src.resetOPD()
@@ -163,29 +169,6 @@ class Asterism:
 
         obj.relay(self)
         return self
-
-        # for src in self.src:
-        #     src * obj
-        #
-        # if obj.tag == 'telescope':
-        #     obj.src = self
-        #
-        # if obj.tag == 'shackHartmann':
-        #     obj.signal = obj.signal_list
-        #     obj.signal_list = []
-
-        # if obj.tag == 'telescope':
-        #     obj.src = self
-        #     for src in self.src:
-        #         src*obj
-        #
-        # if obj.tag == 'deformableMirror':
-        #     for src in self.src:
-        #         src*obj
-        #
-        # if obj.tag == 'shackHartmann':
-        #     for src in self.src:
-        #         src*obj
 
 
 

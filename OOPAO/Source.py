@@ -151,10 +151,11 @@ class Source:
 
         self.is_initialized = True
 
+
         # <JM @ SpaceODT>
 
-        self._OPD = None    # set the initial OPD
-        self._OPD_no_pupil = None  # set the initial OPD
+        self._OPD = np.zeros((100,100))    # set the initial OPD
+        self._OPD_no_pupil = np.zeros((100,100))  # set the initial OPD
 
         self.mask = 1
 
@@ -165,14 +166,21 @@ class Source:
 
         # <\JM @ SpaceODT>
 
+    # <JM @ SpaceODT>
     def __pow__(self, obj):
+        obj.src = self
+        self.optical_path = [[self.type + '(' + self.optBand + ')', self]]
+
         if obj.isPaired:
             atm = obj.atm
             obj-atm
-            self.optical_path = [[self.type + '(' + self.optBand + ')', self]]
-            self.resetOPD()
+            # self.resetOPD()
             self*obj
             obj+atm
+        else:
+            self*obj
+
+
 
         return self
 
@@ -180,41 +188,17 @@ class Source:
 
         obj.relay(self)
         return self
+    # <\JM @ SpaceODT>
 
-        # self.optical_path.append([obj.tag, obj])
-
-        # if obj.tag == 'telescope':
-        #     if obj.src == None:
-        #         obj.src = self
-
-
-
-
-
-        # if obj.tag == 'telescope':
-        #     self.tel = obj
-        #     if obj.src is None:
-        #         obj.src = self
-        #     obj.relay(self)
-        #     return self
-        #
-        # elif obj.tag == 'deformableMirror':
-        #     self.dm = obj
-        #     obj.relay(self)
-        #     return self
-        #
-        # elif obj.tag == 'shackHartmann':
-        #     self.wfs = obj
-        #     obj.relay(self)
-        #     return self
 
 
     def resetOPD(self):
-        # self.OPD = None
-        # self.OPD_no_pupil = None
-        # self.OPD = 0*self.OPD
-        # TODO: Does not work the first time someone resets the OPD
+
+        self.OPD = 0*self.OPD
         self.OPD_no_pupil = 0*self.OPD_no_pupil
+
+        # TODO: Does not work the first time someone resets the OPD
+        # if self.OPD_no_pupil is not None:
 
     def print_optical_path(self):
         if self.optical_path is not None:
@@ -241,7 +225,7 @@ class Source:
 
     @OPD.setter
     def OPD(self, val):
-        self._OPD = val
+        self._OPD = np.array(val)
 
     @property
     def OPD_no_pupil(self):
@@ -249,13 +233,14 @@ class Source:
 
     @OPD_no_pupil.setter
     def OPD_no_pupil(self, val):
-        self._OPD_no_pupil = val
-        self._OPD = val
-        if len(self._OPD.shape) > 2:
-            for i in range(self._OPD.shape[-1]):
-                self._OPD[:, :, i] = self._OPD[:, :, i] * self.mask
-        else:
-            self._OPD = val*self.mask
+        self._OPD_no_pupil = np.array(val)
+
+        # self._OPD = np.array(val)
+        # if len(self._OPD.shape) > 2:
+        #     for i in range(self._OPD.shape[-1]):
+        #         self._OPD[:, :, i] = self._OPD[:, :, i] * self.mask
+        # else:
+        #     self._OPD = val*self.mask
 
     @property
     def phase(self):

@@ -348,6 +348,7 @@ class ShackHartmann:
             self.signal_2D = np.array(signal_2D_list)
             self.signal = np.array(signal_list)
 
+
             # np.hstack(shwfs.signal)
 
 

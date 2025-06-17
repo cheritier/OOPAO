@@ -180,11 +180,6 @@ class Telescope:
         # temporary source object associated to the telescope object
         self.src = None
 
-        # self.OPD = self.pupil.astype(self.precision())     # set the initial OPD
-        # self.OPD_no_pupil = 1+self.pupil.astype(self.precision())*0  # set the initial OPD
-
-        self.OPD = []
-        self.OPD_no_pupil = []
 
         self.tag = 'telescope'                  # tag of the object
         # indicate if telescope object is paired with an atmosphere object
@@ -198,27 +193,12 @@ class Telescope:
         print(self)
         self.isInitialized = True
 
-    def resetOPD(self):
-        # if not self.isPaired:
-        print(self.isPaired)
-        print(self.src.tag)
-        print(self.src)
-
-        if self.src.tag == 'asterism':
-            self.OPD = [self.OPD]*len(self.src.src)
-            self.OPD_no_pupil = [self.OPD_no_pupil]*len(self.src.src)
-
-        else:
-            self.OPD = 0 * self.pupil.astype(self.precision())
-            self.OPD_no_pupil = 0 * self.pupil.astype(self.precision())
-
-        # else:
-        #     self.OPD = self.atm.OPD
-        #     self.OPD_no_pupil = self.atm.OPD_no_pupil
 
     def relay(self, src):
 
         self.src = src
+
+        self.src.mask = self.pupil.copy()
 
         if src.tag == 'source':
             src_list = [src]
@@ -233,44 +213,13 @@ class Telescope:
 
             if not self.isPaired:
                 src.OPD_no_pupil = 1 + self.pupil.astype(self.precision()) * 0
+                src.OPD = (1 + self.pupil.astype(self.precision()) * 0)*src.mask
             else:
-                if src.inAsterism:
-                    # src.OPD = self.atm.OPD[src.ast_idx]
-                    src.OPD_no_pupil = self.atm.OPD_no_pupil[src.ast_idx]
-                else:
-                    # src.OPD = self.atm.OPD
-                    src.OPD_no_pupil = self.atm.OPD_no_pupil
+                self.atm.relay()
 
             src.var = np.var(src.phase[np.where(self.pupil == 1)])
             src.fluxMap = self.pupilReflectivity * src.nPhoton * \
                           self.samplingTime * (self.D / self.resolution) ** 2
-
-            if self.src.tag == 'asterism':
-                self.OPD.append(src.OPD.copy())
-                self.OPD_no_pupil.append(src.OPD_no_pupil.copy())
-
-            elif self.src.tag == 'source':
-                self.OPD = src.OPD.copy()
-                self.OPD_no_pupil = src.OPD_no_pupil.copy()
-
-        # if src.tag == 'source':
-        # src.mask = self.pupil.copy()
-        #
-        # if not self.isPaired:
-        #     # src.OPD = self.pupil.astype(self.precision())
-        #     src.OPD_no_pupil = 1+self.pupil.astype(self.precision())*0
-        #
-        # else:
-        #     if src.inAsterism:
-        #         # src.OPD = self.atm.OPD[src.ast_idx]
-        #         src.OPD_no_pupil = self.atm.OPD_no_pupil[src.ast_idx]
-        #     else:
-        #         # src.OPD = self.atm.OPD
-        #         src.OPD_no_pupil = self.atm.OPD_no_pupil
-        #
-        # src.var = np.var(src.phase[np.where(self.pupil == 1)])
-        # src.fluxMap = self.pupilReflectivity * src.nPhoton * \
-        #         self.samplingTime*(self.D/self.resolution)**2
 
 
 
@@ -321,10 +270,18 @@ class Telescope:
             # case with multiple sources
             input_source = self.src.src
             # check where is located the source in the focal plane
-            r = xp.squeeze(xp.asarray(self.src.coordinates))[:, 0]
-            theta = xp.squeeze(xp.asarray(self.src.coordinates))[:, 1]
-            x_max = max(xp.abs(r * xp.cos(np.deg2rad(theta))))
-            y_max = max(xp.abs(r * xp.sin(np.deg2rad(theta))))
+            if self.src.n_source > 1:
+                r = xp.squeeze(xp.asarray(self.src.coordinates))[:, 0]
+                theta = xp.squeeze(xp.asarray(self.src.coordinates))[:, 1]
+                x_max = max(xp.abs(r * xp.cos(np.deg2rad(theta))))
+                y_max = max(xp.abs(r * xp.sin(np.deg2rad(theta))))
+            else:
+                r = xp.squeeze(xp.asarray(self.src.coordinates))[0]
+                theta = xp.squeeze(xp.asarray(self.src.coordinates))[1]
+                x_max = (xp.abs(r * xp.cos(np.deg2rad(theta))))
+                y_max = (xp.abs(r * xp.sin(np.deg2rad(theta))))
+            
+
         else:
             input_source = [self.src]
             r = xp.squeeze(xp.asarray(self.src.coordinates))[0]
@@ -361,6 +318,7 @@ class Telescope:
 
             r = (input_source[i_src].coordinates[0])
             # X/Y shift inversion to match convention for atmosphere
+
             x_shift = r*xp.sin(np.deg2rad(input_source[i_src].coordinates[1]))
             y_shift = r*xp.cos(np.deg2rad(input_source[i_src].coordinates[1]))
             delta_x = int(np.floor(np.abs(x_shift)/pixel_scale)*np.sign(x_shift))
@@ -482,21 +440,6 @@ class Telescope:
 
         return oversampling
 
-    # def resetOPD(self):
-    #     if self.src is not None:
-    #
-    #         if self.src.tag == 'asterism':
-    #             self.optical_path = [[self.src.type, id(self.src)]]
-    #             self.optical_path.append([self.tag, id(self)])
-    #             self.OPD = [0*self.pupil.astype(self.precision())
-    #                         for i in range(self.src.n_source)]
-    #             self.OPD_no_pupil = [self.pupil.astype(self.precision())*0 for i in range(self.src.n_source)]
-    #         else:
-    #             self.optical_path = [
-    #                 [self.src.type + '('+self.src.optBand+')', id(self.src)]]
-    #             self.optical_path.append([self.tag, id(self)])
-    #             self.OPD = 0*self.pupil.astype(self.precision())
-    #             self.OPD_no_pupil = 0*self.pupil.astype(self.precision())
 
 
     def apply_spiders(self, angle, thickness_spider, offset_X=None, offset_Y=None):
@@ -553,64 +496,27 @@ class Telescope:
         if self.isInitialized:
             warning('A new pupil is now considered, its reflectivity is considered to be uniform. Assign the proper reflectivity map to tel.pupilReflectivity if required.')
 
-    # @property
-    # def OPD(self):
-    #     return self._OPD
-    #
-    # @OPD.setter
-    # def OPD(self, val):
-    #     self._OPD = val
-    #     if self.src is not None:
-    #         if type(val) is not list:
-    #             if self.src.tag == 'source':
-    #                 self.src.phase = self._OPD*2*xp.pi/self.src.wavelength
-    #                 if xp.ndim(self.OPD) == 2:
-    #                     self.mean_removed_OPD = (
-    #                         self.OPD - xp.mean(self.OPD[xp.where(self.pupil == 1)]))*self.pupil
-    #             else:
-    #                 if self.src.tag == 'asterism':
-    #                     for i in range(self.src.n_source):
-    #                         self.src.src[i].phase = self._OPD * \
-    #                             2*xp.pi/self.src.src[i].wavelength
-    #                 else:
-    #                     raise OopaoError('The wrong object was attached to the telescope')
-    #         else:
-    #             if self.src.tag == 'asterism':
-    #                 if len(self._OPD) == self.src.n_source:
-    #                     for i in range(self.src.n_source):
-    #                         self.src.src[i].phase = self._OPD[i] * \
-    #                             2*xp.pi/self.src.src[i].wavelength
-    #                 else:
-    #                     raise OopaoError('The number of sources does not match the length of tel.OPD.')
+    # <JM @ SpaceODT> Updating tel OPD updates the src OPD for backwards compatibility
+    @property
+    def OPD(self):
+        return self.src.OPD
 
-    # @property
-    # def OPD_no_pupil(self):
-    #     return self._OPD_no_pupil
-    #
-    # @OPD_no_pupil.setter
-    # def OPD_no_pupil(self, val):
-    #     self._OPD_no_pupil = val
-    #     if self.src is not None:
-    #
-    #         if type(val) is not list:
-    #             if self.src.tag == 'source':
-    #                 self.src.phase_no_pupil = self._OPD_no_pupil*2*xp.pi/self.src.wavelength
-    #             else:
-    #                 if self.src.tag == 'asterism':
-    #                     for i in range(self.src.n_source):
-    #                         self.src.src[i].phase_no_pupil = self._OPD_no_pupil * \
-    #                             2*xp.pi/self.src.src[i].wavelength
-    #                 else:
-    #                     raise OopaoError('The wrong object was attached to the telescope')
-    #         else:
-    #             if self.src.tag == 'asterism':
-    #                 if len(self._OPD_no_pupil) == self.src.n_source:
-    #                     for i in range(self.src.n_source):
-    #                         self.src.src[i].phase_no_pupil = self._OPD_no_pupil[i] * \
-    #                             2*xp.pi/self.src.src[i].wavelength
-    #                 else:
-    #                     raise OopaoError('The lenght of the OPD list ('+str(len(self._OPD_no_pupil)) +
-    #                                     ') does not match the number of sources ('+str(self.src.n_source)+')')
+    @OPD.setter
+    def OPD(self, val):
+        self.src.OPD = val
+
+    @property
+    def OPD_no_pupil(self):
+        return self.src.OPD_no_pupil
+
+    @OPD.setter
+    def OPD_no_pupil(self, val):
+        self.src.OPD_no_pupil = val
+
+    def resetOPD(self):
+        self.src.resetOPD()
+
+    # <\JM @ SpaceODT>
 
 
 
@@ -762,13 +668,12 @@ class Telescope:
     # Combining with an atmosphere object
     def __add__(self, obj):
         if obj.tag == 'atmosphere':
-            obj*self
 
+            obj*self
             self.atm = obj
 
             if self.isPetalFree:
                 self.removePetalling()
-            print('Telescope and Atmosphere combined!')
 
         if obj.tag == 'spatialFilter':
             self.spatialFilter = obj
@@ -780,9 +685,8 @@ class Telescope:
         if obj.tag == 'atmosphere':
 
             self.isPaired = False
-            self.resetOPD()
             self.src.resetOPD()
-            print('Telescope and Atmosphere separated!')
+            obj.asterism = None
 
         if obj.tag == 'spatialFilter':
             self.spatialFilter = None

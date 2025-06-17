@@ -395,17 +395,23 @@ class DeformableMirror:
 
 
     def relay(self, src):
-
         if src.tag == 'source':
             src.optical_path.append([self.tag, self])
             src.OPD_no_pupil = self.dm_propagation(src)
+
+            if len(src.OPD_no_pupil.shape) > 2:
+                src.OPD = src.OPD_no_pupil.copy()
+                for i in range(src.OPD_no_pupil.shape[-1]):
+                    src.OPD[:, :, i] = src.OPD[:, :, i] * src.mask
+            else:
+                src.OPD = src.OPD_no_pupil * src.mask
 
         elif src.tag == 'asterism':
             src_list = src.src
             for src in src_list:
                 src.optical_path.append([self.tag, self])
                 src.OPD_no_pupil = self.dm_propagation(src)
-
+                src.OPD = src.OPD_no_pupil*src.mask
 
 
 
@@ -522,7 +528,7 @@ class DeformableMirror:
             # case with single OPD
             if np.ndim(self.OPD) == 2:
 
-                OPD_out_no_pupil = OPD_in + dm_OPD
+                OPD_out_no_pupil = OPD_in + dm_OPD #* 2 #Factor of 2 because DM is reflective
             # case with multiple OPD
             else:
                 OPD_out_no_pupil = np.tile(
