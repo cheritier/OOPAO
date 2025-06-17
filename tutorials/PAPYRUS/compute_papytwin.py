@@ -71,7 +71,7 @@ def from_im_fit_ellipse(loc, threshold, n):
     return x_t, y_t, a, b, e
 
 
-def compute_papyrus_model(param,loc,source,IFreal):
+def compute_papyrus_model(param,loc,source,IFreal=False):
     """
     This functions generate a full model of the papyrus AO systems
 
@@ -80,7 +80,7 @@ def compute_papyrus_model(param,loc,source,IFreal):
     param :  Parameter File for the papyrus model
     loc :    Location of the input data()
     source : True -> T152 pupil / False -> calibration pupil
-    IFreal : True -> ALPAO DM real IF / False -> OOPAO gaussian IF
+    IFreal : DEPRECATED True -> ALPAO DM real IF / False -> OOPAO gaussian IF 
         
     Returns
     -------
@@ -94,34 +94,32 @@ def compute_papyrus_model(param,loc,source,IFreal):
     #%% -----------------------     TELESCOPE   ----------------------------------
             
     from OOPAO.Telescope import Telescope
+    T152onDM_size = 35.5 #mm
+    PapyrusOnDM_size = 37.5 #mm 
     
-    # number of pixel per subapertures
-    n_pix_per_subap = param['nPixelPerSubap']
+    if source:
+        ratio_sky_calib = 1
+        param['centralObstruction'] = 0
+        param['diameter'] = param['diameter'] * PapyrusOnDM_size/T152onDM_size
+    else:
+        ratio_sky_calib = T152onDM_size/PapyrusOnDM_size
+        param['centralObstruction'] = 0.3
         
-    # number of subapertures
-    n_subap_pyramid =(param['nSubaperture']-4/param['ratio'])
-    # 
-    resolution_desired  = int(n_subap_pyramid*n_pix_per_subap)
-    
-    n_extra_pixel       = int(n_pix_per_subap*4/param['ratio']) # should be even number
-    
-    
-    resolution = int(resolution_desired + n_extra_pixel)
-
-    # create the Telescope object
-    tel = Telescope(resolution          = resolution,\
-                    diameter            = np.round((param['diameter']/resolution_desired)*resolution,2),\
-                    samplingTime        = param['samplingTime'],\
-                    centralObstruction  = param['centralObstruction'],fov=2)
+    # create a temporary Telescope object
+    tel_ = Telescope(resolution         = int(np.round(param['nSubaperture']*param['nPixelPerSubap']*ratio_sky_calib)),
+                    diameter            = param['diameter'],
+                    samplingTime        = param['samplingTime'],
+                    centralObstruction  = param['centralObstruction'],
+                    fov                 = 0)
         
-    #%% REDEFINITION OF PUPIL TO AVOID EDGE EFFECTS
-    D           = tel.resolution+1
-    x           = np.linspace(-tel.resolution/2,tel.resolution/2,tel.resolution)
-    xx,yy       = np.meshgrid(x,x)
-    circle      = xx**2+yy**2
-    obs         = circle>=(tel.centralObstruction*D/2)**2
-    pupil       = circle<(D/2-n_extra_pixel)**2       
-    tel.pupil = pupil*obs
+    # redefine the pupil padding to accomodate for the calibration or sky mode
+    tel = Telescope(resolution          = param['resolution'],
+                    diameter            = param['diameter'] * param['resolution']/tel_.resolution,
+                    samplingTime        = param['samplingTime'],
+                    centralObstruction  = param['centralObstruction'],
+                    fov                 = 0)
+    n_extra_pix = (tel.resolution-tel_.resolution)//2
+    tel.pupil = np.pad(tel_.pupil,[n_extra_pix,n_extra_pix])
         
     #%% -----------------------     NGS   ----------------------------------
     from OOPAO.Source import Source
@@ -150,55 +148,25 @@ def compute_papyrus_model(param,loc,source,IFreal):
     from OOPAO.tools.interpolateGeometricalTransformation import interpolate_cube
     
     # mis-registrations object
-    misReg = MisRegistration(param)
+    misReg          = MisRegistration(param)
+    pitch           = 2.5 #mm
+    DM_diag_size    = param['nActuator'] * pitch #mm
+    scale_T152DM = DM_diag_size / T152onDM_size
+    D_T152 = 1.52
     
-    pitch = 2.5 #mm
-    DM_diag_size  = param['nActuator'] * pitch #mm
+    x = np.linspace(-scale_T152DM * D_T152/2, scale_T152DM * D_T152/2, param['nActuator'])
+    [X,Y] = np.meshgrid(x,x)
     
-    if source:
-        #ALPAO 17x17 actuators coordinates on T152 pupil
-        T152onDM_size = 35.5 #mm
-        scale_T152DM = DM_diag_size / T152onDM_size
-        x = np.linspace(-scale_T152DM * param['diameter']/2, scale_T152DM * param['diameter']/2, param['nActuator'])
-        [X,Y] = np.meshgrid(x,x)
-        DM_coordinates= np.asarray([X.reshape(17**2),Y.reshape(17**2)]).T
-        dist = np.sqrt(DM_coordinates[:,0]**2 + DM_coordinates[:,1]**2)
-        DM_coordinates = DM_coordinates[dist <= param['diameter']/2 + 2.2 *pitch * param['diameter'] / T152onDM_size, :]
-        DM_pitch = pitch * param['diameter'] / T152onDM_size
+    DM_coordinates = np.asarray([X.reshape(17**2),Y.reshape(17**2)]).T
+    dist           = np.sqrt(DM_coordinates[:,0]**2 + DM_coordinates[:,1]**2)
+    DM_coordinates = DM_coordinates[dist <= D_T152/2 + 2.2 *pitch * D_T152 / T152onDM_size, :]
+    DM_pitch       = pitch * D_T152 / T152onDM_size
     
-    else:
-        #ALPAO 17x17 actuators coordinates on Papyrus pupil
-        PapyrusOnDM_size = 37.5 #mm
-        scale = DM_diag_size / PapyrusOnDM_size
-        x = np.linspace(-scale * param['diameter']/2, scale * param['diameter']/2, param['nActuator'])
-        [X,Y] = np.meshgrid(x,x)
-        DM_coordinates= np.asarray([X.reshape(17**2),Y.reshape(17**2)]).T
-        dist = np.sqrt(DM_coordinates[:,0]**2 + DM_coordinates[:,1]**2)
-        DM_coordinates = DM_coordinates[dist <= param['diameter']/2 + 2 *pitch * param['diameter'] / PapyrusOnDM_size, :]
-        DM_pitch = pitch * param['diameter'] / PapyrusOnDM_size
-    
-    if IFreal:
-        #ALPAO 17x17 IF of actuators measured with Phasics
-        IF = fits.getdata(loc+'IM_phasics_python.fits')
-        d = 15 * pitch 
-        px_size_in = d / IF.shape[1]
-        px_size_out = d / tel.resolution
-        IF = IF.astype(float)
-        IF_interp = interpolate_cube(cube_in=IF,\
-                                     pixel_size_in=px_size_in,\
-                                     pixel_size_out=px_size_out,\
-                                     resolution_out=tel.resolution,\
-                                     mis_registration=misReg)
-        IF = np.reshape(IF_interp.T,[tel.resolution**2,IF_interp.shape[0]])
-        #IF = IF / IF.max()
-        
-    else:
-        IF = None
-        
+    # hardcoded for now
     alpao_unit     = 30*7591.024876
     
     param['dm_coordinates'] = DM_coordinates
-    param['pitch'] = DM_pitch
+    param['pitch']          = DM_pitch
     
     dm=DeformableMirror(telescope    = tel,\
                         nSubap       = 16,\
@@ -206,47 +174,59 @@ def compute_papyrus_model(param,loc,source,IFreal):
                         misReg       = misReg, \
                         coordinates  = DM_coordinates,\
                         pitch        = DM_pitch,\
-                        modes        = IF,
-                        flip_lr=True,
-                        sign = -1/alpao_unit)
+                        modes        = None,
+                        flip_lr      = True,
+                        sign         = -1/alpao_unit)
     
     #%% -----------------------     PYRAMID WFS   ----------------------------------
-    
     from OOPAO.Pyramid import Pyramid
     
-
-    map_valid = np.ones([40]).astype(bool)
-    
-    wfs = Pyramid(nSubap            = param['nSubaperture']//param['ratio'],\
-              telescope             = tel,\
-              modulation            = param['modulation'],\
-              lightRatio            = 0,\
-              n_pix_separation      = 40//param['ratio'],\
-              n_pix_edge            = 20//param['ratio'],\
-              psfCentering          = True,\
-              postProcessing        = 'fullFrame_sum_flux',\
+    wfs = Pyramid(nSubap            = (param['nSubaperture']+param['nExtraSubaperture'])//param['ratio'],
+              telescope             = tel,
+              modulation            = param['modulation'],
+              lightRatio            = 0,
+              n_pix_separation      = 40//param['ratio'],
+              n_pix_edge            = 20//param['ratio'],
+              psfCentering          = True,
+              postProcessing        = 'fullFrame_sum_flux',
               userValidSignal       = None,
               user_modulation_path  = None)
 
+    # latest values read from parameter file
+    wfs.apply_shift_wfs(sx= param['pwfs_pupils_shift_x'],sy= param['pwfs_pupils_shift_y'],units='pixels')
+    
+    from parameter_files.OCAM2K  import OCAM_param
+    from OOPAO.Detector import Detector
+    # perfect OCAM (No Noise)
+    OCAM = Detector(nRes            = wfs.cam.resolution,
+                    integrationTime = tel.samplingTime,
+                    bits            = None,
+                    FWC             = None,
+                    gain            = 1,
+                    sensor          = OCAM_param['sensor'],
+                    QE              = 1,
+                    binning         = 1,
+                    psf_sampling    = wfs.zeroPaddingFactor,
+                    darkCurrent     = 0,
+                    readoutNoise    = 0,
+                    photonNoise     = False)
+    wfs.cam = OCAM
    
     return tel,ngs,dm,wfs,atm
 
 
 
 
-def optimize_pwfs_pupils(wfs,valid_pixel_map,n_it=3):
+def check_pwfs_pupils(wfs,valid_pixel_map,n_it=3, correct = False):
     
     wfs.modulation = 20
     
     from OOPAO.tools.tools import centroid
     
     plt.close('all')
-    xs = [0,0,0,0]
-    ys = [0,0,0,0]
-    
-    for i_it in range(n_it):
-        wfs.apply_shift_wfs(sx =xs,sy = ys)
-    
+    xs = wfs.sx
+    ys = wfs.sy
+    if correct is False:
         for i in range(4):
             I = wfs.grabFullQuadrant(i+1,valid_pixel_map)
             xc = I.shape[0]//2
@@ -260,16 +240,43 @@ def optimize_pwfs_pupils(wfs,valid_pixel_map,n_it=3):
     
             
             plt.figure(1)
-            plt.subplot(n_it,4,4*i_it + i+1)
+            plt.subplot(2,2,i+1)
             plt.imshow(I-I_)
             plt.plot(x,y,'+',markersize = 20)
             plt.plot(x_,y_,'+',markersize = 20)
-            plt.title('Step '+str(i_it)+' -- ['+str(np.round(x-x_,1))+','+str(np.round(y-y_,1))+']')
             plt.axis('off')
             xs[i] += ((x-x_))
             ys[i] += ((y_-y))
+            plt.title('PAPYRUS/PAPYTWIN Q'+str(i))
             plt.draw()
-            plt.pause(0.2)
+
+    else:
+        for i_it in range(n_it):
+            wfs.apply_shift_wfs(sx =xs,sy = ys)
+        
+            for i in range(4):
+                I = wfs.grabFullQuadrant(i+1,valid_pixel_map)
+                xc = I.shape[0]//2
+                
+                [x,y] = np.asarray(centroid(I,threshold=0.3))
+                
+                I_ = np.abs(wfs.grabFullQuadrant(i+1))
+                I_ /= I_.max()
+                
+                [x_,y_] = np.asarray(centroid(I_,threshold=0.3))
+        
+                
+                plt.figure(1)
+                plt.subplot(n_it,4,4*i_it + i+1)
+                plt.imshow(I-I_)
+                plt.plot(x,y,'+',markersize = 20)
+                plt.plot(x_,y_,'+',markersize = 20)
+                plt.title('Step '+str(i_it)+' -- ['+str(np.round(x-x_,1))+','+str(np.round(y-y_,1))+']')
+                plt.axis('off')
+                xs[i] += ((x-x_))
+                ys[i] += ((y_-y))
+                plt.draw()
+                plt.pause(0.2)
             
             
 def bin_bench_data(valid_pixel,full_int_mat, ratio):
@@ -290,3 +297,36 @@ def bin_bench_data(valid_pixel,full_int_mat, ratio):
 
     
     return valid_pixel, full_int_mat_
+
+
+
+def calibrate_mis_registration(ngs,tel,atm,dm,wfs,param,M2C,input_im, index_modes = np.arange(10,150,10)):
+    
+    from OOPAO.SPRINT import SPRINT
+    from OOPAO.tools.tools import emptyClass
+    
+    # modal basis considered
+    
+    basis =  emptyClass()
+    basis.modes         = M2C[:,index_modes]
+    basis.extra         = 'PAP_full_KL'              # EXTRA NAME TO DISTINGUISH DIFFERENT SENSITIVITY MATRICES, BE CAREFUL WITH THIS!     
+    
+    obj =  emptyClass()
+    obj.ngs     = ngs
+    obj.tel     = tel
+    obj.atm     = atm
+    obj.wfs     = wfs
+    obj.dm      = dm
+    obj.param   = param
+        
+    Sprint = SPRINT(obj, basis,dm_input=obj.dm,n_mis_reg=5,recompute_sensitivity=True )
+    Sprint.estimate(obj, on_sky_slopes = input_im[:,index_modes],dm_input=dm ,n_iteration=2,n_update_zero_point=2,tolerance=100)
+    
+    
+    from OOPAO.mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
+    dm = applyMisRegistration(tel,
+                              misRegistration_tmp = Sprint.mis_registration_out,
+                              param=param,
+                              dm_input=dm)
+
+    return
