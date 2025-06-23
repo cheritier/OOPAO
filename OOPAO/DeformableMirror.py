@@ -393,6 +393,7 @@ class DeformableMirror:
             print(self)
 
     def buildLayer(self, telescope, altitude):
+        rad2arcsec = (180/np.pi)/3600
         # initialize layer object
         layer = emptyClass()
 
@@ -408,32 +409,48 @@ class DeformableMirror:
         layer.resolution_fov = int(
             np.ceil((telescope.resolution/telescope.D)*layer.D))
         layer.center = layer.resolution//2
+        
+        layer = emptyClass()
+        # create a random state to allow reproductible sequences of phase screens
+        # gather properties of the atmosphere
+        layer.altitude = altitude
+        # Diameter and resolution of the layer including the Field Of View and the number of extra pixels
+        layer.D_fov = telescope.D+2*xp.tan(telescope.fov/2/rad2arcsec)*layer.altitude
+        layer.resolution_fov = int(
+            xp.ceil((telescope.resolution/telescope.D)*layer.D_fov))
+        # 4 pixels are added as a margin for the edges
+        layer.resolution = layer.resolution_fov + 4
+        layer.D = layer.resolution * telescope.D / telescope.resolution
+        layer.center = layer.resolution//2
+
+
 
         if telescope.src.tag == 'source':
-            [x_z, y_z] = pol2cart(telescope.src.coordinates[0]*(
-                layer.D_fov-telescope.D)/telescope.D, np.deg2rad(telescope.src.coordinates[1]))
-
+            [x_z, y_z] = pol2cart(layer.altitude*xp.tan(telescope.src.coordinates[0]/rad2arcsec)
+                                  * layer.resolution / layer.D, xp.deg2rad(telescope.src.coordinates[1]))
             center_x = int(y_z)+layer.resolution//2
             center_y = int(x_z)+layer.resolution//2
-
-            layer.pupil_footprint = np.zeros(
-                [layer.resolution, layer.resolution])
+            layer.pupil_footprint = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
             layer.pupil_footprint[center_x-telescope.resolution//2:center_x+telescope.resolution //
                                   2, center_y-telescope.resolution//2:center_y+telescope.resolution//2] = 1
+            
+
         else:
+
             layer.pupil_footprint = []
+            layer.extra_sx = []
+            layer.extra_sy = []
             layer.center_x = []
             layer.center_y = []
-
             for i in range(telescope.src.n_source):
-                [x_z, y_z] = pol2cart(telescope.src.coordinates[i][0]*(
-                    layer.D_fov-telescope.D)/telescope.D, np.deg2rad(telescope.src.coordinates[i][1]))
-
+                [x_z, y_z] = pol2cart(layer.altitude*xp.tan(telescope.src.coordinates[i][0]/rad2arcsec)
+                                      * layer.resolution / layer.D, xp.deg2rad(telescope.src.coordinates[i][1]))
+                layer.extra_sx.append(int(x_z)-x_z)
+                layer.extra_sy.append(int(y_z)-y_z)
                 center_x = int(y_z)+layer.resolution//2
                 center_y = int(x_z)+layer.resolution//2
 
-                pupil_footprint = np.zeros(
-                    [layer.resolution, layer.resolution])
+                pupil_footprint = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
                 pupil_footprint[center_x-telescope.resolution//2:center_x+telescope.resolution //
                                 2, center_y-telescope.resolution//2:center_y+telescope.resolution//2] = 1
                 layer.pupil_footprint.append(pupil_footprint)
