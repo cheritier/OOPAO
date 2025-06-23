@@ -556,7 +556,7 @@ class ShackHartmann:
         if len(tmp) > 1:
             tmp = tmp[0]
         x_max = x_subap[tmp[0]]
-        y_max = y_subap[tmp[1]]
+        y_max = y_subap[tmp[0]]
         shift_X = np.zeros(len(self.telescope.src.Na_profile[0, :]))
         shift_Y = np.zeros(len(self.telescope.src.Na_profile[0, :]))
         for i in range(len(self.telescope.src.Na_profile[0, :])):
