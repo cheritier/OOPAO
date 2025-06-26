@@ -544,7 +544,7 @@ class Telescope:
                         tel_tmp.OPD_no_pupil = self.OPD_no_pupil[i_obj]
                         self.src.src[i_obj]*tel_tmp*obj[i_obj]
                         wfs_signal.append(obj[i_obj].signal)
-                    obj[i_obj].signal = xp.mean(wfs_signal, axis=0)
+                    # obj[i_obj].signal = xp.mean(wfs_signal, axis=0)
                 else:
                     raise OopaoError('Error! There is a mis-match between the number of Sources ('+str(
                         len(self.OPD))+') and the number of WFS ('+str(len(obj))+')')
