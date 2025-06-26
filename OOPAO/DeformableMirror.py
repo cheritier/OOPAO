@@ -197,6 +197,7 @@ class DeformableMirror:
         self.flip_lr = flip_lr
         self.sign = sign
         self.M4_param = M4_param
+        self.rad2arcsec = (180./np.pi)*3600
         if M4_param is not None:
             if M4_param['isM4']:
                 from .M4_model.make_M4_influenceFunctions import makeM4influenceFunctions
@@ -393,29 +394,14 @@ class DeformableMirror:
             print(self)
 
     def buildLayer(self, telescope, altitude):
-        rad2arcsec = (180/np.pi)/3600
+
         # initialize layer object
-        layer = emptyClass()
-
-        # gather properties of the atmosphere
-        layer.altitude = altitude
-
-        # Diameter and resolution of the layer including the Field Of View and the number of extra pixels
-        layer.D = telescope.D+2 * \
-            np.tan(telescope.fov/2)*layer.altitude*self.oversampling_factor
-        layer.resolution = int(
-            np.ceil((telescope.resolution/telescope.D)*layer.D))
-        layer.D_fov = telescope.D+2*np.tan(telescope.fov/2)*layer.altitude
-        layer.resolution_fov = int(
-            np.ceil((telescope.resolution/telescope.D)*layer.D))
-        layer.center = layer.resolution//2
-        
         layer = emptyClass()
         # create a random state to allow reproductible sequences of phase screens
         # gather properties of the atmosphere
         layer.altitude = altitude
         # Diameter and resolution of the layer including the Field Of View and the number of extra pixels
-        layer.D_fov = telescope.D+2*xp.tan(telescope.fov/2/rad2arcsec)*layer.altitude
+        layer.D_fov = telescope.D+2*xp.tan(telescope.fov_rad/2)*layer.altitude
         layer.resolution_fov = int(
             xp.ceil((telescope.resolution/telescope.D)*layer.D_fov))
         # 4 pixels are added as a margin for the edges
@@ -426,7 +412,7 @@ class DeformableMirror:
 
 
         if telescope.src.tag == 'source':
-            [x_z, y_z] = pol2cart(layer.altitude*xp.tan(telescope.src.coordinates[0]/rad2arcsec)
+            [x_z, y_z] = pol2cart(layer.altitude*xp.tan(telescope.src.coordinates[0]/self.rad2arcsec)
                                   * layer.resolution / layer.D, xp.deg2rad(telescope.src.coordinates[1]))
             center_x = int(y_z)+layer.resolution//2
             center_y = int(x_z)+layer.resolution//2
@@ -443,7 +429,7 @@ class DeformableMirror:
             layer.center_x = []
             layer.center_y = []
             for i in range(telescope.src.n_source):
-                [x_z, y_z] = pol2cart(layer.altitude*xp.tan(telescope.src.coordinates[i][0]/rad2arcsec)
+                [x_z, y_z] = pol2cart(layer.altitude*xp.tan(telescope.src.coordinates[i][0]/self.rad2arcsec)
                                       * layer.resolution / layer.D, xp.deg2rad(telescope.src.coordinates[i][1]))
                 layer.extra_sx.append(int(x_z)-x_z)
                 layer.extra_sy.append(int(y_z)-y_z)
@@ -458,11 +444,26 @@ class DeformableMirror:
                 layer.center_y.append(center_y)
 
         return layer
+    
+    def set_pupil_footprint(self,src):
+                [x_z, y_z] = pol2cart(self.altitude_layer.altitude*xp.tan((src.coordinates[0]/self.rad2arcsec))
+                                      * self.altitude_layer.resolution / self.altitude_layer.D, xp.deg2rad(src.coordinates[1]))
+                self.altitude_layer.extra_sx = int(x_z)-x_z
+                self.altitude_layer.extra_sy = int(y_z)-y_z
+
+                center_x = int(y_z)+self.altitude_layer.resolution//2
+                center_y = int(x_z)+self.altitude_layer.resolution//2
+
+                self.altitude_layer.pupil_footprint = xp.zeros(
+                    [self.altitude_layer.resolution, self.altitude_layer.resolution], dtype=self.precision())
+                self.altitude_layer.pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution //
+                                      2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
+
 
     def get_OPD_altitude(self, i_source):
-
+        self.set_pupil_footprint(self.telescope.src.src[i_source])
         if np.ndim(self.OPD) == 2:
-            OPD = np.reshape(self.OPD[np.where(self.altitude_layer.pupil_footprint[i_source] == 1)], [
+            OPD = np.reshape(self.OPD[np.where(self.altitude_layer.pupil_footprint == 1)], [
                              self.telescope.resolution, self.telescope.resolution])
         else:
             OPD = np.reshape(self.OPD[self.altitude_layer.center_x[i_source]-self.telescope.resolution//2:self.altitude_layer.center_x[i_source]+self.telescope.resolution//2, self.altitude_layer.center_y[i_source] -
