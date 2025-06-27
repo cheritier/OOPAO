@@ -669,7 +669,7 @@ class Atmosphere:
         print('r0 \t\t'+str(r0_wvl) + ' \t [m]')
         print('Seeing \t' + str(xp.round(seeingArcsec_wvl, 2)) + str('\t ["]'))
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        return
+        return r0_wvl,seeingArcsec_wvl
        
     def __mul__(self, obj):
         if obj.tag == 'telescope' or obj.tag == 'source' or obj.tag == 'asterism':
