@@ -31,7 +31,7 @@ class Papyrus:
         loc = directory + '/papyrus_inputs/'
     
         # tel_calib,_,dm_calib,_,_ = compute_papyrus_model(param = param, loc = loc, source=False, IFreal=IFreal)
-        self.tel,self.ngs,self.dm,self.wfs,self.atm,self.slow_tt = compute_papyrus_model(param = self.param, loc = loc, source=True, IFreal=False)
+        self.tel,self.ngs,self.dm,self.wfs,self.atm,self.slow_tt,self.perfet_OCAM,self.OCAM = compute_papyrus_model(param = self.param, loc = loc, source=True, IFreal=False)
         
         
     def set_pupil(self,calibration=True,sky_offset = [0,0]):
