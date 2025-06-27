@@ -86,7 +86,7 @@ class ShackHartmann:
                 sampling of the detector pixels in [arcsec]. This parameter overwrites the shannon_sampling parameter.
                 The effective pixel_scale value is obtained by taking the closest value after considering the FFT sampling
                 and the possible binning factor:
-                    - If the pixel-scale is too large for the lenslet FoV, the diffractive spots are zero-padded. 
+                    - If the pixel-scale is too large for the lenslet FoV, the diffractive spots are zero-padded.
                     A warning is displayed in this situation.
         padding_extension_factor : int, optional
             DEPRECATED
@@ -403,7 +403,7 @@ class ShackHartmann:
             * self.pixel_scale / (self.telescope.src.wavelength / self.telescope.D) / self.rad2arcsec
         self.wfs_measure(self.telescope.src.phase)
         self.slopes_units = np.mean(self.signal)
-        self.cam.photonNoise =  photonNoise
+        self.cam.photonNoise = photonNoise
         self.cam.readoutNoise = readoutNoise
         self.telescope.OPD = tmp_opd
         print('Done')
@@ -466,6 +466,21 @@ class ShackHartmann:
             self.raw_data[index_frame,
                           ind_x*self.n_pix_subap//self.binning_factor:(ind_x+1)*self.n_pix_subap//self.binning_factor,
                           ind_y*self.n_pix_subap//self.binning_factor:(ind_y+1)*self.n_pix_subap//self.binning_factor] = intensity
+
+    def merge_data_cube(self, cube):
+        # save current raw data
+        tmp_raw_data = self.raw_data.copy()
+
+        def joblib_fill_raw_data():
+            Q = Parallel(n_jobs=1, prefer='processes')(delayed(self.fill_raw_data)(i, j, k) for i, j, k in zip(self.index_x[self.valid_subapertures_1D],
+                                                                                                               self.index_y[self.valid_subapertures_1D],
+                                                                                                               cube))
+            return Q
+        joblib_fill_raw_data()
+        output_raw_data = self.raw_data.copy()
+        # re-assign raw_data
+        self.raw_data = tmp_raw_data.copy()
+        return output_raw_data
 
     def split_raw_data(self):
         raw_data_h_split = np.vsplit((self.cam.frame), self.nSubap)
