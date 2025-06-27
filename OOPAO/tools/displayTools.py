@@ -350,7 +350,7 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = 
         plt_obj.list_title = list_title        
 
         plt_obj.keep_going = True
-        f = plt.figure(fig_number,figsize = [n_sp*4,n_sp_y*2],facecolor=[0,0.1,0.25], edgecolor = None)
+        f = plt.figure(fig_number,figsize = [n_sp*4,n_sp_y*3],facecolor=[0,0.1,0.25], edgecolor = None)
         COLOR = 'white'
         mpl.rcParams['text.color'] = COLOR
         mpl.rcParams['axes.labelcolor'] = COLOR
