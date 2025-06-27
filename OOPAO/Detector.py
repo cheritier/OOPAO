@@ -164,17 +164,19 @@ class Detector:
 
             if value == 8:
                 self.output_precision = np.uint8
-
+                self.clip_unsigned = 0
             elif value == 16:
                 self.output_precision = np.uint16
-
+                self.clip_unsigned = 0
             elif value == 32:
                 self.output_precision = np.uint32
-
+                self.clip_unsigned = 0
             elif value == 64:
                 self.output_precision = np.uint64
+                self.clip_unsigned = 0
             else:
-                self.output_precision = int
+                self.output_precision = float
+                self.clip_unsigned = -np.inf
 
         return
 
@@ -191,7 +193,7 @@ class Detector:
 
     def digitalization(self, frame):
         if self.FWC is None:
-            return (frame / frame.max() * 2**self.bits).astype(self.output_precision)
+            return (frame / frame.max() * 2**self.bits)
             self.quantification_noise = 0
         else:
             self.quantification_noise = self.FWC * \
@@ -201,8 +203,8 @@ class Detector:
                 warning('The ADC is saturating (gain applyed %i), %.1f %%' % (
                     self.gain, self.saturation))
             frame = (frame / self.FWC * (2**self.bits-1)
-                     ).astype(self.output_precision)
-            return np.clip(frame, a_min=frame.min(), a_max=2**self.bits-1)
+                     )
+            return np.clip(frame, a_min=max(frame.min(),self.clip_unsigned), a_max=2**self.bits-1)
 
     def set_photon_noise(self, frame):
         self.photon_noise = np.sqrt(self.signal)
@@ -271,6 +273,8 @@ class Detector:
         # Apply the digital quantification of the detector
         if self.bits is not None:
             frame = self.digitalization(frame)
+
+        frame = frame.astype(self.output_precision)
 
         # Remove the dark fromthe detector
         if self.backgroundMap is not None:
