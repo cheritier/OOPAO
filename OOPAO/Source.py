@@ -135,13 +135,18 @@ class Source:
         self.laser_coordinates = laser_coordinates
         # shift in arcsec to be applied to the atmospheric phase screens (one value for each layer) to simulate a chromatic effect
         self.chromatic_shift = chromatic_shift
-        if Na_profile is not None and FWHM_spot_up is not None:
-            self.Na_profile = Na_profile
-            self.FWHM_spot_up = FWHM_spot_up
 
-            # consider the altitude weigthed by Na profile
-            self.altitude = np.sum(Na_profile[0, :]*Na_profile[1, :])
+
+        if self.altitude != np.inf:
             self.type = 'LGS'
+        # TODO: Para a source ser LGS é preciso mandar estes parametros que eu não percebo!!
+        # if Na_profile is not None and FWHM_spot_up is not None:
+        #     self.Na_profile = Na_profile
+        #     self.FWHM_spot_up = FWHM_spot_up
+
+        #     # consider the altitude weigthed by Na profile
+        #     self.altitude = np.sum(Na_profile[0, :]*Na_profile[1, :])
+        #     self.type = 'LGS'
         else:
 
             self.type = 'NGS'

@@ -261,10 +261,10 @@ class DeformableMirror:
             raise OopaoError('The value of mechanical coupling should be positive.')
         if altitude is None:
             # Resolution of the DM influence Functions
-            self.resolution = telescope.resolution
+            self.resolution = telescope.resolution #TODO: Use this variable throughout the class instead of self.telescope.resolution
             self.mechCoupling = mechCoupling
             self.tag = 'deformableMirror'
-            self.D = telescope.D
+            self.D = telescope.D #TODO: Use this variable throughout the class instead of self.telescope.D
 
         else:
             if telescope.src.tag == 'asterism':
@@ -583,7 +583,10 @@ class DeformableMirror:
         if self.flip_:
             G = np.flip(G)
 
+        #TODO: Acrescentei o order="F"
         output = np.reshape(G, [1, self.resolution**2])
+        # output = np.reshape(G, [1, self.resolution**2], order="F")
+
         if self.floating_precision == 32:
             output = np.float32(output)
 
@@ -625,6 +628,10 @@ class DeformableMirror:
                     try:
                         self.OPD = self.precision(np.reshape(np.matmul(self.modes, self._coefs), [
                                                   self.resolution, self.resolution, val.shape[1]]))
+
+                        # TODO: Acrescentei o order="F" porque a OPD do espelho estava tranposta 
+                        # self.OPD = self.precision(np.reshape(np.matmul(self.modes, self._coefs), [
+                        #     self.resolution, self.resolution, val.shape[1]], order="F"))
                     except:
                         self.OPD = self.precision(np.reshape(
                             self.modes@self._coefs, [self.resolution, self.resolution, val.shape[1]]))

@@ -338,15 +338,19 @@ class ShackHartmann:
             signal_2D_list = []
             signal_list = []
 
+            frames_list = []
+
             for src in src_list:
                 src.optical_path.append([self.tag, self])
                 self.src = src
                 self.wfs_measure(phase_in=self.src.phase)
                 signal_2D_list.append(self.signal_2D)
                 signal_list.append(self.signal)
+                frames_list.append(self.cam.frame)
 
             self.signal_2D = np.array(signal_2D_list)
             self.signal = np.array(signal_list)
+            self.frames = np.array(frames_list)
 
 
             # np.hstack(shwfs.signal)
@@ -482,13 +486,14 @@ class ShackHartmann:
         return
 
     def centroid(self, image, threshold=0.01):
-
+        
         if np.ndim(image) <= 2:
             im = np.reshape(image.copy(), (1, np.shape(image)[0], np.shape(image)[1]))
         else:
             im = np.atleast_3d(image.copy())
 
         im[im < (threshold*im.max())] = 0
+        
         centroid_out = np.zeros([im.shape[0], 2])
         X_map, Y_map = np.meshgrid(np.arange(im.shape[1]), np.arange(im.shape[2]))
         X_coord_map = np.atleast_3d(X_map).T
@@ -1037,6 +1042,28 @@ class ShackHartmann:
 
         self.src.phase = tmp_phase.copy()
 
+    def get_valid_actuators(self):
+        n_elements = 2 * self.nSubap + 1  # Linear number of lenslet+actuator
+        valid_lenslet_actuator = np.zeros((n_elements, n_elements), dtype=int)
+
+        index = np.arange(1, n_elements, 2)  # Lenslet index
+        # valid_lenslet_actuator[np.ix_(index, index)] = self.valid_subapertures
+        valid_lenslet_actuator[np.ix_(index, index)] = self.filtered_subap_mask
+        
+
+        for x_lenslet in index:
+            for y_lenslet in index:
+                if valid_lenslet_actuator[x_lenslet, y_lenslet] == 1:
+                    x_actuator_indices = [x_lenslet - 1, x_lenslet - 1, x_lenslet + 1, x_lenslet + 1]
+                    y_actuator_indices = [y_lenslet - 1, y_lenslet + 1, y_lenslet + 1, y_lenslet - 1]
+                    for x_act, y_act in zip(x_actuator_indices, y_actuator_indices):
+                        valid_lenslet_actuator[x_act, y_act] = 1
+
+        index = np.arange(0, n_elements, 2)  
+        val = valid_lenslet_actuator[np.ix_(index, index)].astype(bool)
+
+        return val
+
     @property
     def is_geometric(self):
         return self._is_geometric
@@ -1083,6 +1110,7 @@ class ShackHartmann:
     def __mul__(self, obj):
         if obj.tag == 'detector':
             obj._integrated_time += self.telescope.samplingTime
+            # print(f"self.raw_data: {self.raw_data.shape}")
             obj.integrate(self.raw_data)
         else:
             raise OopaoError('The light is propagated to the wrong type of object')

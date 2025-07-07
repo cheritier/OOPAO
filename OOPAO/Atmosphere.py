@@ -277,7 +277,7 @@ class Atmosphere:
             layer.extra_sy = []
             # for i in range(self.asterism.n_source):
             for i in range(self.telescope.src.n_source):
-                print(self.telescope.src.coordinates[i][0])
+                # print(self.telescope.src.coordinates[i][0])
                 # [x_z, y_z] = pol2cart(layer.altitude*xp.tan(self.telescope.src.coordinates[i][0]/206265)
                 #                       * layer.resolution / layer.D, xp.deg2rad(self.asterism.coordinates[i][1]))
                 
@@ -412,7 +412,6 @@ class Atmosphere:
                     layer.extra_sy.append(int(y_z)-y_z)
                     center_x = int(y_z)+layer.resolution//2
                     center_y = int(x_z)+layer.resolution//2
-                    breakpoint()
 
                     # print(f"center_x: {center_x}, center_y: {center_y}")
 
@@ -585,6 +584,7 @@ class Atmosphere:
                                      resolution_out, shift_x=tmpLayer.extra_sx[i], shift_y=tmpLayer.extra_sy[i]))
 
                 if self.asterism.src[i].type == 'LGS':
+                    # print("LGS")
                     sub_im = xp.reshape(_im[xp.where(tmpLayer.pupil_footprint[i] == 1)], [
                                         self.telescope.resolution, self.telescope.resolution])
                     alpha_cone = xp.arctan(
