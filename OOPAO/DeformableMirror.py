@@ -519,24 +519,35 @@ class DeformableMirror:
 
         # <\JM @ SpaceODT>
 
+        if self.telescope.isPetalFree:
+            self.telescope.removePetalling()
+
+        # case with single OPD
+        if np.ndim(self.OPD) == 2:
+            OPD_out_no_pupil = OPD_in + dm_OPD #* 2 #Factor of 2 because DM is reflective
+        # case with multiple OPD
+        else:
+            OPD_out_no_pupil = np.tile(
+                OPD_in[..., None], (1, 1, self.OPD.shape[2]))+dm_OPD
+
 
         # case where the telescope is paired to an atmosphere
-        if self.telescope.isPaired:
-            if self.telescope.isPetalFree:
-                self.telescope.removePetalling()
+        # if self.telescope.isPaired:
+        #     if self.telescope.isPetalFree:
+        #         self.telescope.removePetalling()
 
-            # case with single OPD
-            if np.ndim(self.OPD) == 2:
+        #     # case with single OPD
+        #     if np.ndim(self.OPD) == 2:
 
-                OPD_out_no_pupil = OPD_in + dm_OPD #* 2 #Factor of 2 because DM is reflective
-            # case with multiple OPD
-            else:
-                OPD_out_no_pupil = np.tile(
-                    OPD_in[..., None], (1, 1, self.OPD.shape[2]))+dm_OPD
+        #         OPD_out_no_pupil = OPD_in + dm_OPD #* 2 #Factor of 2 because DM is reflective
+        #     # case with multiple OPD
+        #     else:
+        #         OPD_out_no_pupil = np.tile(
+        #             OPD_in[..., None], (1, 1, self.OPD.shape[2]))+dm_OPD
 
-        # case where the telescope is separated from a telescope object
-        else:
-            OPD_out_no_pupil = dm_OPD
+        # # case where the telescope is separated from a telescope object
+        # else:
+        #     OPD_out_no_pupil = dm_OPD
 
         return OPD_out_no_pupil
 

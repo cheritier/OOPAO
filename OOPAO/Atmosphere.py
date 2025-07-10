@@ -156,17 +156,22 @@ class Atmosphere:
         self.tau0 = 0.31 * self.r0 / self.V0  # Coherence time of atmosphere, Roddier 1981
         # default value to update phase screens at each iteration
         self.user_defined_opd = False
-        if self.telescope.src is None:
-            raise OopaoError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
+
+        # <JM @ SpaceODT> Removed this because the atmosphere behaves as its own entity now
+        # if self.telescope.src is None:
+        #     raise OopaoError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
+        # <\JM @ SpaceODT>
+        
         self.mode = mode              # DEBUG -> first phase screen generation mode
         self.seeingArcsec = 206265*(self.wavelength/self.r0)
         # case when multiple sources are considered (LGS and NGS)
 
         # <JM @ SpaceODT> Moved this part to __mul__
-        if telescope.src.type == 'asterism':
-            self.asterism = telescope.src
-        else:
-            self.asterism = None
+        self.asterism = None
+        # if telescope.src.type == 'asterism':
+        #     self.asterism = telescope.src
+        # else:
+        #     self.asterism = None
         # self.asterism = None
         # <\JM @ SpaceODT>
 
@@ -253,53 +258,64 @@ class Atmosphere:
         layer.D = layer.resolution * self.telescope.D / self.telescope.resolution
 
         layer.center = layer.resolution//2
-        # if self.asterism is None:
-        if self.telescope.src.tag == "source":
-            [x_z, y_z] = pol2cart(layer.altitude*xp.tan(self.telescope.src.coordinates[0]/206265)* layer.resolution / layer.D,
-                                   xp.deg2rad(self.telescope.src.coordinates[1]))
-            center_x = int(y_z)+layer.resolution//2
-            center_y = int(x_z)+layer.resolution//2
 
-            # print(f"center_x: {center_x}, center_y: {center_y}")
-
-
-            layer.pupil_footprint = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
-            layer.pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution //
-                                  2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
-
-            # print(layer.pupil_footprint.shape)
-            # plt.imshow(layer.pupil_footprint)
-            # plt.show()
-
-        else:
-            layer.pupil_footprint = []
-            layer.extra_sx = []
-            layer.extra_sy = []
-            # for i in range(self.asterism.n_source):
-            for i in range(self.telescope.src.n_source):
-                # print(self.telescope.src.coordinates[i][0])
-                # [x_z, y_z] = pol2cart(layer.altitude*xp.tan(self.telescope.src.coordinates[i][0]/206265)
-                #                       * layer.resolution / layer.D, xp.deg2rad(self.asterism.coordinates[i][1]))
-                
-                [x_z, y_z] = pol2cart(layer.altitude*xp.tan(self.telescope.src.coordinates[i][0]/206265)
-                                    * layer.resolution / layer.D, xp.deg2rad(self.telescope.src.coordinates[i][1]))
-                layer.extra_sx.append(int(x_z)-x_z)
-                layer.extra_sy.append(int(y_z)-y_z)
-                center_x = int(y_z)+layer.resolution//2
-                center_y = int(x_z)+layer.resolution//2
-
-                # print(f"center_x: {center_x}, center_y: {center_y}")
-
-
-                pupil_footprint = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
-                pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution //
+        [x_z, y_z] = pol2cart(layer.altitude*xp.tan(0/206265)* layer.resolution / layer.D,
+                                xp.deg2rad(0))
+        center_x = int(y_z)+layer.resolution//2
+        center_y = int(x_z)+layer.resolution//2
+        
+        layer.pupil_footprint = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
+        layer.pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution //
                                 2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
 
-                # print(pupil_footprint.shape)
-                # plt.imshow(pupil_footprint)
-                # plt.show()
 
-                layer.pupil_footprint.append(pupil_footprint)
+        # if self.asterism is None:
+        # if self.telescope.src.tag == "source":
+        #     [x_z, y_z] = pol2cart(layer.altitude*xp.tan(self.telescope.src.coordinates[0]/206265)* layer.resolution / layer.D,
+        #                            xp.deg2rad(self.telescope.src.coordinates[1]))
+        #     center_x = int(y_z)+layer.resolution//2
+        #     center_y = int(x_z)+layer.resolution//2
+
+        #     # print(f"center_x: {center_x}, center_y: {center_y}")
+
+
+        #     layer.pupil_footprint = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
+        #     layer.pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution //
+        #                           2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
+
+        #     # print(layer.pupil_footprint.shape)
+        #     # plt.imshow(layer.pupil_footprint)
+        #     # plt.show()
+
+        # else:
+        #     layer.pupil_footprint = []
+        #     layer.extra_sx = []
+        #     layer.extra_sy = []
+        #     # for i in range(self.asterism.n_source):
+        #     for i in range(self.telescope.src.n_source):
+        #         # print(self.telescope.src.coordinates[i][0])
+        #         # [x_z, y_z] = pol2cart(layer.altitude*xp.tan(self.telescope.src.coordinates[i][0]/206265)
+        #         #                       * layer.resolution / layer.D, xp.deg2rad(self.asterism.coordinates[i][1]))
+                
+        #         [x_z, y_z] = pol2cart(layer.altitude*xp.tan(self.telescope.src.coordinates[i][0]/206265)
+        #                             * layer.resolution / layer.D, xp.deg2rad(self.telescope.src.coordinates[i][1]))
+        #         layer.extra_sx.append(int(x_z)-x_z)
+        #         layer.extra_sy.append(int(y_z)-y_z)
+        #         center_x = int(y_z)+layer.resolution//2
+        #         center_y = int(x_z)+layer.resolution//2
+
+        #         # print(f"center_x: {center_x}, center_y: {center_y}")
+
+
+        #         pupil_footprint = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
+        #         pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution //
+        #                         2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
+
+        #         # print(pupil_footprint.shape)
+        #         # plt.imshow(pupil_footprint)
+        #         # plt.show()
+
+        #         layer.pupil_footprint.append(pupil_footprint)
 
         # layer pixel size
 
@@ -378,16 +394,19 @@ class Atmosphere:
 
         for i_layer in range(self.nLayer):
             layer = getattr(self, 'layer_'+str(i_layer+1))
-            if self.asterism is None:
-                if self.telescope.src.chromatic_shift is not None:
-                    if len(self.telescope.src.chromatic_shift) == self.nLayer:
-                        chromatic_shift = self.telescope.src.chromatic_shift[i_layer]
+
+
+            if len(self.src_list) == 1:
+                src = self.src_list[0]
+                if src.chromatic_shift is not None:
+                    if len(src.chromatic_shift) == self.nLayer:
+                        chromatic_shift = src.chromatic_shift[i_layer]
                     else:
                         raise OopaoError('The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')
                 else:
                     chromatic_shift = 0
-                [x_z, y_z] = pol2cart(layer.altitude*xp.tan((self.telescope.src.coordinates[0]+chromatic_shift)/206265)
-                                      * layer.resolution / layer.D, xp.deg2rad(self.telescope.src.coordinates[1]))
+                [x_z, y_z] = pol2cart(layer.altitude*xp.tan((src.coordinates[0]+chromatic_shift)/206265)
+                                      * layer.resolution / layer.D, xp.deg2rad(src.coordinates[1]))
                 layer.extra_sx = int(x_z)-x_z
                 layer.extra_sy = int(y_z)-y_z
 
@@ -405,9 +424,10 @@ class Atmosphere:
                 layer.pupil_footprint = []
                 layer.extra_sx = []
                 layer.extra_sy = []
-                for i in range(self.asterism.n_source):
-                    [x_z, y_z] = pol2cart(layer.altitude*xp.tan(self.asterism.coordinates[i][0]/206265)
-                                          * layer.resolution / layer.D, xp.deg2rad(self.asterism.coordinates[i][1]))
+                # for i in range(self.asterism.n_source):
+                for src in self.src_list:
+                    [x_z, y_z] = pol2cart(layer.altitude*xp.tan(src.coordinates[0]/206265)
+                                          * layer.resolution / layer.D, xp.deg2rad(src.coordinates[1]))
                     layer.extra_sx.append(int(x_z)-x_z)
                     layer.extra_sy.append(int(y_z)-y_z)
                     center_x = int(y_z)+layer.resolution//2
@@ -515,31 +535,21 @@ class Atmosphere:
             self*self.telescope
 
 
-    def relay(self):
+    def relay(self, src):
         from copy import deepcopy
 
-        src_tmp = deepcopy(self.telescope.src)
+        # src_tmp = deepcopy(self.telescope.src)
 
-        if  self.telescope.src.tag == 'asterism':
-            src_list = self.telescope.src.src
 
-        elif self.telescope.src.tag == 'source':
-            src_list = [self.telescope.src]
+        if src.tag == 'source':
+            self.src_list = [src]
+            self.asterism = None
 
-        for src in src_list:
-            src.optical_path.append([self.tag, self])
-            
-            # self.telescope.src = src
+        elif src.tag == 'asterism':
+            self.src_list = src.src
+            self.asterism = src
 
-            # self.set_pupil_footprint()
-            # phase_support = self.initialize_phase_support()
-            # for i_layer in range(self.nLayer):
-            #     tmpLayer = getattr(self, 'layer_' + str(i_layer + 1))
-            #     phase_support = self.fill_phase_support(
-            #         tmpLayer, phase_support, i_layer)
-
-            # self.set_OPD(phase_support)
-
+        self.set_pupil_footprint()
 
         phase_support = self.initialize_phase_support()
         for i_layer in range(self.nLayer):
@@ -547,7 +557,12 @@ class Atmosphere:
             phase_support = self.fill_phase_support(
                 tmpLayer, phase_support, i_layer)
 
+        for src in self.src_list:
+            src.optical_path.append([self.tag, self])
+            
         self.set_OPD(phase_support)
+
+        # self.set_OPD(phase_support)
 
 
     def initialize_phase_support(self):
@@ -560,8 +575,9 @@ class Atmosphere:
         return phase_support
 
     def fill_phase_support(self, tmpLayer, phase_support, i_layer):
-        # if self.asterism is None:
-        if self.telescope.src.tag == "source":
+
+        # if self.telescope.src.tag == "source":
+        if self.asterism is None:
             _im = tmpLayer.phase.copy()
             if tmpLayer.extra_sx != 0 or tmpLayer.extra_sy != 0:
                 pixel_size_in = 1
@@ -569,6 +585,7 @@ class Atmosphere:
                 resolution_out = _im.shape[0]
                 _im = xp.squeeze(interpolate_image(_im, pixel_size_in, pixel_size_out,
                                  resolution_out, shift_x=tmpLayer.extra_sx, shift_y=tmpLayer.extra_sy))
+            
             phase_support += xp.reshape(_im[xp.where(tmpLayer.pupil_footprint == 1)], [
                                         self.telescope.resolution, self.telescope.resolution]) * xp.sqrt(self.fractionalR0[i_layer])
         else:
@@ -616,14 +633,25 @@ class Atmosphere:
     def set_OPD(self, phase_support):
         # print(self.asterism)
         # if self.asterism is None:
-        if self.telescope.src.tag == "source":
-            self.telescope.src.OPD_no_pupil = phase_support*self.wavelength/2/xp.pi
-            self.telescope.src.OPD = self.telescope.src.OPD_no_pupil*self.telescope.src.mask
-
+        if len(self.src_list) == 1:
+            src = self.src_list[0]
+            src.OPD_no_pupil = phase_support*self.wavelength/2/xp.pi
+            src.OPD = src.OPD_no_pupil*src.mask
         else:
-            for src in self.telescope.src.src:
-                src.OPD_no_pupil = phase_support[src.ast_idx]*self.wavelength/2/xp.pi
+            for i, src in enumerate(self.src_list):
+                src.OPD_no_pupil = phase_support[i]*self.wavelength/2/xp.pi
                 src.OPD = src.OPD_no_pupil*src.mask
+
+        return
+
+        # if self.telescope.src.tag == "source":
+        #     self.telescope.src.OPD_no_pupil = phase_support*self.wavelength/2/xp.pi
+        #     self.telescope.src.OPD = self.telescope.src.OPD_no_pupil*self.telescope.src.mask
+
+        # else:
+        #     for src in self.telescope.src.src:
+        #         src.OPD_no_pupil = phase_support[src.ast_idx]*self.wavelength/2/xp.pi
+        #         src.OPD = src.OPD_no_pupil*src.mask
 
         return
     # <\JM @ SpaceODT>
@@ -840,6 +868,8 @@ class Atmosphere:
             raise OopaoError('The atmosphere can be multiplied only with a Telescope or a Source object!')
 
     def display_atm_layers(self, layer_index=None, fig_index=None, list_src=None):
+        # TODO: Does not work before the propagation
+
         display_cn2 = False
 
         if layer_index is None:
@@ -854,11 +884,14 @@ class Atmosphere:
             raise OopaoError('layer_index should be a list')
         normalized_speed = xp.asarray(self.windSpeed)/max(self.windSpeed)
 
-        if list_src is None:
-            if self.telescope.src.tag == 'asterism':
-                list_src = self.telescope.src.src
-            else:
-                list_src = [self.telescope.src]
+        # if list_src is None:
+        #     if self.telescope.src.tag == 'asterism':
+        #         list_src = self.telescope.src.src
+        #     else:
+        #         list_src = [self.telescope.src]
+
+        list_src = self.src_list
+        
         plt.figure(fig_index, figsize=[
                    n_sp*4, 3*(1+display_cn2)], edgecolor=None)
         if display_cn2:

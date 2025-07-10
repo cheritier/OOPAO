@@ -146,15 +146,17 @@ class Asterism:
 
         self.resetOPD()
 
-        if obj.isPaired:
-            atm = obj.atm
-            obj-atm
-            self*obj
-            atm.asterism=self
-            obj+atm
+        self*obj
 
-        else:
-            self * obj
+        # if obj.isPaired:
+        #     atm = obj.atm
+        #     obj-atm
+        #     self*obj
+        #     atm.asterism=self
+        #     obj+atm
+
+        # else:
+        #     self * obj
 
             # for src in self.src:
             #     src.optical_path = [[src.type + '('+src.optBand+')', src]]

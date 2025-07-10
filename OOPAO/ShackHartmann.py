@@ -332,7 +332,6 @@ class ShackHartmann:
             self.src = src
             self.wfs_measure(phase_in=self.src.phase)
 
-
         elif src.tag == 'asterism':
             src_list = src.src
             signal_2D_list = []

@@ -195,9 +195,7 @@ class Telescope:
 
 
     def relay(self, src):
-
         self.src = src
-
         self.src.mask = self.pupil.copy()
 
         if src.tag == 'source':
@@ -211,11 +209,15 @@ class Telescope:
 
             src.mask = self.pupil.copy()
 
-            if not self.isPaired:
-                src.OPD_no_pupil = 1 + self.pupil.astype(self.precision()) * 0
-                src.OPD = (1 + self.pupil.astype(self.precision()) * 0)*src.mask
-            else:
-                self.atm.relay()
+            src.OPD_no_pupil = src.OPD_no_pupil.copy() #TODO: Create a tel.OPD to add to the source OPD
+            src.OPD = src.OPD_no_pupil*src.mask
+
+
+            # if not self.isPaired:
+            #     src.OPD_no_pupil = 1 + self.pupil.astype(self.precision()) * 0
+            #     src.OPD = (1 + self.pupil.astype(self.precision()) * 0)*src.mask
+            # else:
+            #     self.atm.relay() # TODO: Decouple atm from tel
 
             src.var = np.var(src.phase[np.where(self.pupil == 1)])
             src.fluxMap = self.pupilReflectivity * src.nPhoton * \
@@ -519,7 +521,9 @@ class Telescope:
     # <\JM @ SpaceODT>
 
 
-
+    # This function was replaced by relay functions in different objects
+    # Remains here for now for reference
+    # 7/7/2025 
     def mul(self, obj):
         print(f"Multiplying Telescope with {obj.tag}")
         # case where multiple objects are considered

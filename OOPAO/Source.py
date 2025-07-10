@@ -176,14 +176,18 @@ class Source:
         obj.src = self
         self.optical_path = [[self.type + '(' + self.optBand + ')', self]]
 
-        if obj.isPaired:
-            atm = obj.atm
-            obj-atm
-            # self.resetOPD()
-            self*obj
-            obj+atm
-        else:
-            self*obj
+        self.resetOPD()
+
+        self*obj
+
+        # if obj.isPaired:
+        #     atm = obj.atm
+        #     obj-atm
+        #     # self.resetOPD()
+        #     self*obj
+        #     obj+atm
+        # else:
+        #     self*obj
 
 
 
@@ -193,14 +197,19 @@ class Source:
 
         obj.relay(self)
         return self
+    
     # <\JM @ SpaceODT>
 
 
 
     def resetOPD(self):
+        
+        self.OPD = np.zeros((self.OPD.shape[0], self.OPD.shape[1]))
+        self.OPD_no_pupil = np.zeros((self.OPD_no_pupil.shape[0], self.OPD_no_pupil.shape[1]))
 
-        self.OPD = 0*self.OPD
-        self.OPD_no_pupil = 0*self.OPD_no_pupil
+
+        # self.OPD = 0*self.OPD
+        # self.OPD_no_pupil = 0*self.OPD_no_pupil
 
         # TODO: Does not work the first time someone resets the OPD
         # if self.OPD_no_pupil is not None:
@@ -217,15 +226,7 @@ class Source:
     @property
     def OPD(self):
         return self._OPD
-        # if self._OPD is not None:
-        #     return self._OPD
-        #
-        # if len(self._OPD_no_pupil.shape) > 2:
-        #     for i in range(self._OPD_no_pupil.shape[-1]):
-        #         self._OPD_no_pupil[:, :, i] = self._OPD_no_pupil[:, :, i]*self.mask
-        #     return self._OPD_no_pupil
-        #
-        # return self.OPD_no_pupil*self.mask
+
 
 
     @OPD.setter
@@ -240,12 +241,6 @@ class Source:
     def OPD_no_pupil(self, val):
         self._OPD_no_pupil = np.array(val)
 
-        # self._OPD = np.array(val)
-        # if len(self._OPD.shape) > 2:
-        #     for i in range(self._OPD.shape[-1]):
-        #         self._OPD[:, :, i] = self._OPD[:, :, i] * self.mask
-        # else:
-        #     self._OPD = val*self.mask
 
     @property
     def phase(self):
