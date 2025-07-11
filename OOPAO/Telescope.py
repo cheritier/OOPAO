@@ -209,15 +209,11 @@ class Telescope:
 
             src.mask = self.pupil.copy()
 
-            src.OPD_no_pupil = src.OPD_no_pupil.copy() #TODO: Create a tel.OPD to add to the source OPD
+            #TODO: Create a tel.OPD to add to the source OPD
+            src.OPD_no_pupil = src.OPD_no_pupil.copy()
             src.OPD = src.OPD_no_pupil*src.mask
 
 
-            # if not self.isPaired:
-            #     src.OPD_no_pupil = 1 + self.pupil.astype(self.precision()) * 0
-            #     src.OPD = (1 + self.pupil.astype(self.precision()) * 0)*src.mask
-            # else:
-            #     self.atm.relay() # TODO: Decouple atm from tel
 
             src.var = np.var(src.phase[np.where(self.pupil == 1)])
             src.fluxMap = self.pupilReflectivity * src.nPhoton * \
@@ -521,9 +517,9 @@ class Telescope:
     # <\JM @ SpaceODT>
 
 
+    # <JM @ SpaceODT> 
     # This function was replaced by relay functions in different objects
-    # Remains here for now for reference
-    # 7/7/2025 
+    # Remains here for now for reference 
     def mul(self, obj):
         print(f"Multiplying Telescope with {obj.tag}")
         # case where multiple objects are considered
@@ -669,6 +665,9 @@ class Telescope:
                         raise OopaoError('The wrong object was attached to the telescope')
         return self
 
+
+    # <JM @ SpaceODT> This is no longer needed as the atmosphere behaves as its own entity now.
+    # Remains here for now for reference 
     # Combining with an atmosphere object
     def __add__(self, obj):
         if obj.tag == 'atmosphere':
@@ -695,6 +694,9 @@ class Telescope:
         if obj.tag == 'spatialFilter':
             self.spatialFilter = None
             print('Telescope and Spatial Filter separated!')
+    
+    # <\JM @ SpaceODT>
+    
 
     def print_optical_path(self):
         if self.optical_path is not None:

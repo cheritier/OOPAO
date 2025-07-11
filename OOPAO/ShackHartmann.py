@@ -26,7 +26,6 @@ import matplotlib.pyplot as plt
 class ShackHartmann:
     def __init__(self, nSubap: float,
                  telescope,
-                 src,
                  lightRatio: float,
                  threshold_cog: float = 0.01,
                  is_geometric: bool = False,
@@ -157,7 +156,9 @@ class ShackHartmann:
 
         self.tag = 'shackHartmann'
         self.telescope = telescope
-        self.src = src
+
+        self.src = self.telescope.src
+
         if self.telescope.src is None:
             raise OopaoError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
         if self.src.type == 'LGS':
@@ -293,63 +294,81 @@ class ShackHartmann:
         if self.is_LGS:
             self.shift_x_buffer, self.shift_y_buffer, self.spot_kernel_elongation_fft, self.spot_kernel_elongation = self.get_convolution_spot(compute_fft_kernel=True)
 
+        
         if self.src.tag == 'source':
-            # WFS initialization
+            src_list = [self.src]
+        elif self.src.tag == 'asterism':
+            src_list = self.src.src
+
+        signal_2D_list = []
+        signal_list = []
+
+        for src in src_list:
+            self.src = src
             self.initialize_wfs()
 
-        elif self.src.tag == 'asterism':
-
-            lgsAst = copy.deepcopy(self.src)
-
-            src_list = lgsAst.src
-
-            signal_2D_list = []
-            signal_list = []
-
-            for src in src_list:
-                self.src = src
-                self.initialize_wfs()
-                # self.signal_2D, self.signal, intensity
-                signal_2D_list.append(self.signal_2D)
-                signal_list.append(self.signal)
+            signal_2D_list.append(self.signal_2D)
+            signal_list.append(self.signal)
 
 
-            self.src = lgsAst
-            self.signal_2D = signal_2D_list.copy()
-            self.signal = signal_list.copy()
+        self.signal_2D = signal_2D_list.copy()
+        self.signal = signal_list.copy()
 
-            self.src.signal_2D = signal_2D_list.copy()
-            self.src.signal = signal_list.copy()
+        self.src.signal_2D = signal_2D_list.copy()
+        self.src.signal = signal_list.copy()
 
-        self.signal_list = []
-        self.signal_2D_list = []
 
 
     def relay(self, src):
 
+        # if src.tag == 'source':
+        #     src.optical_path.append([self.tag, self])
+        #     self.src = src
+        #     self.wfs_measure(phase_in=self.src.phase)
+
+
         if src.tag == 'source':
+            src_list = [src]
+        elif src.tag == 'asterism':
+            src_list = src.src
+
+        
+        signal_2D_list = []
+        signal_list = []
+        frames_list = []
+
+        for src in src_list:
             src.optical_path.append([self.tag, self])
             self.src = src
             self.wfs_measure(phase_in=self.src.phase)
+            signal_2D_list.append(self.signal_2D)
+            signal_list.append(self.signal)
+            frames_list.append(self.cam.frame)
 
-        elif src.tag == 'asterism':
-            src_list = src.src
-            signal_2D_list = []
-            signal_list = []
+        self.signal_2D = np.array(signal_2D_list)
+        self.signal = np.array(signal_list)
+        self.frames = np.array(frames_list)
 
-            frames_list = []
 
-            for src in src_list:
-                src.optical_path.append([self.tag, self])
-                self.src = src
-                self.wfs_measure(phase_in=self.src.phase)
-                signal_2D_list.append(self.signal_2D)
-                signal_list.append(self.signal)
-                frames_list.append(self.cam.frame)
 
-            self.signal_2D = np.array(signal_2D_list)
-            self.signal = np.array(signal_list)
-            self.frames = np.array(frames_list)
+        # elif src.tag == 'asterism':
+        #     src_list = src.src
+        #     signal_2D_list = []
+        #     signal_list = []
+
+        #     frames_list = []
+
+        #     for src in src_list:
+        #         src.optical_path.append([self.tag, self])
+        #         self.src = src
+        #         self.wfs_measure(phase_in=self.src.phase)
+        #         signal_2D_list.append(self.signal_2D)
+        #         signal_list.append(self.signal)
+        #         frames_list.append(self.cam.frame)
+
+        #     self.signal_2D = np.array(signal_2D_list)
+        #     self.signal = np.array(signal_list)
+        #     self.frames = np.array(frames_list)
 
 
             # np.hstack(shwfs.signal)
@@ -1047,7 +1066,7 @@ class ShackHartmann:
 
         index = np.arange(1, n_elements, 2)  # Lenslet index
         # valid_lenslet_actuator[np.ix_(index, index)] = self.valid_subapertures
-        valid_lenslet_actuator[np.ix_(index, index)] = self.filtered_subap_mask
+        valid_lenslet_actuator[np.ix_(index, index)] = self.valid_subapertures
         
 
         for x_lenslet in index:

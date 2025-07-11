@@ -57,16 +57,7 @@ class Asterism:
         print(self)
         self.tag = 'asterism'
         self.type = 'asterism'
-
-        # for i in range(self.n_source):
-        #     self.coordinates.append(self.src[i].coordinates)
-        #     self.altitude.append(self.src[i].altitude)
-        #     self.nPhoton += self.src[i].nPhoton/self.n_source
-            # self.phase.append(self.src[i].phase)
-            # self.fluxMap.append(self.src[i].phase)
-
-        # self.phase = np.asarray(self.phase)
-        # self.fluxMap = np.asarray(self.fluxMap)
+ 
 
         self.wavelength = self.src[0].wavelength
 
@@ -88,7 +79,6 @@ class Asterism:
     def phase(self, val):
         for src in self.src:
             src.phase = val[src.ast_idx]
-            # src.OPD = (val[src.ast_idx]*self.wavelength) / (2*np.pi)
 
 
     @property
@@ -138,36 +128,21 @@ class Asterism:
 
 
     def __pow__(self, obj):
-        obj.src = self
-        # obj.resetOPD()
+        # Re-propagation function. Same as .* in OOMAO
 
+        obj.src = self
         for src in self.src:
             src.optical_path = [[src.type + '('+src.optBand+')', src]]
-
         self.resetOPD()
-
         self*obj
 
-        # if obj.isPaired:
-        #     atm = obj.atm
-        #     obj-atm
-        #     self*obj
-        #     atm.asterism=self
-        #     obj+atm
-
-        # else:
-        #     self * obj
-
-            # for src in self.src:
-            #     src.optical_path = [[src.type + '('+src.optBand+')', src]]
-            #     src.resetOPD()
-            #     src*obj
 
         return self
 
 
 
     def __mul__(self, obj):
+        # Propagation function.
 
         obj.relay(self)
         return self

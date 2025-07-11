@@ -159,13 +159,19 @@ class Source:
 
         # <JM @ SpaceODT>
 
-        self._OPD = np.zeros((100,100))    # set the initial OPD
-        self._OPD_no_pupil = np.zeros((100,100))  # set the initial OPD
+        # TODO: By default, the OPD for each source is initialized as a zero array with shape (100, 100). 
+        # This leads to issues when the initial propagation does not involve the atmosphere.
+        # A solution for this case still needs to be determined.
+        self._OPD = np.zeros((100,100))          
+        self._OPD_no_pupil = np.zeros((100,100)) 
 
-        self.mask = 1
+        # mask to create to compute the OPD with pupil. 
+        # Initally set to 1 so it doesnt do anything until the source is propagated through the telescope.
+        self.mask = 1 
 
         self.optical_path = [[self.type + '('+self.optBand+')', self]]
 
+        # Variables that indicate if this source belongs to an asterism and its index if it does. 
         self.inAsterism = False
         self.ast_idx = -1
 
@@ -173,27 +179,16 @@ class Source:
 
     # <JM @ SpaceODT>
     def __pow__(self, obj):
+        # Re-propagation function. Same as .* in OOMAO
+
         obj.src = self
         self.optical_path = [[self.type + '(' + self.optBand + ')', self]]
-
         self.resetOPD()
-
         self*obj
-
-        # if obj.isPaired:
-        #     atm = obj.atm
-        #     obj-atm
-        #     # self.resetOPD()
-        #     self*obj
-        #     obj+atm
-        # else:
-        #     self*obj
-
-
-
         return self
 
     def __mul__(self, obj):
+        # Propagation function. 
 
         obj.relay(self)
         return self
@@ -203,16 +198,10 @@ class Source:
 
 
     def resetOPD(self):
-        
+        self.mask = 1
         self.OPD = np.zeros((self.OPD.shape[0], self.OPD.shape[1]))
         self.OPD_no_pupil = np.zeros((self.OPD_no_pupil.shape[0], self.OPD_no_pupil.shape[1]))
 
-
-        # self.OPD = 0*self.OPD
-        # self.OPD_no_pupil = 0*self.OPD_no_pupil
-
-        # TODO: Does not work the first time someone resets the OPD
-        # if self.OPD_no_pupil is not None:
 
     def print_optical_path(self):
         if self.optical_path is not None:
