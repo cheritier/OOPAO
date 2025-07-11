@@ -482,18 +482,21 @@ class ShackHartmann:
         self.raw_data = tmp_raw_data.copy()
         return output_raw_data
 
-    def split_raw_data(self):
-        raw_data_h_split = np.vsplit((self.cam.frame), self.nSubap)
-        self.maps_intensity = np.zeros([self.nSubap**2,
+    def split_raw_data(self,input_frame=None):
+        if input_frame is None:
+            input_frame = self.cam.frame
+        raw_data_h_split = np.vsplit((input_frame), self.nSubap)
+        maps_intensity = np.zeros([self.nSubap**2,
                                         self.n_pix_subap,
                                         self.n_pix_subap], dtype=float)
         center = self.n_pix_subap//2
         for i in range(self.nSubap):
             raw_data_v_split = np.hsplit(raw_data_h_split[i], self.nSubap)
-            self.maps_intensity[i*self.nSubap:(i+1)*self.nSubap,
+            maps_intensity[i*self.nSubap:(i+1)*self.nSubap,
                                 center - self.n_pix_subap//self.binning_factor//2:center+self.n_pix_subap//self.binning_factor // 2,
                                 center - self.n_pix_subap//self.binning_factor//2:center+self.n_pix_subap//self.binning_factor//2] = np.asarray(raw_data_v_split)
-        self.maps_intensity = self.maps_intensity[self.valid_subapertures_1D, :, :]
+        maps_intensity = maps_intensity[self.valid_subapertures_1D, :, :]
+        return maps_intensity
 
     def compute_raw_data_multi(self, intensity):
         self.ind_frame = np.zeros(intensity.shape[0], dtype=(int))
@@ -659,7 +662,7 @@ class ShackHartmann:
     def wfs_integrate(self):
         # propagate to detector to add noise and detector effects
         self*self.cam
-        self.split_raw_data()
+        self.maps_intensity = self.split_raw_data()
 
         # compute the centroid on valid subaperture
         self.centroid_lenslets = self.centroid(self.maps_intensity*self.weighting_map, self.threshold_cog)
