@@ -25,7 +25,6 @@ except:
 class Pyramid:
     def __init__(self,
                  nSubap: float,
-                 src,
                  telescope,
                  modulation: float,
                  lightRatio: float,
@@ -200,7 +199,9 @@ class Pyramid:
         # telescope attached to the wfs
         self.telescope = telescope
 
-        self.src = src
+
+
+        self.src = self.telescope.src
 
         if (self.telescope.resolution/nSubap) % 2 != 0:
             raise OopaoError('The resolution should be an even number and be a multiple of 2**i where i>=2')
