@@ -602,6 +602,21 @@ class ShackHartmann:
                           ind_x*self.n_pix_subap//self.binning_factor:(ind_x+1)*self.n_pix_subap//self.binning_factor,
                           ind_y*self.n_pix_subap//self.binning_factor:(ind_y+1)*self.n_pix_subap//self.binning_factor] = intensity
 
+    def merge_data_cube(self, cube):
+        # save current raw data
+        tmp_raw_data = self.raw_data.copy()
+
+        def joblib_fill_raw_data():
+            Q = Parallel(n_jobs=1, prefer='processes')(delayed(self.fill_raw_data)(i, j, k) for i, j, k in zip(self.index_x[self.valid_subapertures_1D],
+                                                                                                               self.index_y[self.valid_subapertures_1D],
+                                                                                                               cube))
+            return Q
+        joblib_fill_raw_data()
+        output_raw_data = self.raw_data.copy()
+        # re-assign raw_data
+        self.raw_data = tmp_raw_data.copy()
+        return output_raw_data
+
     def split_raw_data(self):
         raw_data_h_split = np.vsplit((self.cam.frame), self.nSubap)
 
