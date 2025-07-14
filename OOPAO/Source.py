@@ -136,19 +136,21 @@ class Source:
         # shift in arcsec to be applied to the atmospheric phase screens (one value for each layer) to simulate a chromatic effect
         self.chromatic_shift = chromatic_shift
 
-
+        # TODO: These shouldn't both exist
         if self.altitude != np.inf:
             self.type = 'LGS'
-        # TODO: Para a source ser LGS é preciso mandar estes parametros que eu não percebo!!
-        # if Na_profile is not None and FWHM_spot_up is not None:
-        #     self.Na_profile = Na_profile
-        #     self.FWHM_spot_up = FWHM_spot_up
-
-        #     # consider the altitude weigthed by Na profile
-        #     self.altitude = np.sum(Na_profile[0, :]*Na_profile[1, :])
-        #     self.type = 'LGS'
         else:
+            self.type = 'NGS'
 
+        if Na_profile is not None and FWHM_spot_up is not None:
+            self.Na_profile = Na_profile
+            self.FWHM_spot_up = FWHM_spot_up
+
+            # consider the altitude weigthed by Na profile
+            self.altitude = np.sum(Na_profile[0, :]*Na_profile[1, :])
+            self.type = 'LGS'
+
+        else:
             self.type = 'NGS'
 
         if self.display_properties:
@@ -171,6 +173,9 @@ class Source:
 
         self.optical_path = [[self.type + '('+self.optBand+')', self]]
 
+
+        self.through_atm = False
+
         # Variables that indicate if this source belongs to an asterism and its index if it does. 
         self.inAsterism = False
         self.ast_idx = -1
@@ -184,6 +189,7 @@ class Source:
         obj.src = self
         self.optical_path = [[self.type + '(' + self.optBand + ')', self]]
         self.resetOPD()
+        self.through_atm = False
         self*obj
         return self
 
