@@ -225,6 +225,10 @@ class Atmosphere:
         # self.set_OPD(phase_support)
         # <\JM @ SpaceODT>
 
+        # <JM @ SpaceODT> Commented this so the OPD isn't saved when initializing the atm
+        self.src_list = []
+        # <\JM @ SpaceODT>
+
         # reset the r0 and generate a new phase screen to override the ro_def computation
         self.r0 = self.r0
         self.generateNewPhaseScreen(0)
@@ -558,6 +562,7 @@ class Atmosphere:
                 tmpLayer, phase_support, i_layer)
 
         for src in self.src_list:
+            src.through_atm = True
             src.optical_path.append([self.tag, self])
             
         self.set_OPD(phase_support)
@@ -780,14 +785,14 @@ class Atmosphere:
     def print_atm_at_wavelength(self, wavelength):
 
         r0_wvl = self.r0*((wavelength/self.wavelength)**(6/5))
-        seeingArcsec_wvl = 206265*(wavelength/r0_wvl)
+        seeingArcsec_wvl = self.rad2arcsec*(wavelength/r0_wvl)
 
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE AT ' +
               str(wavelength)+' nm %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         print('r0 \t\t'+str(r0_wvl) + ' \t [m]')
         print('Seeing \t' + str(xp.round(seeingArcsec_wvl, 2)) + str('\t ["]'))
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        return
+        return r0_wvl,seeingArcsec_wvl
        
     def __mul__(self, obj):
         if obj.tag == 'telescope' or obj.tag == 'source' or obj.tag == 'asterism':
@@ -960,7 +965,10 @@ class Atmosphere:
             ax.set_ylabel('[m]')
             ax.set_title('Altitude '+str(tmpLayer.altitude)+' m')
             ax.plot(x_tel+center, y_tel+center, '--', color='k')
-            ax.legend(loc='upper left')
+
+            if len(list_src) > 0:
+                ax.legend(loc='upper left')
+
             makeSquareAxes(plt.gca())
             ax.arrow(center,
                      center,
