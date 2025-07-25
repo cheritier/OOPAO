@@ -192,6 +192,7 @@ class Telescope:
         self.coronagraph_diameter = None
         print(self)
         self.isInitialized = True
+        self.apply_off_axis_tip_tilt = True
 
     def set_pupil(self):
         # Case where the pupil is not input: circular pupil with central obstruction
@@ -221,7 +222,7 @@ class Telescope:
 
     def computePSF(self, zeroPaddingFactor=2, detector=None, img_resolution=None):
         conversion_constant = (180/xp.pi)*3600
-        factor = 1
+        factor = 1*self.apply_off_axis_tip_tilt
         # case when a detector is provided to the telescope (tel*det)
         if detector is not None:
             zeroPaddingFactor = detector.psf_sampling
@@ -255,8 +256,12 @@ class Telescope:
         maximum_fov = pixel_scale*img_resolution/2
         n_extra = np.abs(np.floor((maximum_fov - max(x_max, y_max))/pixel_scale) - img_resolution//2)
         n_pix = np.ceil(max(int(img_resolution/2 + n_extra)*2, img_resolution)).astype('int')
-        center = n_pix//2
-        self.support_PSF = np.zeros([n_pix, n_pix])
+        if self.apply_off_axis_tip_tilt:
+            self.support_PSF = np.zeros([n_pix, n_pix])
+        else:
+            self.support_PSF = np.zeros([img_resolution, img_resolution])
+        center = self.support_PSF.shape[0]//2
+
         input_wavelenght = input_source[0].wavelength
         output_PSF = []
         output_PSF_norma = []
@@ -282,8 +287,8 @@ class Telescope:
             # X/Y shift inversion to match convention for atmosphere
             x_shift = r*xp.sin(np.deg2rad(input_source[i_src].coordinates[1]))
             y_shift = r*xp.cos(np.deg2rad(input_source[i_src].coordinates[1]))
-            delta_x = int(np.floor(np.abs(x_shift)/pixel_scale)*np.sign(x_shift))
-            delta_y = int(np.floor(np.abs(y_shift)/pixel_scale)*np.sign(y_shift))
+            delta_x = int(factor*np.floor(np.abs(x_shift)/pixel_scale)*np.sign(x_shift))
+            delta_y = int(factor*np.floor(np.abs(y_shift)/pixel_scale)*np.sign(y_shift))
 
             delta_Tilt = (np.abs(x_shift) % pixel_scale)*np.sign(x_shift)
             delta_Tip = (np.abs(y_shift) % pixel_scale)*np.sign(y_shift)
