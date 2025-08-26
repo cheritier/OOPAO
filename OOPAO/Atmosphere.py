@@ -483,46 +483,57 @@ class Atmosphere:
 
     def fill_phase_support(self, tmpLayer, phase_support, i_layer):
         if self.asterism is None:
+            if self.telescope.src.altitude <= tmpLayer.altitude:
+                raise OopaoError('The source altitude ('+str(self.telescope.src.altitude)+' m) is below or at the same altitude as the atmosphere layer ('+str(tmpLayer.altitude)+' m)')
             _im = tmpLayer.phase.copy()
-            if tmpLayer.extra_sx != 0 or tmpLayer.extra_sy != 0:
-                pixel_size_in = 1
-                pixel_size_out = 1
-                resolution_out = _im.shape[0]
+            h = self.telescope.src.altitude-tmpLayer.altitude
+            if xp.isinf(h):
+                # magnification due to cone effect not considered
+                magnification_cone_effect = 1
+                interpolate_im = False
+            else:
+                # magnification due to cone effect not considered
+                magnification_cone_effect = (h)/self.telescope.src.altitude
+                interpolate_im = True
+            pixel_size_in = 1
+            pixel_size_out = pixel_size_in*magnification_cone_effect
+            resolution_out = tmpLayer.resolution
+
+            if tmpLayer.extra_sx != 0 or tmpLayer.extra_sy != 0 or interpolate_im is True:
                 _im = xp.squeeze(interpolate_image(_im, pixel_size_in, pixel_size_out,
                                  resolution_out, shift_x=tmpLayer.extra_sx, shift_y=tmpLayer.extra_sy))
             phase_support += xp.reshape(_im[xp.where(tmpLayer.pupil_footprint == 1)], [
                                         self.telescope.resolution, self.telescope.resolution]) * xp.sqrt(self.fractionalR0[i_layer])
         else:
             for i in range(self.asterism.n_source):
+                if self.asterism.altitude[i] <= tmpLayer.altitude:
+                    raise OopaoError('The source altitude ('+str(self.asterism.altitude[i])+' m) is below or at the same altitude as the atmosphere layer ('+str(tmpLayer.altitude)+' m)')
                 _im = tmpLayer.phase.copy()
-
                 if tmpLayer.extra_sx[i] != 0 or tmpLayer.extra_sy[i] != 0:
-
                     pixel_size_in = 1
                     pixel_size_out = 1
                     resolution_out = _im.shape[0]
                     _im = xp.squeeze(interpolate_image(_im, pixel_size_in, pixel_size_out,
                                      resolution_out, shift_x=tmpLayer.extra_sx[i], shift_y=tmpLayer.extra_sy[i]))
-
                 if self.asterism.src[i].type == 'LGS':
                     sub_im = xp.reshape(_im[xp.where(tmpLayer.pupil_footprint[i] == 1)], [
                                         self.telescope.resolution, self.telescope.resolution])
-                    alpha_cone = xp.arctan(
-                        self.telescope.D/2/self.asterism.altitude[i])
                     h = self.asterism.altitude[i]-tmpLayer.altitude
                     if xp.isinf(h):
-                        r = self.telescope.D/2
+                        # magnification due to cone effect not considered
+                        magnification_cone_effect = 1
+                        interpolate_im = False
                     else:
-                        r = h*xp.tan(alpha_cone)
-                    ratio = self.telescope.D/r/2
+                        # magnification due to cone effect not considered
+                        magnification_cone_effect = (h)/self.telescope.src.altitude
+                        interpolate_im = True
                     cube_in = xp.atleast_3d(sub_im).T
 
-                    pixel_size_in = tmpLayer.D/tmpLayer.resolution
-                    pixel_size_out = pixel_size_in/ratio
+                    pixel_size_in = 1
+                    pixel_size_out = pixel_size_in*magnification_cone_effect
                     resolution_out = self.telescope.resolution
 
-                    phase_support[i] += xp.squeeze(interpolate_cube(
-                        cube_in, pixel_size_in, pixel_size_out, resolution_out)).T * xp.sqrt(self.fractionalR0[i_layer])
+                    phase_support[i] += xp.squeeze(interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out)).T * xp.sqrt(self.fractionalR0[i_layer])
                 else:
                     phase_support[i] += xp.reshape(_im[xp.where(tmpLayer.pupil_footprint[i] == 1)], [
                                                    self.telescope.resolution, self.telescope.resolution]) * xp.sqrt(self.fractionalR0[i_layer])
@@ -734,8 +745,6 @@ class Atmosphere:
 
         if type(layer_index) is not list:
             raise OopaoError('layer_index should be a list')
-        normalized_speed = xp.asarray(self.windSpeed)/max(self.windSpeed)
-
         if list_src is None:
             if self.telescope.src.tag == 'asterism':
                 list_src = self.telescope.src.src
@@ -776,15 +785,12 @@ class Atmosphere:
             col = []
             for i_source in range(len(list_src)):
                 col.append(cm(1.*i_source/len(list_src)))
-                [x_c, y_c] = pol2cart(
-                    self.telescope.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
-                alpha_cone = xp.arctan(
-                    self.telescope.D/2/list_src[i_source].altitude)
+                [x_c, y_c] = pol2cart(self.telescope.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
                 h = list_src[i_source].altitude-tmpLayer.altitude
                 if xp.isinf(h):
                     r = self.telescope.D/2
                 else:
-                    r = h*xp.tan(alpha_cone)
+                    r = (h)/self.telescope.src.altitude*self.telescope.D/2
                 [x_cone, y_cone] = pol2cart(
                     r, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
                 if list_src[i_source].chromatic_shift is not None:
