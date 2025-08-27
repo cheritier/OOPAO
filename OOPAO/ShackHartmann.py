@@ -666,7 +666,7 @@ class ShackHartmann:
         [SLx, SLy] = self.gradient_2D(arr)
         sy = bin_ndarray(ndarray=SLx, new_shape=(self.nSubap, self.nSubap), operation="mean", ignore_zeros=True)
         sx = bin_ndarray(ndarray=SLy, new_shape=(self.nSubap, self.nSubap), operation="mean", ignore_zeros=True)
-
+        
         return np.concatenate((sx, sy))
 
     def convolve_direct(self, A_in, B_in):

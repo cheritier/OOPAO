@@ -142,16 +142,16 @@ class Source:
         else:
             self.type = 'NGS'
 
-        if Na_profile is not None and FWHM_spot_up is not None:
-            self.Na_profile = Na_profile
-            self.FWHM_spot_up = FWHM_spot_up
+        # if Na_profile is not None and FWHM_spot_up is not None:
+        #     self.Na_profile = Na_profile
+        #     self.FWHM_spot_up = FWHM_spot_up
 
-            # consider the altitude weigthed by Na profile
-            self.altitude = np.sum(Na_profile[0, :]*Na_profile[1, :])
-            self.type = 'LGS'
+        #     # consider the altitude weigthed by Na profile
+        #     self.altitude = np.sum(Na_profile[0, :]*Na_profile[1, :])
+        #     self.type = 'LGS'
 
-        else:
-            self.type = 'NGS'
+        # else:
+        #     self.type = 'NGS'
 
         if self.display_properties:
             print(self)
@@ -222,11 +222,10 @@ class Source:
     def OPD(self):
         return self._OPD
 
-
-
     @OPD.setter
     def OPD(self, val):
         self._OPD = np.array(val)
+
 
     @property
     def OPD_no_pupil(self):
@@ -235,6 +234,7 @@ class Source:
     @OPD_no_pupil.setter
     def OPD_no_pupil(self, val):
         self._OPD_no_pupil = np.array(val)
+        self.OPD = self._OPD_no_pupil*self.mask
 
 
     @property
@@ -249,6 +249,11 @@ class Source:
     @property
     def phase_no_pupil(self):
         return self.OPD_no_pupil*2*np.pi/self.wavelength
+    
+    @phase_no_pupil.setter
+    def phase_no_pupil(self, val):
+        self.OPD_no_pupil = (val * self.wavelength) / (2 * np.pi)
+
 
 
     def photometry(self, arg):
