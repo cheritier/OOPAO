@@ -31,6 +31,7 @@ class ShackHartmann:
                  shannon_sampling: bool = False,
                  unit_P2V: bool = False,
                  n_pixel_per_subaperture: int = None,
+                 half_pixel_shift: bool = False,
                  padding_extension_factor: int = None):
         """SHACK-HARTMANN
         A Shack Hartmann object consists in defining a 2D grd of lenslet arrays located in the pupil plane of the telescope to estimate the local tip/tilt seen by each lenslet.
@@ -88,6 +89,10 @@ class ShackHartmann:
                 and the possible binning factor:
                     - If the pixel-scale is too large for the lenslet FoV, the diffractive spots are zero-padded.
                     A warning is displayed in this situation.
+        half_pixel_shift : bool,optional
+                half pixel shift (in pixel scale unit) of the SH spots in the focal plane to center the SH spots on 1 or 4 pixels.
+                The default is False and corresponds to a spot centered on 4 pixels.
+            
         padding_extension_factor : int, optional
             DEPRECATED
 
@@ -165,6 +170,7 @@ class ShackHartmann:
         self.lightRatio = lightRatio
         self.binning_factor = binning_factor
         self.zero_padding = 2
+        self.half_pixel_shift = half_pixel_shift
         self.threshold_convolution = threshold_convolution
         self.threshold_cog = threshold_cog
         self.shannon_sampling = shannon_sampling
@@ -252,19 +258,11 @@ class ShackHartmann:
         # phasor to center spots in the center of the lenslets
         [xx, yy] = np.meshgrid(np.linspace(0, self.n_pix_lenslet_init-1, self.n_pix_lenslet_init),
                                np.linspace(0, self.n_pix_lenslet_init-1, self.n_pix_lenslet_init))
-        self.phasor = np.exp(-(1j*np.pi*(self.n_pix_lenslet_init+1) /
+        self.phasor = np.exp(-(1j*np.pi*(self.n_pix_lenslet_init+1+(self.pixel_scale/self.pixel_scale_init)*self.half_pixel_shift) /
                              self.n_pix_lenslet_init)*(xx+yy))
         self.phasor_tiled = np.moveaxis(
             np.tile(self.phasor[:, :, None], self.nSubap**2), 2, 0)
-
-        # Get subapertures index and flux per subaperture
-        [xx, yy] = np.meshgrid(np.linspace(0, self.n_pix_lenslet-1, self.n_pix_lenslet),
-                               np.linspace(0, self.n_pix_lenslet-1, self.n_pix_lenslet))
-        self.phasor_expanded = np.exp(-(1j*np.pi *
-                                      (self.n_pix_lenslet+1)/self.n_pix_lenslet)*(xx+yy))
-        self.phasor_expanded_tiled = np.moveaxis(
-            np.tile(self.phasor_expanded[:, :, None], self.nSubap**2), 2, 0)
-
+        # get the flux per subaperture
         self.initialize_flux()
         for i in range(self.nSubap):
             for j in range(self.nSubap):
@@ -888,6 +886,23 @@ class ShackHartmann:
             if self.isInitialized:
                 print('Re-initializing WFS...')
                 self.initialize_wfs()
+
+    @property
+    def half_pixel_shift(self):
+        return self._half_pixel_shift
+
+    @half_pixel_shift.setter
+    def half_pixel_shift(self, val):
+        self._half_pixel_shift = val
+        if hasattr(self, 'isInitialized'):
+            if self.isInitialized:
+                # recompute the phasor to center spots in the center of the lenslets on 1 or 4 pixels
+                [xx, yy] = np.meshgrid(np.linspace(0, self.n_pix_lenslet_init-1, self.n_pix_lenslet_init),
+                                       np.linspace(0, self.n_pix_lenslet_init-1, self.n_pix_lenslet_init))
+                self.phasor = np.exp(-(1j*np.pi*(self.n_pix_lenslet_init+1+(self.pixel_scale/self.pixel_scale_init)*self.half_pixel_shift) /
+                                     self.n_pix_lenslet_init)*(xx+yy))
+                self.phasor_tiled = np.moveaxis(
+                    np.tile(self.phasor[:, :, None], self.nSubap**2), 2, 0)
 
     @property
     def lightRatio(self):
