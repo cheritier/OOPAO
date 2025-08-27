@@ -401,7 +401,8 @@ class Atmosphere:
             layer = getattr(self, 'layer_'+str(i_layer+1))
 
 
-            if len(self.src_list) == 1:
+            # if len(self.src_list) == 1:
+            if self.asterism is None:
                 src = self.src_list[0]
                 if src.chromatic_shift is not None:
                     if len(src.chromatic_shift) == self.nLayer:
@@ -638,8 +639,9 @@ class Atmosphere:
     # <JM @ SpaceODT> Changed this function so the OPD gets stored directly in the source
     def set_OPD(self, phase_support):
         # print(self.asterism)
-        # if self.asterism is None:
-        if len(self.src_list) == 1:
+        
+        # if len(self.src_list) == 1:
+        if self.asterism is None:
             src = self.src_list[0]
             src.OPD_no_pupil = phase_support*self.wavelength/2/xp.pi
             src.OPD = src.OPD_no_pupil*src.mask
