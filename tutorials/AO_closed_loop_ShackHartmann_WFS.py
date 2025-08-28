@@ -230,11 +230,13 @@ from OOPAO.ShackHartmann import ShackHartmann
 # make sure tel and atm are separated to initialize the PWFS
 tel.isPaired = False
 tel.resetOPD()
+tel.pupil[:]=1
+tel.pupil = tel.pupil
 
-wfs = ShackHartmann(nSubap      = n_subaperture,
+wfs = ShackHartmann(nSubap      = 1,
                     telescope   = tel,
                     lightRatio      = 0.5,
-                    shannon_sampling = True)
+                    shannon_sampling = True, half_pixel_shift=False)
 
 # propagate the light to the Wave-Front Sensor
 tel*wfs

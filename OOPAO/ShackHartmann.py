@@ -903,6 +903,8 @@ class ShackHartmann:
                                      self.n_pix_lenslet_init)*(xx+yy))
                 self.phasor_tiled = np.moveaxis(
                     np.tile(self.phasor[:, :, None], self.nSubap**2), 2, 0)
+                print('Re-initializing WFS...')
+                self.initialize_wfs()
 
     @property
     def lightRatio(self):

@@ -13,6 +13,7 @@ from ..MisRegistration import MisRegistration
 from ..calibration.InteractionMatrix import InteractionMatrix, InteractionMatrixFromPhaseScreen
 from ..mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
 from ..mis_registration_identification_algorithm.computeMetaSensitivyMatrix import computeMetaSensitivityMatrix
+from OOPAO.calibration.CalibrationVault import CalibrationVault
 from ..tools.interpolateGeometricalTransformation import (anamorphosisImageMatrix,
                                                           rotateImageMatrix,
                                                           translationImageMatrix)
@@ -80,7 +81,8 @@ def estimateMisRegistration(nameFolder,
                             tolerance=1/50,
                             plot = False,
                             previous_estimate=None,
-                            ind_mis_reg = None):
+                            ind_mis_reg = None,
+                            subaperture_mask = None):
 
     # ---------- LOAD/COMPUTE SENSITIVITY MATRICES --------------------
     # compute the sensitivity matrices. if the data already exits, the files will be loaded
@@ -89,7 +91,7 @@ def estimateMisRegistration(nameFolder,
     # make sure that these files are well corresponding to the system you are working with.
 
     if sensitivity_matrices is None:
-        [metaMatrix,calib_0] = computeMetaSensitivityMatrix(nameFolder=nameFolder,
+        [metaMatrix,calib_0,raw_meta_matrix] = computeMetaSensitivityMatrix(nameFolder=nameFolder,
                                                             nameSystem=nameSystem,
                                                             tel=tel,
                                                             atm=atm,
@@ -105,7 +107,9 @@ def estimateMisRegistration(nameFolder,
                                                             ind_mis_reg = ind_mis_reg)
     else:
         metaMatrix = sensitivity_matrices
-
+    
+    if subaperture_mask is not None:
+        metaMatrix= cal
     #  ---------- ITERATIVE ESTIMATION OF THE PARAMETERS --------------------
     epsilonMisRegistration_field = ['shiftX', 'shiftY', 'rotationAngle', 'radialScaling', 'tangentialScaling']
     epsilonMisRegistration_field = list(np.asarray(epsilonMisRegistration_field)[ind_mis_reg])
