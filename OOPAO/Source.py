@@ -234,7 +234,11 @@ class Source:
     @OPD_no_pupil.setter
     def OPD_no_pupil(self, val):
         self._OPD_no_pupil = np.array(val)
-        self.OPD = self._OPD_no_pupil*self.mask
+
+        if len(val.shape) > 2:
+            self.OPD = self._OPD_no_pupil*self.mask[:, :, np.newaxis]
+        else:
+            self.OPD = self._OPD_no_pupil*self.mask
 
 
     @property
