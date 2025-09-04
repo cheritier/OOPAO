@@ -210,7 +210,6 @@ class Telescope:
             src.mask = self.pupil.copy()
 
             #TODO: Create a tel.OPD to add to the source OPD
-            src.OPD_no_pupil = src.OPD_no_pupil.copy()
             src.OPD = src.OPD_no_pupil*src.mask
 
 
