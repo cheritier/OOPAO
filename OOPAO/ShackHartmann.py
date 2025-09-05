@@ -226,6 +226,8 @@ class ShackHartmann:
         self.n_pix_lenslet_init = self.n_pix_subap_init*self.zero_padding
         # 4) The number of pixel per subaperture associated to the extended fov
         self.n_pix_lenslet = self.n_pix_subap*self.zero_padding
+        # maximum field of view for off-axis sources when propagating asterism
+        self.max_fov_arcsec = self.pixel_scale*self.n_pix_subap/2
         # associated centers for each case
         self.center = self.n_pix_lenslet//2
         self.center_init = self.n_pix_lenslet_init//2

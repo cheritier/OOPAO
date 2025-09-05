@@ -302,9 +302,12 @@ class Pyramid:
             self.zeroPadding, self.zeroPadding), (self.zeroPadding, self.zeroPadding)), 'constant'))
         # case where a spatial filter is considered
         self.spatialFilter = None
-        self.fov = 206265*self.nRes/self.zeroPaddingFactor * \
+        self.rad2arcsec = (180/xp.pi)*3600
+        self.fov = self.rad2arcsec*self.nRes/self.zeroPaddingFactor * \
             (self.telescope.src.wavelength/self.telescope.D)  # fov in arcsec
         self.fov_l_d = self.nRes/self.zeroPaddingFactor  # fov in arcsec
+        # maximum field of view for off-axis sources when propagating asterism
+        self.max_fov_arcsec = self.fov/2
 
         n_cpu = multiprocessing.cpu_count()
         # joblib settings for parallization
