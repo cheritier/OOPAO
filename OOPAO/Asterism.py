@@ -46,8 +46,6 @@ class Asterism:
 
         """
 
-        #Test
-
         self.n_source = len(list_src)
         self.src = list_src
 
