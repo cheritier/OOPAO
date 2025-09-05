@@ -163,8 +163,9 @@ class Telescope:
         self.pixelSize = self.D/self.resolution       # size of the pixels in m
         self.centralObstruction = centralObstruction           # central obstruction
         self.fov = fov                          # Field of View in arcsec converted in radian
+        self.rad2arcsec = (180/xp.pi)*3600
         # Field of View in arcsec converted in radian
-        self.fov_rad = fov/206265
+        self.fov_rad = fov/self.rad2arcsec
         self.samplingTime = samplingTime                 # AO loop speed
         # Flag to remove the petalling effect with ane ELT system.
         self.isPetalFree = False
@@ -221,7 +222,6 @@ class Telescope:
         raise OopaoError("The method computeCoronoPSF has been deprecated and is now integrated within the computePSF method setting the tel.coronograph_diameter property (default value is None and means no coronograph considered)")
 
     def computePSF(self, zeroPaddingFactor=2, detector=None, img_resolution=None):
-        conversion_constant = (180/xp.pi)*3600
         factor = 1*self.apply_off_axis_tip_tilt
         # case when a detector is provided to the telescope (tel*det)
         if detector is not None:
@@ -252,13 +252,14 @@ class Telescope:
             x_max = (xp.abs(r * xp.cos(np.deg2rad(theta))))
             y_max = (xp.abs(r * xp.sin(np.deg2rad(theta))))
 
-        pixel_scale = conversion_constant*(input_source[0].wavelength/self.D)/zeroPaddingFactor
+        pixel_scale = self.rad2arcsec*(input_source[0].wavelength/self.D)/zeroPaddingFactor # in arcsec
         maximum_fov = pixel_scale*img_resolution/2
         n_extra = np.abs(np.floor((maximum_fov - max(x_max, y_max))/pixel_scale) - img_resolution//2)
         n_pix = np.ceil(max(int(img_resolution/2 + n_extra)*2, img_resolution)).astype('int')
         if self.apply_off_axis_tip_tilt:
             self.support_PSF = np.zeros([n_pix, n_pix])
         else:
+            n_pix = img_resolution
             self.support_PSF = np.zeros([img_resolution, img_resolution])
         center = self.support_PSF.shape[0]//2
 
@@ -280,25 +281,29 @@ class Telescope:
             # amplitude of the EM field:
             amp = amp_mask*self.pupil*self.pupilReflectivity * xp.sqrt(input_source[i_src].fluxMap)
             # add a Tip/Tilt for off-axis sources
-            [Tip, Tilt] = xp.meshgrid(xp.linspace(-xp.pi, xp.pi, self.resolution, dtype=self.precision()),
-                                      xp.linspace(-xp.pi, xp.pi, self.resolution, dtype=self.precision()))
-
+            [Tip, Tilt] = xp.meshgrid(xp.linspace(-xp.pi, xp.pi, self.resolution, endpoint=False, dtype=self.precision()),
+                                      xp.linspace(-xp.pi, xp.pi, self.resolution, endpoint=False, dtype=self.precision()))
             r = (input_source[i_src].coordinates[0])
             # X/Y shift inversion to match convention for atmosphere
-            x_shift = r*xp.sin(np.deg2rad(input_source[i_src].coordinates[1]))
-            y_shift = r*xp.cos(np.deg2rad(input_source[i_src].coordinates[1]))
+            x_shift = r*xp.sin(np.deg2rad(input_source[i_src].coordinates[1]))  # in arcsec
+            y_shift = r*xp.cos(np.deg2rad(input_source[i_src].coordinates[1]))  # in arcsec
+            # shift in pixel of the PSF
             delta_x = int(factor*np.floor(np.abs(x_shift)/pixel_scale)*np.sign(x_shift))
             delta_y = int(factor*np.floor(np.abs(y_shift)/pixel_scale)*np.sign(y_shift))
 
             delta_Tilt = (np.abs(x_shift) % pixel_scale)*np.sign(x_shift)
             delta_Tip = (np.abs(y_shift) % pixel_scale)*np.sign(y_shift)
-            # print([delta_Tip,delta_Tilt])
-            self.delta_TT = (delta_Tip*Tip + delta_Tilt*Tilt)*self.pupil*(self.D/input_source[i_src].wavelength)*(1/conversion_constant)
+
+            delta_Tilt = x_shift - delta_x*pixel_scale
+            delta_Tip = y_shift - delta_y*pixel_scale
+
+            self.delta_TT = (delta_Tip*Tip + delta_Tilt*Tilt)*self.pupil*(self.D/input_source[i_src].wavelength)*(1/self.rad2arcsec)
+
             # axis in arcsec
-            self.xPSF_arcsec = [-conversion_constant*(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor),
-                                conversion_constant*(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor)]
-            self.yPSF_arcsec = [-conversion_constant*(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor),
-                                conversion_constant*(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor)]
+            self.xPSF_arcsec = [-self.rad2arcsec*(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor),
+                                self.rad2arcsec*(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor)]
+            self.yPSF_arcsec = [-self.rad2arcsec*(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor),
+                                self.rad2arcsec*(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor)]
 
             # axis in radians
             self.xPSF_rad = [-(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor),
@@ -377,11 +382,11 @@ class Telescope:
         else:
             # PSF computation
             [xx, yy] = xp.meshgrid(xp.linspace(0, N - 1, N, dtype=self.precision()), xp.linspace(0, N - 1, N, dtype=self.precision()), copy=False)
-            phasor = xp.exp(-1j * xp.pi / N * (xx + yy) * (1 - img_resolution % 2)).astype(self.precision_complex())
+            self.phasor = xp.exp(-1j * xp.pi * (N + 1) / N * (xx + yy) * (1 - img_resolution % 2)).astype(self.precision_complex())
             #                                                        ^--- this is to account odd/even number of pixels
             # Propagate with Fourier shifting
-            EMF = xp.fft.fftshift(
-                1 / N * xp.fft.fft2(xp.fft.ifftshift(supportPadded * phasor))).astype(self.precision_complex())
+            EMF = xp.fft.fftshift(1 / N * xp.fft.fft2(xp.fft.ifftshift(supportPadded * self.phasor))).astype(self.precision_complex())
+            EMF = (1 / N * xp.fft.fft2((supportPadded * self.phasor))).astype(self.precision_complex())
 
         # Again, this is to properly crop a PSF with the odd/even number of pixels
         if N % 2 == img_size % 2:
@@ -534,7 +539,7 @@ class Telescope:
                                 2*xp.pi/self.src.src[i].wavelength
                     else:
                         raise OopaoError('The lenght of the OPD list ('+str(len(self._OPD_no_pupil)) +
-                                        ') does not match the number of sources ('+str(self.src.n_source)+')')
+                                         ') does not match the number of sources ('+str(self.src.n_source)+')')
 
     def __mul__(self, obj):
         # case where multiple objects are considered
@@ -568,23 +573,30 @@ class Telescope:
                     input_source = copy.deepcopy(self.src.src)
                     output_raw_data = xp.zeros(
                         [obj.raw_data.shape[0], obj.raw_data.shape[0]])
-                    if obj.tag == 'pyramid':
-                        output_raw_em = xp.zeros(
-                            obj.focal_plane_camera.frame.shape)
                     obj.telescope = copy.deepcopy(self)
 
                     for i_src in range(len(input_source)):
                         obj.telescope.src = input_source[i_src]
-                        [Tip, Tilt] = xp.meshgrid(
-                            xp.linspace(-xp.pi, xp.pi, self.resolution, dtype=self.precision()), xp.linspace(-xp.pi, xp.pi, self.resolution, dtype=self.precision()))
-                        delta_TT = input_source[i_src].coordinates[0]*(1/((180/xp.pi)*3600))*(self.D/input_source[i_src].wavelength)*(
-                            xp.cos(input_source[i_src].coordinates[1])*Tip+xp.sin(input_source[i_src].coordinates[1])*Tilt)*self.pupil
+                        [Tip, Tilt] = xp.meshgrid(xp.linspace(-xp.pi, xp.pi, self.resolution, endpoint=False, dtype=self.precision()),
+                                                  xp.linspace(-xp.pi, xp.pi, self.resolution, endpoint=False, dtype=self.precision()))
+                        r = (input_source[i_src].coordinates[0])
+                        # X/Y shift inversion to match convention for atmosphere
+                        delta_Tilt = (r*xp.sin(np.deg2rad(input_source[i_src].coordinates[1])))  # in arcsec
+                        delta_Tip = (r*xp.cos(np.deg2rad(input_source[i_src].coordinates[1])))  # in arcsec
+                        if delta_Tip > obj.max_fov_arcsec or delta_Tilt > obj.max_fov_arcsec:
+                            raise OopaoError('The source is outside of the field of view of the WFS object and cannot be propagated')
+
+                        delta_TT = (delta_Tip*Tip + delta_Tilt*Tilt)*self.pupil*(self.D/input_source[i_src].wavelength)*(1/self.rad2arcsec)
+                        obj.delta_TT = delta_TT
                         obj.wfs_measure(
                             phase_in=input_source[i_src].phase + delta_TT, integrate=False)
                         output_raw_data += obj.raw_data.copy()
                         if obj.tag == 'pyramid':
                             obj*obj.focal_plane_camera
-                            output_raw_em += obj.focal_plane_camera.frame
+                            if i_src == 0:
+                                output_raw_em = obj.focal_plane_camera.frame.copy()
+                            else:
+                                output_raw_em += obj.focal_plane_camera.frame
                     if obj.tag == 'pyramid':
                         obj.focal_plane_camera.frame = output_raw_em
                     obj.raw_data = output_raw_data.copy()
