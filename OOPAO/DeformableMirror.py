@@ -260,12 +260,14 @@ class DeformableMirror:
         self.altitude = altitude
         if mechCoupling <= 0:
             raise OopaoError('The value of mechanical coupling should be positive.')
+
         if altitude is None:
             # Resolution of the DM influence Functions
-            self.resolution = telescope.resolution
+            self.resolution = telescope.resolution #TODO: Use this variable throughout the class instead of self.telescope.resolution
             self.mechCoupling = mechCoupling
             self.tag = 'deformableMirror'
-            self.D = telescope.D
+            self.D = telescope.D #TODO: Use this variable throughout the class instead of self.telescope.D
+
         else:
             if telescope.src.tag == 'asterism':
                 self.oversampling_factor = np.max((np.asarray(self.telescope.src.coordinates)[
@@ -273,6 +275,7 @@ class DeformableMirror:
             else:
                 self.oversampling_factor = self.telescope.src.coordinates[0]/(
                     self.telescope.resolution/2)
+
             self.altitude_layer = self.buildLayer(self.telescope, altitude)
             # Resolution of the DM influence Functions
             self.resolution = self.altitude_layer.resolution
@@ -393,6 +396,68 @@ class DeformableMirror:
         if self.print_dm_properties:
             print(self)
 
+
+    def relay(self, src):
+
+        if src.tag == 'source':
+            self.src_list = [src]
+        elif src.tag == 'asterism':
+            self.src_list = src.src
+
+        if self.altitude is not None:
+            self.set_pupil_footprint()
+
+        for src in self.src_list:
+
+            self.src = src
+
+            src.optical_path.append([self.tag, self])
+            src.OPD_no_pupil = self.dm_propagation(src)
+
+            if len(src.OPD_no_pupil.shape) > 2:
+                src.OPD = src.OPD_no_pupil.copy()
+                for i in range(src.OPD_no_pupil.shape[-1]):
+                    src.OPD[:, :, i] = src.OPD[:, :, i] * src.mask
+            else:
+                src.OPD = src.OPD_no_pupil * src.mask
+
+
+
+    def set_pupil_footprint(self):
+        if len(self.src_list) == 1:
+
+            [x_z, y_z] = pol2cart(self.altitude_layer.altitude * xp.tan(self.src_list[0].coordinates[0] / self.rad2arcsec)
+                                  * self.altitude_layer.resolution / self.altitude_layer.D, xp.deg2rad(self.src_list[0].coordinates[1]))
+            center_x = int(y_z) + self.altitude_layer.resolution // 2
+            center_y = int(x_z) + self.altitude_layer.resolution // 2
+            self.altitude_layer.pupil_footprint = xp.zeros([self.altitude_layer.resolution, self.altitude_layer.resolution], dtype=self.precision())
+            self.altitude_layer.pupil_footprint[center_x - self.telescope.resolution // 2:center_x + self.telescope.resolution // 2,
+            center_y - self.telescope.resolution // 2:center_y + self.telescope.resolution // 2] = 1
+
+        else:
+
+            self.altitude_layer.pupil_footprint = []
+            self.altitude_layer.extra_sx = []
+            self.altitude_layer.extra_sy = []
+            self.altitude_layer.center_x = []
+            self.altitude_layer.center_y = []
+
+            for src in self.src_list:
+                [x_z, y_z] = pol2cart(self.altitude_layer.altitude * xp.tan(src.coordinates[0] / self.rad2arcsec)
+                                      * self.altitude_layer.resolution / self.altitude_layer.D, xp.deg2rad(src.coordinates[1]))
+                self.altitude_layer.extra_sx.append(int(x_z) - x_z)
+                self.altitude_layer.extra_sy.append(int(y_z) - y_z)
+                center_x = int(y_z) + self.altitude_layer.resolution // 2
+                center_y = int(x_z) + self.altitude_layer.resolution // 2
+
+                pupil_footprint = xp.zeros([self.altitude_layer.resolution, self.altitude_layer.resolution], dtype=self.precision())
+                pupil_footprint[center_x - self.telescope.resolution // 2:center_x + self.telescope.resolution //
+                                                                     2,
+                center_y - self.telescope.resolution // 2:center_y + self.telescope.resolution // 2] = 1
+                self.altitude_layer.pupil_footprint.append(pupil_footprint)
+                self.altitude_layer.center_x.append(center_x)
+                self.altitude_layer.center_y.append(center_y)
+
     def buildLayer(self, telescope, altitude):
 
         # initialize layer object
@@ -445,30 +510,20 @@ class DeformableMirror:
 
         return layer
 
-    def set_pupil_footprint(self, src):
-        [x_z, y_z] = pol2cart(self.altitude_layer.altitude*xp.tan((src.coordinates[0]/self.rad2arcsec))
-                              * self.altitude_layer.resolution / self.altitude_layer.D, xp.deg2rad(src.coordinates[1]))
-        self.altitude_layer.extra_sx = int(x_z)-x_z
-        self.altitude_layer.extra_sy = int(y_z)-y_z
+    def get_OPD_altitude(self):
 
-        center_x = int(y_z)+self.altitude_layer.resolution//2
-        center_y = int(x_z)+self.altitude_layer.resolution//2
-
-        self.altitude_layer.pupil_footprint = xp.zeros(
-            [self.altitude_layer.resolution, self.altitude_layer.resolution], dtype=self.precision())
-        self.altitude_layer.pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution //
-                                            2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
-
-    def get_OPD_altitude(self, i_source):
-        self.set_pupil_footprint(self.telescope.src.src[i_source])
         if np.ndim(self.OPD) == 2:
-            OPD = np.reshape(self.OPD[np.where(self.altitude_layer.pupil_footprint == 1)], [
-                             self.telescope.resolution, self.telescope.resolution])
+            if self.src.inAsterism:
+                OPD = np.reshape(self.OPD[np.where(self.altitude_layer.pupil_footprint[self.src.ast_idx] == 1)], [
+                                 self.telescope.resolution, self.telescope.resolution])
+            else:
+                OPD = np.reshape(self.OPD[np.where(self.altitude_layer.pupil_footprint == 1)], [
+                                 self.telescope.resolution, self.telescope.resolution])
         else:
             OPD = np.reshape(self.OPD[self.altitude_layer.center_x[i_source]-self.telescope.resolution//2:self.altitude_layer.center_x[i_source]+self.telescope.resolution//2, self.altitude_layer.center_y[i_source] -
                              self.telescope.resolution//2:self.altitude_layer.center_y[i_source]+self.telescope.resolution//2, :], [self.telescope.resolution, self.telescope.resolution, self.OPD.shape[2]])
 
-        if self.telescope.src.src[i_source].type == 'LGS':
+        if self.src.inAsterism and self.src.type == 'LGS':
             if np.ndim(self.OPD) == 2:
                 sub_im = np.atleast_3d(OPD)
             else:
@@ -477,7 +532,8 @@ class DeformableMirror:
             if np.isinf(h):
                 magnification_cone_effect = 1
             else:
-                magnification_cone_effect = h/self.telescope.src.altitude
+                r = h*np.tan(alpha_cone)
+            ratio = self.telescope.D/r/2
             cube_in = sub_im.T
             pixel_size_in = 1
             pixel_size_out = pixel_size_in*magnification_cone_effect
@@ -488,34 +544,36 @@ class DeformableMirror:
 
         return OPD
 
-    def dm_propagation(self, telescope, OPD_in=None, i_source=None):
+    def dm_propagation(self, src, OPD_in=None, i_source=None):
         if self.coefs.all() == self.current_coefs.all():
             self.coefs = self.coefs
+
+        # <JM @ SpaceODT>
+
         if OPD_in is None:
-            OPD_in = telescope.OPD_no_pupil
-        if np.ndim(OPD_in) == 3:
-            telescope.resetOPD()
-            OPD_in = telescope.OPD_no_pupil
-            # warning('Multiple wave-front were already propagated at the telescope level. The telescope OPD is reset to a single flat wave-front.')
-        if i_source is not None:
-            dm_OPD = self.get_OPD_altitude(i_source)
+            OPD_in = src.OPD_no_pupil
+
+        if self.altitude is not None:
+            dm_OPD = self.get_OPD_altitude()
         else:
             dm_OPD = self.OPD
-        # case where the telescope is paired to an atmosphere
-        # if telescope.isPaired:
-        if telescope.isPetalFree:
-            telescope.removePetalling()
-        # case with single OPD
-        if np.ndim(self.OPD) == 2:
-            OPD_out_no_pupil = OPD_in + dm_OPD
-        # case with multiple OPD
-        if np.ndim(self.OPD) == 3:
-            OPD_out_no_pupil = np.tile(
-                OPD_in[..., None], (1, 1, self.OPD.shape[2]))+dm_OPD
 
-        # case where the telescope is separated from a telescope object
-        # else:
-            # OPD_out_no_pupil = dm_OPD
+
+        # <\JM @ SpaceODT>
+        # breakpoint()
+        if src.through_atm:
+            if self.telescope.isPetalFree:
+                self.telescope.removePetalling()
+
+            # case with single OPD
+            if np.ndim(self.OPD) == 2:
+                OPD_out_no_pupil = OPD_in + dm_OPD #* 2 #Factor of 2 because DM is reflective
+            # case with multiple OPD
+            else:
+                OPD_out_no_pupil = np.tile(
+                    OPD_in[..., None], (1, 1, self.OPD.shape[2]))+dm_OPD
+        else:
+            OPD_out_no_pupil = dm_OPD
 
         return OPD_out_no_pupil
 
@@ -562,7 +620,10 @@ class DeformableMirror:
         if self.flip_:
             G = np.flip(G)
 
+        #TODO: Acrescentei o order="F"
         output = np.reshape(G, [1, self.resolution**2])
+        # output = np.reshape(G, [1, self.resolution**2], order="F")
+
         if self.floating_precision == 32:
             output = np.float32(output)
 
@@ -604,6 +665,10 @@ class DeformableMirror:
                     try:
                         self.OPD = self.precision(np.reshape(np.matmul(self.modes, self._coefs), [
                                                   self.resolution, self.resolution, val.shape[1]]))
+
+                        # TODO: Acrescentei o order="F" porque a OPD do espelho estava tranposta 
+                        # self.OPD = self.precision(np.reshape(np.matmul(self.modes, self._coefs), [
+                        #     self.resolution, self.resolution, val.shape[1]], order="F"))
                     except:
                         self.OPD = self.precision(np.reshape(
                             self.modes@self._coefs, [self.resolution, self.resolution, val.shape[1]]))

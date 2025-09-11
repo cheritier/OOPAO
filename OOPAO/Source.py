@@ -120,9 +120,9 @@ class Source:
         self.bandwidth = tmp[1]
         self.zeroPoint = tmp[2]/368                            # zero point
         self._magnitude = magnitude                            # magnitude
-        self.phase = []                                    # phase of the source
+        # self.phase = []                                    # phase of the source
         # phase of the source (no pupil)
-        self.phase_no_pupil = []
+        # self.phase_no_pupil = []
         self.fluxMap = []                                    # 2D flux map of the source
         # number of photon per m2 per s
         self._nPhoton = self.zeroPoint*10**(-0.4*magnitude)
@@ -135,54 +135,138 @@ class Source:
         self.laser_coordinates = laser_coordinates
         # shift in arcsec to be applied to the atmospheric phase screens (one value for each layer) to simulate a chromatic effect
         self.chromatic_shift = chromatic_shift
-        if Na_profile is not None and FWHM_spot_up is not None:
-            self.Na_profile = Na_profile
-            self.FWHM_spot_up = FWHM_spot_up
 
-            # consider the altitude weigthed by Na profile
-            self.altitude = np.sum(Na_profile[0, :]*Na_profile[1, :])
+        # TODO: These shouldn't both exist
+        if self.altitude != np.inf:
             self.type = 'LGS'
         else:
-
             self.type = 'NGS'
+
+        # if Na_profile is not None and FWHM_spot_up is not None:
+        #     self.Na_profile = Na_profile
+        #     self.FWHM_spot_up = FWHM_spot_up
+
+        #     # consider the altitude weigthed by Na profile
+        #     self.altitude = np.sum(Na_profile[0, :]*Na_profile[1, :])
+        #     self.type = 'LGS'
+
+        # else:
+        #     self.type = 'NGS'
 
         if self.display_properties:
             print(self)
 
         self.is_initialized = True
-        
+
+
+        # <JM @ SpaceODT>
+
+        # TODO: By default, the OPD for each source is initialized as a zero array with shape (100, 100). 
+        # This leads to issues when the initial propagation does not involve the atmosphere.
+        # A solution for this case still needs to be determined.
+        self._OPD = None        
+        self._OPD_no_pupil = None 
+
+        # mask to create to compute the OPD with pupil. 
+        # Initally set to 1 so it doesnt do anything until the source is propagated through the telescope.
+        self.mask = 1 
+
+        self.optical_path = [[self.type + '('+self.optBand+')', self]]
+
+
+        self.through_atm = False
+
+        # Variables that indicate if this source belongs to an asterism and its index if it does. 
+        self.inAsterism = False
+        self.ast_idx = -1
+
+        # <\JM @ SpaceODT>
+
+    # <JM @ SpaceODT>
+    def __pow__(self, obj):
+        # Re-propagation function. Same as .* in OOMAO
+        obj.src = self
+        self.optical_path = [[self.type + '(' + self.optBand + ')', self]]
+        self.resetOPD()
+        self.through_atm = False
+        self*obj
+        return self
+
     def __mul__(self, obj):
-        if obj.tag == 'telescope':
-            obj.src = self
-            if type(obj.OPD) is list:
-                obj.resetOPD()
+        # Propagation function. 
 
-            if np.ndim(obj.OPD) == 3:
-                obj.resetOPD()
+        obj.relay(self)
+        return self
+    
+    # <\JM @ SpaceODT>
 
-            obj.OPD = obj.OPD*obj.pupil  # here to ensure that a new pupil is taken into account
 
-            # update the phase of the source
-            self.phase = obj.OPD*2*np.pi/self.wavelength
-            self.phase_no_pupil = obj.OPD_no_pupil*2*np.pi/self.wavelength
 
-            # compute the variance in the pupil
-            self.var = np.var(self.phase[np.where(obj.pupil == 1)])
-            # assign the source object to the obj object
+    def resetOPD(self):
+        self.mask = 1
+        self.OPD = None
+        self.OPD_no_pupil = None
+        
 
-            self.fluxMap = obj.pupilReflectivity*self.nPhoton * \
-                obj.samplingTime*(obj.D/obj.resolution)**2
-            if obj.optical_path is None:
-                obj.optical_path = []
-                obj.optical_path.append(
-                    [self.type + '('+self.optBand+')', id(self)])
-                obj.optical_path.append([obj.tag, id(obj)])
-            else:
-                obj.optical_path[0] = [self.type +
-                                       '('+self.optBand+')', id(self)]
-            return obj
+
+    def print_optical_path(self):
+        if self.optical_path is not None:
+            tmp_path = ''
+            for i in range(len(self.optical_path)):
+                tmp_path += self.optical_path[i][0]
+                if i < len(self.optical_path)-1:
+                    tmp_path += ' ~~> '
+            print(tmp_path)
+
+    @property
+    def OPD(self):
+        return self._OPD
+
+    @OPD.setter
+    def OPD(self, val):
+        if val is not None:
+            self._OPD = np.array(val)
         else:
-            raise OopaoError('The Source can only be paired to a Telescope!')
+            self._OPD = None
+            
+
+
+    @property
+    def OPD_no_pupil(self):
+        return self._OPD_no_pupil
+
+    @OPD_no_pupil.setter
+    def OPD_no_pupil(self, val):
+        if val is not None:
+            self._OPD_no_pupil = np.array(val)
+
+            if len(val.shape) > 2:
+                self.OPD = self._OPD_no_pupil*self.mask[:, :, np.newaxis]
+            else:
+                self.OPD = self._OPD_no_pupil*self.mask
+        else:
+            self._OPD_no_pupil = None
+
+            
+
+    @property
+    def phase(self):
+        return self.OPD*2*np.pi/self.wavelength
+
+    @phase.setter
+    def phase(self, val):
+        self._OPD = (val * self.wavelength) / (2 * np.pi)
+
+
+    @property
+    def phase_no_pupil(self):
+        return self.OPD_no_pupil*2*np.pi/self.wavelength
+    
+    @phase_no_pupil.setter
+    def phase_no_pupil(self, val):
+        self.OPD_no_pupil = (val * self.wavelength) / (2 * np.pi)
+
+
 
     def photometry(self, arg):
         # photometry object [wavelength, bandwidth, zeroPoint]
