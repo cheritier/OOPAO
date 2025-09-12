@@ -157,6 +157,7 @@ class ShackHartmann:
 
         self.tag = 'shackHartmann'
         self.telescope = telescope
+
         if self.telescope.src is None:
             raise OopaoError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
         if telescope.src.type == 'LGS':
@@ -289,6 +290,16 @@ class ShackHartmann:
         # WFS initialization
         self.initialize_wfs()
 
+        
+        if self.src.tag == 'source':
+            src_list = [self.src]
+        elif self.src.tag == 'asterism':
+            src_list = self.src.src
+
+        signal_2D_list = []
+        signal_list = []
+
+        for src in src_list:
     def initialize_wfs(self):
         tmp_opd = self.telescope.OPD.copy()
         # tmp_opd_no_pupil = self.telescope.OPD_no_pupil.copy()
@@ -406,6 +417,7 @@ class ShackHartmann:
         self.cam.photonNoise = photonNoise
         self.cam.readoutNoise = readoutNoise
         self.telescope.OPD = tmp_opd
+        self.src.OPD = tmp_opd
         print('Done')
         return
 
@@ -541,7 +553,7 @@ class ShackHartmann:
         # compute the projection of the LGS on the subaperture to simulate
         #  the spots elongation using a convulotion with gaussian spot
         # coordinates of the LLT in [m] from the center (sign convention adjusted to match display position on camera)
-        [X0, Y0] = [self.telescope.src.laser_coordinates[1], -self.telescope.src.laser_coordinates[0]]
+        [X0, Y0] = [self.src.laser_coordinates[1], -self.src.laser_coordinates[0]]
 
         # 3D coordinates
         coordinates_3D = np.zeros([3, len(self.telescope.src.Na_profile[0, :])])
@@ -685,8 +697,6 @@ class ShackHartmann:
         self.SX[self.validLenslets_x, self.validLenslets_y] = self.centroid_lenslets[:, 0]
         self.SY[self.validLenslets_x, self.validLenslets_y] = self.centroid_lenslets[:, 1]
 
-        signal_2D = np.concatenate((self.SX, self.SY)) - self.reference_slopes_maps
-        signal_2D[~self.valid_slopes_maps] = 0
 
         signal_2D = signal_2D/self.slopes_units
         signal = signal_2D[self.valid_slopes_maps]
@@ -821,7 +831,8 @@ class ShackHartmann:
             else:
                 # -- case with multiple wave-fronts to sense--
                 # set phase buffer
-                self.phase_buffer = np.moveaxis(self.telescope.src.phase, -1, 0)
+                # self.phase_buffer = np.moveaxis(self.telescope.src.phase, -1, 0)
+                self.phase_buffer = np.array(self.src.phase)
 
                 # reset camera frame
                 self.raw_data = np.zeros([self.phase_buffer.shape[0],
