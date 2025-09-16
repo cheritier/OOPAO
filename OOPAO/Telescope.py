@@ -663,7 +663,10 @@ class Telescope:
                 pupil = xp.atleast_3d(self.pupil)
 
                 if self.src.tag == 'source':
-                    self.OPD_no_pupil = obj.dm_propagation(self)
+                    if obj.altitude is None or np.isinf(obj.altitude):
+                        self.OPD_no_pupil = obj.dm_propagation(self)
+                    else:
+                        self.OPD_no_pupil = obj.dm_propagation(self,src=self.src)                        
                     if xp.ndim(self.OPD_no_pupil) == 2:
                         self.OPD = self.OPD_no_pupil*self.pupil
                     else:
@@ -674,7 +677,7 @@ class Telescope:
                             for i in range(self.src.n_source):
                                 if obj.altitude is not None:
                                     self.OPD_no_pupil[i] = obj.dm_propagation(
-                                        self, OPD_in=self.OPD_no_pupil[i], i_source=i)
+                                        self, OPD_in=self.OPD_no_pupil[i], src=self.src.src[i])
                                 else:
                                     self.OPD_no_pupil[i] = obj.dm_propagation(
                                         self, OPD_in=self.OPD_no_pupil[i])
