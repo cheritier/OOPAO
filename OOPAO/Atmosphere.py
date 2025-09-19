@@ -169,6 +169,7 @@ class Atmosphere:
         # case when multiple sources are considered (LGS and NGS)
 
         # <JM @ SpaceODT> Moved this part to __mul__
+
         if src is None and self.telescope.src is None:
             raise OopaoError(
                 "The Atmosphere object requires a Source. " 
@@ -183,11 +184,6 @@ class Atmosphere:
             self.asterism = self.src
         else:
             self.asterism = None
-        # if telescope.src.type == 'asterism':
-        #     self.asterism = telescope.src
-        # else:
-        #     self.asterism = None
-        # self.asterism = None
         # <\JM @ SpaceODT>
 
         self.param = param
@@ -278,15 +274,6 @@ class Atmosphere:
 
         layer.center = layer.resolution//2
 
-        # [x_z, y_z] = pol2cart(layer.altitude*xp.tan(0/206265)* layer.resolution / layer.D,
-        #                         xp.deg2rad(0))
-        # center_x = int(y_z)+layer.resolution//2
-        # center_y = int(x_z)+layer.resolution//2
-        
-        # layer.pupil_footprint = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
-        # layer.pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution //
-        #                         2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
-
 
         if self.asterism is None:
             [x_z, y_z] = pol2cart(layer.altitude*xp.tan(self.src.coordinates[0]/206265)* layer.resolution / layer.D,
@@ -319,6 +306,7 @@ class Atmosphere:
 
 
                 layer.pupil_footprint.append(pupil_footprint)
+
 
         # layer pixel size
 
@@ -409,8 +397,10 @@ class Atmosphere:
                         raise OopaoError('The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')
                 else:
                     chromatic_shift = 0
+
                 [x_z, y_z] = pol2cart(layer.altitude*xp.tan((self.src.coordinates[0]+chromatic_shift)/self.rad2arcsec)
                                       * layer.resolution / layer.D, xp.deg2rad(self.src.coordinates[1]))
+
                 layer.extra_sx = int(x_z)-x_z
                 layer.extra_sy = int(y_z)-y_z
 
@@ -540,6 +530,7 @@ class Atmosphere:
 
 
     def relay(self, src):
+
         self.src = src
 
         if src.tag == 'source':
@@ -580,17 +571,21 @@ class Atmosphere:
 
         # if self.telescope.src.tag == "source":
         if self.asterism is None:
+
             if self.src.altitude <= tmpLayer.altitude:
                 raise OopaoError('The source altitude ('+str(self.src.altitude)+' m) is below or at the same altitude as the atmosphere layer ('+str(tmpLayer.altitude)+' m)')
             _im = tmpLayer.phase.copy()
             h = self.src.altitude-tmpLayer.altitude
+
             if xp.isinf(h):
                 # magnification due to cone effect not considered
                 magnification_cone_effect = 1
                 interpolate_im = False
             else:
                 # magnification due to cone effect not considered
+
                 magnification_cone_effect = (h)/self.src.altitude
+
                 interpolate_im = True
             pixel_size_in = 1
             pixel_size_out = pixel_size_in*magnification_cone_effect
@@ -628,7 +623,9 @@ class Atmosphere:
                         interpolate_im = False
                     else:
                         # magnification due to cone effect not considered
+
                         magnification_cone_effect = (h)/self.src.altitude
+
                         interpolate_im = True
                     cube_in = xp.atleast_3d(sub_im).T
 
@@ -662,18 +659,9 @@ class Atmosphere:
 
         self.OPD = np.array(phase_support)*self.wavelength/2/xp.pi
 
-        return
-
-        # if self.telescope.src.tag == "source":
-        #     self.telescope.src.OPD_no_pupil = phase_support*self.wavelength/2/xp.pi
-        #     self.telescope.src.OPD = self.telescope.src.OPD_no_pupil*self.telescope.src.mask
-
-        # else:
-        #     for src in self.telescope.src.src:
-        #         src.OPD_no_pupil = phase_support[src.ast_idx]*self.wavelength/2/xp.pi
-        #         src.OPD = src.OPD_no_pupil*src.mask
 
         return
+
     # <\JM @ SpaceODT>
 
 
