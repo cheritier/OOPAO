@@ -197,11 +197,7 @@ class Telescope:
 
 
     def relay(self, src):
-        if src.OPD is None:
-            src.OPD_no_pupil = np.zeros(self.pupil.shape)
-            print('here')
         self.src = src
-        self.src.mask = self.pupil.copy()
 
         if src.tag == 'source':
             src_list = [src]
@@ -212,6 +208,9 @@ class Telescope:
             src.optical_path.append([self.tag, self])
             src.tel = self
             src.mask = self.pupil.copy()
+
+            if src.OPD is None:
+                src.OPD_no_pupil = np.zeros(self.pupil.shape)
 
             #TODO: Create a tel.OPD to add to the source OPD
             src.OPD = src.OPD_no_pupil*src.mask

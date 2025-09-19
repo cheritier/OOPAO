@@ -294,7 +294,88 @@ class ShackHartmann:
         if self.is_LGS:
             self.shift_x_buffer, self.shift_y_buffer, self.spot_kernel_elongation_fft, self.spot_kernel_elongation = self.get_convolution_spot(compute_fft_kernel=True)
         # WFS initialization
-        self.initialize_wfs()
+        # self.initialize_wfs()
+
+        
+        if self.src.tag == 'source':
+            src_list = [self.src]
+        elif self.src.tag == 'asterism':
+            src_list = self.src.src
+
+        signal_2D_list = []
+        signal_list = []
+
+        for src in src_list:
+            self.src = src
+            self.initialize_wfs()
+
+            signal_2D_list.append(self.signal_2D)
+            signal_list.append(self.signal)
+
+
+        self.signal_2D = signal_2D_list.copy()
+        self.signal = signal_list.copy()
+
+        self.src.signal_2D = signal_2D_list.copy()
+        self.src.signal = signal_list.copy()
+
+
+
+    def relay(self, src):
+
+        # if src.tag == 'source':
+        #     src.optical_path.append([self.tag, self])
+        #     self.src = src
+        #     self.wfs_measure(phase_in=self.src.phase)
+
+
+        if src.tag == 'source':
+            src_list = [src]
+        elif src.tag == 'asterism':
+            src_list = src.src
+
+        
+        signal_2D_list = []
+        signal_list = []
+        frames_list = []
+
+        for src in src_list:
+            src.optical_path.append([self.tag, self])
+            self.src = src
+            self.wfs_measure(phase_in=self.src.phase)
+            signal_2D_list.append(self.signal_2D)
+            signal_list.append(self.signal)
+            frames_list.append(self.cam.frame)
+
+        self.signal_2D = np.array(signal_2D_list)
+        self.signal = np.array(signal_list)
+        self.frames = np.array(frames_list)
+
+
+
+        # elif src.tag == 'asterism':
+        #     src_list = src.src
+        #     signal_2D_list = []
+        #     signal_list = []
+
+        #     frames_list = []
+
+        #     for src in src_list:
+        #         src.optical_path.append([self.tag, self])
+        #         self.src = src
+        #         self.wfs_measure(phase_in=self.src.phase)
+        #         signal_2D_list.append(self.signal_2D)
+        #         signal_list.append(self.signal)
+        #         frames_list.append(self.cam.frame)
+
+        #     self.signal_2D = np.array(signal_2D_list)
+        #     self.signal = np.array(signal_list)
+        #     self.frames = np.array(frames_list)
+
+
+            # np.hstack(shwfs.signal)
+
+
 
         
         if self.src.tag == 'source':
