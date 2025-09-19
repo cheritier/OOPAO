@@ -35,6 +35,7 @@ class ShackHartmann:
                  shannon_sampling: bool = False,
                  unit_P2V: bool = False,
                  n_pixel_per_subaperture: int = None,
+                 half_pixel_shift: bool = False,
                  padding_extension_factor: int = None):
         """SHACK-HARTMANN
         A Shack Hartmann object consists in defining a 2D grd of lenslet arrays located in the pupil plane of the telescope to estimate the local tip/tilt seen by each lenslet.
@@ -90,8 +91,12 @@ class ShackHartmann:
                 sampling of the detector pixels in [arcsec]. This parameter overwrites the shannon_sampling parameter.
                 The effective pixel_scale value is obtained by taking the closest value after considering the FFT sampling
                 and the possible binning factor:
-                    - If the pixel-scale is too large for the lenslet FoV, the diffractive spots are zero-padded. 
+                    - If the pixel-scale is too large for the lenslet FoV, the diffractive spots are zero-padded.
                     A warning is displayed in this situation.
+        half_pixel_shift : bool,optional
+                half pixel shift (in pixel scale unit) of the SH spots in the focal plane to center the SH spots on 1 or 4 pixels.
+                The default is False and corresponds to a spot centered on 4 pixels.
+            
         padding_extension_factor : int, optional
             DEPRECATED
 
@@ -172,6 +177,7 @@ class ShackHartmann:
         self.lightRatio = lightRatio
         self.binning_factor = binning_factor
         self.zero_padding = 2
+        self.half_pixel_shift = half_pixel_shift
         self.threshold_convolution = threshold_convolution
         self.threshold_cog = threshold_cog
         self.shannon_sampling = shannon_sampling
@@ -227,6 +233,8 @@ class ShackHartmann:
         self.n_pix_lenslet_init = self.n_pix_subap_init*self.zero_padding
         # 4) The number of pixel per subaperture associated to the extended fov
         self.n_pix_lenslet = self.n_pix_subap*self.zero_padding
+        # maximum field of view for off-axis sources when propagating asterism
+        self.max_fov_arcsec = self.pixel_scale*self.n_pix_subap/2
         # associated centers for each case
         self.center = self.n_pix_lenslet//2
         self.center_init = self.n_pix_lenslet_init//2
@@ -259,19 +267,11 @@ class ShackHartmann:
         # phasor to center spots in the center of the lenslets
         [xx, yy] = np.meshgrid(np.linspace(0, self.n_pix_lenslet_init-1, self.n_pix_lenslet_init),
                                np.linspace(0, self.n_pix_lenslet_init-1, self.n_pix_lenslet_init))
-        self.phasor = np.exp(-(1j*np.pi*(self.n_pix_lenslet_init+1) /
+        self.phasor = np.exp(-(1j*np.pi*(self.n_pix_lenslet_init+1+(self.pixel_scale/self.pixel_scale_init)*self.half_pixel_shift) /
                              self.n_pix_lenslet_init)*(xx+yy))
         self.phasor_tiled = np.moveaxis(
             np.tile(self.phasor[:, :, None], self.nSubap**2), 2, 0)
-
-        # Get subapertures index and flux per subaperture
-        [xx, yy] = np.meshgrid(np.linspace(0, self.n_pix_lenslet-1, self.n_pix_lenslet),
-                               np.linspace(0, self.n_pix_lenslet-1, self.n_pix_lenslet))
-        self.phasor_expanded = np.exp(-(1j*np.pi *
-                                      (self.n_pix_lenslet+1)/self.n_pix_lenslet)*(xx+yy))
-        self.phasor_expanded_tiled = np.moveaxis(
-            np.tile(self.phasor_expanded[:, :, None], self.nSubap**2), 2, 0)
-
+        # get the flux per subaperture
         self.initialize_flux()
         for i in range(self.nSubap):
             for j in range(self.nSubap):
@@ -293,6 +293,8 @@ class ShackHartmann:
         self.nSignal = 2*self.nValidSubaperture
         if self.is_LGS:
             self.shift_x_buffer, self.shift_y_buffer, self.spot_kernel_elongation_fft, self.spot_kernel_elongation = self.get_convolution_spot(compute_fft_kernel=True)
+        # WFS initialization
+        # self.initialize_wfs()
 
         
         if self.src.tag == 'source':
@@ -393,7 +395,7 @@ class ShackHartmann:
         self.reference_slopes_maps = np.zeros([self.nSubap*2, self.nSubap])
         self.slopes_units = 1
         print('Acquiring reference slopes..')
-        self.src.resetOPD()
+        self.src**self.telescope
 
         # Comentei aqui
         self.wfs_measure(self.src.phase)
@@ -406,8 +408,8 @@ class ShackHartmann:
         # else:
         #     self.slopes_units = self.pixel_scale_init/self.pixel_scale
         self.set_slopes_units()
-        self.cam.photonNoise = readoutNoise
-        self.cam.readoutNoise = photonNoise
+        self.cam.photonNoise = photonNoise
+        self.cam.readoutNoise = readoutNoise
         self.src.OPD = tmp_opd
         self.print_properties()
 
@@ -481,7 +483,7 @@ class ShackHartmann:
         self.reference_slopes_maps = np.zeros([self.nSubap*2, self.nSubap])
         self.slopes_units = 1
         print('Acquiring reference slopes..')
-        self.src.resetOPD()
+        self.src**self.telescope
 
         self.wfs_measure(self.src.phase)
 
@@ -497,8 +499,8 @@ class ShackHartmann:
 
 
         self.slopes_units = np.mean(self.signal)
-        self.cam.photonNoise = readoutNoise
-        self.cam.readoutNoise = photonNoise
+        self.cam.photonNoise = photonNoise
+        self.cam.readoutNoise = readoutNoise
         self.src.OPD = tmp_opd
         print('Done')
         return
@@ -617,21 +619,21 @@ class ShackHartmann:
         self.raw_data = tmp_raw_data.copy()
         return output_raw_data
 
-    def split_raw_data(self):
-        raw_data_h_split = np.vsplit((self.cam.frame), self.nSubap)
-
-        self.maps_intensity = np.zeros([self.nSubap**2,
+    def split_raw_data(self,input_frame=None):
+        if input_frame is None:
+            input_frame = self.cam.frame
+        raw_data_h_split = np.vsplit((input_frame), self.nSubap)
+        maps_intensity = np.zeros([self.nSubap**2,
                                         self.n_pix_subap,
                                         self.n_pix_subap], dtype=float)
         center = self.n_pix_subap//2
         for i in range(self.nSubap):
             raw_data_v_split = np.hsplit(raw_data_h_split[i], self.nSubap)
-            self.maps_intensity[i*self.nSubap:(i+1)*self.nSubap,
+            maps_intensity[i*self.nSubap:(i+1)*self.nSubap,
                                 center - self.n_pix_subap//self.binning_factor//2:center+self.n_pix_subap//self.binning_factor // 2,
                                 center - self.n_pix_subap//self.binning_factor//2:center+self.n_pix_subap//self.binning_factor//2] = np.asarray(raw_data_v_split)
-        #okok1212
-        self.maps_intensity = self.maps_intensity[self.valid_subapertures_1D, :, :]
-
+        maps_intensity = maps_intensity[self.valid_subapertures_1D, :, :]
+        return maps_intensity
 
     def compute_raw_data_multi(self, intensity):
         self.ind_frame = np.zeros(intensity.shape[0], dtype=(int))
@@ -666,7 +668,7 @@ class ShackHartmann:
         [SLx, SLy] = self.gradient_2D(arr)
         sy = bin_ndarray(ndarray=SLx, new_shape=(self.nSubap, self.nSubap), operation="mean", ignore_zeros=True)
         sx = bin_ndarray(ndarray=SLy, new_shape=(self.nSubap, self.nSubap), operation="mean", ignore_zeros=True)
-        
+
         return np.concatenate((sx, sy))
 
     def convolve_direct(self, A_in, B_in):
@@ -797,8 +799,7 @@ class ShackHartmann:
     def wfs_integrate(self):
         # propagate to detector to add noise and detector effects
         self*self.cam
-        self.split_raw_data()
-
+        self.maps_intensity = self.split_raw_data()
 
         # compute the centroid on valid subaperture
         self.centroid_lenslets = self.centroid(self.maps_intensity*self.weighting_map, self.threshold_cog)
@@ -1108,6 +1109,23 @@ class ShackHartmann:
             if self.isInitialized:
                 print('Re-initializing WFS...')
                 self.initialize_wfs()
+
+    @property
+    def half_pixel_shift(self):
+        return self._half_pixel_shift
+
+    @half_pixel_shift.setter
+    def half_pixel_shift(self, val):
+        self._half_pixel_shift = val
+        if hasattr(self, 'isInitialized'):
+            if self.isInitialized:
+                # recompute the phasor to center spots in the center of the lenslets on 1 or 4 pixels
+                [xx, yy] = np.meshgrid(np.linspace(0, self.n_pix_lenslet_init-1, self.n_pix_lenslet_init),
+                                       np.linspace(0, self.n_pix_lenslet_init-1, self.n_pix_lenslet_init))
+                self.phasor = np.exp(-(1j*np.pi*(self.n_pix_lenslet_init+1+(self.pixel_scale/self.pixel_scale_init)*self.half_pixel_shift) /
+                                     self.n_pix_lenslet_init)*(xx+yy))
+                self.phasor_tiled = np.moveaxis(
+                    np.tile(self.phasor[:, :, None], self.nSubap**2), 2, 0)
 
     @property
     def lightRatio(self):

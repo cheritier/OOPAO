@@ -38,7 +38,8 @@ class Pyramid:
                  nTheta_user_defined: int = None,
                  userValidSignal: bool = None,
                  old_mask: bool = False,
-                 rooftop: str = None,
+                 rooftop: float = 0,
+                 theta_rotation: float = 0,
                  delta_theta: float = 0.,
                  user_modulation_path: list = None,
                  pupilSeparationRatio: float = None,
@@ -59,7 +60,16 @@ class Pyramid:
         lightRatio : float
             Criterion to select the valid subaperture based on flux considerations.
         postProcessing : str, optional
-            Processing of the WFS signals ('fullFrame','slopesMaps','fullFrame_incidence_flux','slopesMaps_incidence_flux').
+            Processing of the WFS signals:
+                -'fullFrame' or 'slopesMaps':
+                    - Use of full detector or slopes-maps computation.
+                    - Normalization is done using the mean value of the whole frame.
+                    -'fullFrame_incidence_flux','slopesMaps_incidence_flux':
+                    - Use of full detector or slopes-maps computation.
+                    - Normalization is done using the mean value of the incident flux in photons.
+                -''fullFrame_sum_flux','slopesMaps_sum_flux':
+                    - Use of full detector or slopes-maps computation.
+                    - Normalization is done using the sum of the incident flux in photons.
             The default is 'slopesMaps'.
         psfCentering : bool, optional
             If False, the Pyramid mask is centered on 1 pixel, if True, the Pyramid mask is centered on 4 pixels -- default value is True.
@@ -86,11 +96,16 @@ class Pyramid:
             User-defined valid pixel mask for the signals computation.
             The default is None.
         old_mask : bool, optional
-            DEPRECATED -- Flag to use the old pyramid mask.
+            Flag to use the old pyramid mask that makes uses of local tip/tilt in the quadrants to shift the position of the pupils.
+            If False it makes use of a mask compatible with a rooftop and a rotation of the mask (see theta_rotation).
             The default is False.
-        rooftop : str, optional
-            If different to None, allows to compute a two-sided Pyramid ("V" corresponds to a vertical split, "H" corresponds to an horizontal split).
-            The default is None.
+        rooftop : float, optional
+            size of the rooftop of the Pyramid prism in lambda/D unit.
+            The default is 0.
+        theta_rotation : float, optional
+                Rotation angle in radians to be applied on the Pyramid Mask.
+                This functionality is not available if the property old_mask is set to True.
+                The default is 0.
         delta_theta : float, optional
             delta angle for the modulation points, default value is 0 (on the edge between two sides of the Pyramid).
             The default is 0.
@@ -198,12 +213,7 @@ class Pyramid:
         # initialize the Pyramid Object
         # telescope attached to the wfs
         self.telescope = telescope
-
-
-
-        self.src = self.telescope.src
-
-        if (self.telescope.resolution/nSubap) % 2 != 0:
+        if (self.telescope.resolution/nSubap) % 2 != 0 and self.telescope.resolution/nSubap != 1:
             raise OopaoError('The resolution should be an even number and be a multiple of 2**i where i>=2')
         if self.telescope.src is None:
             raise OopaoError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
@@ -253,7 +263,7 @@ class Pyramid:
         else:
             self.joblib_setting = 'threads'
         self.rooftop = rooftop
-
+        self.theta_rotation = theta_rotation
         if zeroPadding is not None:
             raise OopaoError('The use of the zeroPadding property has been deprecated')
         # Case where the zero-padding is not specificed => taking the smallest value ensuring to get edgePixel space from the edge.
@@ -267,7 +277,6 @@ class Pyramid:
         self.tag = 'pyramid'
         # WFS detector object (see Detector class)
         self.cam = Detector(round(nSubap*self.zeroPaddingFactor))
-
         # WFS focal plane detector object (see Detector class)
         self.focal_plane_camera = Detector(int(
             (modulation*4+12)*self.zeroPaddingFactor), psf_sampling=self.zeroPaddingFactor)
@@ -293,9 +302,12 @@ class Pyramid:
             self.zeroPadding, self.zeroPadding), (self.zeroPadding, self.zeroPadding)), 'constant'))
         # case where a spatial filter is considered
         self.spatialFilter = None
-        self.fov = 206265*self.nRes/self.zeroPaddingFactor * \
+        self.rad2arcsec = (180/xp.pi)*3600
+        self.fov = self.rad2arcsec*self.nRes/self.zeroPaddingFactor * \
             (self.telescope.src.wavelength/self.telescope.D)  # fov in arcsec
         self.fov_l_d = self.nRes/self.zeroPaddingFactor  # fov in arcsec
+        # maximum field of view for off-axis sources when propagating asterism
+        self.max_fov_arcsec = self.fov/2
 
         n_cpu = multiprocessing.cpu_count()
         # joblib settings for parallization
@@ -339,7 +351,7 @@ class Pyramid:
 
         # Select the valid pixels
         print('Selection of the valid pixels...')
-        self.initialization(self.src, self.telescope)
+        self.initialization(self.telescope)
         print('Acquisition of the reference slopes and units calibration...')
         # set the modulation radius and propagate light
         self.modulation = modulation
@@ -350,17 +362,17 @@ class Pyramid:
 
     def mask_computation(self):
         print('Pyramid Mask initialization...')
-        if self.old_mask is False:
+        if self.old_mask:
+            self.m = self.get_phase_mask_old(resolution=self.nRes, n_subap=self.nSubap, n_pix_separation=self.n_pix_separation,
+                                             n_pix_edge=self.n_pix_edge, psf_centering=self.psfCentering, sx=self.sx, sy=self.sy)
+        else:
             self.m = self.get_phase_mask(resolution=self.nRes, n_subap=self.nSubap, n_pix_separation=self.n_pix_separation,
                                          n_pix_edge=self.n_pix_edge, psf_centering=self.psfCentering, sx=self.sx, sy=self.sy)
-            self.initial_m = self.m.copy()
-
-            # compute the PWFS mask)
-            self.mask = self.convert_for_gpu(np.complex64(np.exp(1j*self.m)))
-            # Save a copy of the initial mask
-            self.initial_mask = np.copy(self.mask)
-        else:
-            raise DeprecationWarning('The use of the old_mask parameter has been deprecated')
+        self.initial_m = self.m.copy()
+        # compute the PWFS mask)
+        self.mask = self.convert_for_gpu(np.complex64(np.exp(1j*self.m)))
+        # Save a copy of the initial mask
+        self.initial_mask = np.copy(self.mask)
 
     def apply_shift_wfs(self, sx=None, sy=None, mis_reg=None, units='pixels'):
         if sx is None:
@@ -391,10 +403,14 @@ class Pyramid:
             warning('The Pyramid pupils have been shifted outside of the detector!' +
                     'Wrapping of the signal is currently occuring!!')
 
-        self.sx = shift_x
-        self.sy = shift_y
-        self.m = self.get_phase_mask(resolution=self.nRes, n_subap=self.nSubap, n_pix_separation=self.n_pix_separation,
-                                     n_pix_edge=self.n_pix_edge, psf_centering=self.psfCentering, sx=shift_x, sy=shift_y)
+        self.sx = np.asarray(shift_x)/factor
+        self.sy = np.asarray(shift_y)/factor
+        if self.old_mask:
+            self.m = self.get_phase_mask_old(resolution=self.nRes, n_subap=self.nSubap, n_pix_separation=self.n_pix_separation,
+                                             n_pix_edge=self.n_pix_edge, psf_centering=self.psfCentering, sx=shift_x, sy=shift_y)
+        else:
+            self.m = self.get_phase_mask(resolution=self.nRes, n_subap=self.nSubap, n_pix_separation=self.n_pix_separation,
+                                         n_pix_edge=self.n_pix_edge, psf_centering=self.psfCentering, sx=shift_x, sy=shift_y)
         self.mask = self.convert_for_gpu(np.complex64(np.exp(1j*self.m)))
         self.slopesUnits = 1
         self.referenceSignal = 0
@@ -402,6 +418,37 @@ class Pyramid:
         self.wfs_calibration(self.telescope)
 
     def get_phase_mask(self, resolution, n_subap, n_pix_separation, n_pix_edge, psf_centering=False, sx=[0, 0, 0, 0], sy=[0, 0, 0, 0]):
+        # new mask compution to include Pyramid rooftop (F.Oyarzun 08/2025)
+        rooftop_pixels = self.rooftop * self.zeroPaddingFactor / np.sqrt(2)
+        # size of the mask in pixel
+        n_tot = int((n_subap*2+n_pix_separation+n_pix_edge*2) * self.telescope.resolution/self.nSubap)
+
+        # normalization factor for the Tip/Tilt
+        n_pix_per_subap = self.telescope.resolution/self.nSubap
+        norma = n_pix_per_subap/2
+        # support for the mask
+
+        lim = np.pi*2
+        # create a Tip/Tilt normalized to apply a 1 pixel shift
+        x = np.linspace(-(1-self.psfCentering*1/n_tot)*lim, (1-self.psfCentering*1/n_tot)*lim, n_tot, endpoint=self.psfCentering)
+        x_, y_ = np.meshgrid(x, x)
+        # rotation of the Pyramid Mask
+        x = x_*np.cos(self.theta_rotation) - y_*np.sin(self.theta_rotation)
+        y = y_*np.cos(self.theta_rotation) + x_*np.sin(self.theta_rotation)
+        # radius for the pupil separation
+        r = (self.nSubap+self.n_pix_separation)/2
+        # separation of the pupils, rotation and shift of the PWFS mask:
+        P1 = x*r + x_*self.sx[0] + y*r - y_*self.sy[0] + rooftop_pixels
+        P2 = -x*r + x_*self.sx[1] + y*r - y_*self.sy[1]
+        P3 = -x*r + x_*self.sx[2] - y*r - y_*self.sy[2] + rooftop_pixels
+        P4 = x*r + x_*self.sx[3] - y*r - y_*self.sy[3]
+        # Stack and compute final mask
+        stacked = np.stack([P1, P2, P3, P4])*norma  # shape: (4, N, N)
+        F = np.max(stacked, axis=0)  # shape: (N, N)
+        return -F
+
+    def get_phase_mask_old(self, resolution, n_subap, n_pix_separation, n_pix_edge, psf_centering=False, sx=[0, 0, 0, 0], sy=[0, 0, 0, 0]):
+        # 25/08/2025: old computation of the PWFS mask apply shift of the pupil using local Tip/Tilt in the quadrants
         # size of the mask in pixel
         n_tot = int((n_subap*2+n_pix_separation+n_pix_edge*2) * self.telescope.resolution/self.nSubap)
 
@@ -459,9 +506,8 @@ class Pyramid:
 
         return -m  # sign convention for backward compatibility
 
-    def initialization(self, src, telescope):
-        src.resetOPD()
-
+    def initialization(self, telescope):
+        telescope.resetOPD()
         if self.userValidSignal is None:
             if self.lightRatio == 0:
                 self.cam.frame = np.ones(
@@ -470,7 +516,7 @@ class Pyramid:
                 print('The valid pixel are selected on flux considerations')
                 # set the modulation to a large value
                 self.modulation = self.calibModulation
-                self.wfs_measure(phase_in=self.src.phase)
+                self.wfs_measure(phase_in=self.telescope.src.phase)
             # save initialization frame
             self.initFrame = self.cam.frame
 
@@ -610,7 +656,9 @@ class Pyramid:
         # initialize modulation camera em field buffer
         self.modulation_camera_em = []
 
-        if self.modulation == 0:
+        if self.modulation == 0 and self.user_modulation_path is None:
+            # if self.user_modulation_path is not None:
+            #     raise OopaoError('The use of user_modulation_path must be used with a modulation different from 0!')
             if np.ndim(phase_in) == 2:
                 self.raw_data = self.convert_for_numpy(self.pyramid_transform(
                     self.convert_for_gpu(self.telescope.src.phase)))
@@ -905,46 +953,18 @@ class Pyramid:
         if cameraFrame is None:
             cameraFrame = self.cam.frame.copy()
 
-        if self.rooftop is None:
-            if n == 3:
-                quadrant = cameraFrame[nExtraPix+centerPixel:(
-                    nExtraPix+centerPixel+n_pixels), nExtraPix+centerPixel:(nExtraPix+centerPixel+n_pixels)]
-            if n == 4:
-                quadrant = cameraFrame[nExtraPix+centerPixel:(
-                    nExtraPix+centerPixel+n_pixels), -nExtraPix+centerPixel-n_pixels:(-nExtraPix+centerPixel)]
-            if n == 1:
-                quadrant = cameraFrame[-nExtraPix+centerPixel -
-                                       n_pixels:(-nExtraPix+centerPixel), -nExtraPix+centerPixel-n_pixels:(-nExtraPix+centerPixel)]
-            if n == 2:
-                quadrant = cameraFrame[-nExtraPix+centerPixel -
-                                       n_pixels:(-nExtraPix+centerPixel), nExtraPix+centerPixel:(nExtraPix+centerPixel+n_pixels)]
-        else:
-            if self.rooftop == 'V':
-                if n == 1:
-                    quadrant = cameraFrame[centerPixel-n_pixels//2:(
-                        centerPixel)+n_pixels//2, (self.edgePixel//2):(self.edgePixel//2 + n_pixels)]
-                if n == 2:
-                    quadrant = cameraFrame[centerPixel-n_pixels//2:(centerPixel)+n_pixels//2, (
-                        self.edgePixel//2 + n_pixels+nExtraPix*2):(self.edgePixel//2+nExtraPix*2+2*n_pixels)]
-                if n == 4:
-                    quadrant = cameraFrame[centerPixel-n_pixels//2:(
-                        centerPixel)+n_pixels//2, (self.edgePixel//2):(self.edgePixel//2 + n_pixels)]
-                if n == 3:
-                    quadrant = cameraFrame[centerPixel-n_pixels//2:(centerPixel)+n_pixels//2, (
-                        self.edgePixel//2 + n_pixels+nExtraPix*2):(self.edgePixel//2+nExtraPix*2+2*n_pixels)]
-            else:
-                if n == 1:
-                    quadrant = cameraFrame[(self.edgePixel//2):(self.edgePixel//2 + n_pixels),
-                                           centerPixel-n_pixels//2:(centerPixel)+n_pixels//2]
-                if n == 2:
-                    quadrant = cameraFrame[(self.edgePixel//2 + n_pixels+nExtraPix*2):(self.edgePixel //
-                                                                                       2+nExtraPix*2+2*n_pixels), centerPixel-n_pixels//2:(centerPixel)+n_pixels//2]
-                if n == 4:
-                    quadrant = cameraFrame[(self.edgePixel//2):(self.edgePixel//2 + n_pixels),
-                                           centerPixel-n_pixels//2:(centerPixel)+n_pixels//2]
-                if n == 3:
-                    quadrant = cameraFrame[(self.edgePixel//2 + n_pixels+nExtraPix*2):(self.edgePixel //
-                                                                                       2+nExtraPix*2+2*n_pixels), centerPixel-n_pixels//2:(centerPixel)+n_pixels//2]
+        if n == 3:
+            quadrant = cameraFrame[nExtraPix+centerPixel:(
+                nExtraPix+centerPixel+n_pixels), nExtraPix+centerPixel:(nExtraPix+centerPixel+n_pixels)]
+        if n == 4:
+            quadrant = cameraFrame[nExtraPix+centerPixel:(
+                nExtraPix+centerPixel+n_pixels), -nExtraPix+centerPixel-n_pixels:(-nExtraPix+centerPixel)]
+        if n == 1:
+            quadrant = cameraFrame[-nExtraPix+centerPixel -
+                                   n_pixels:(-nExtraPix+centerPixel), -nExtraPix+centerPixel-n_pixels:(-nExtraPix+centerPixel)]
+        if n == 2:
+            quadrant = cameraFrame[-nExtraPix+centerPixel -
+                                   n_pixels:(-nExtraPix+centerPixel), nExtraPix+centerPixel:(nExtraPix+centerPixel+n_pixels)]
         return quadrant
 
     def grabFullQuadrant(self, n, cameraFrame=None):
@@ -1097,7 +1117,7 @@ class Pyramid:
         if self._modulation >= (self.telescope.resolution//2):
             raise OopaoError('Error the modulation radius is too large for this resolution!' +
                              'Consider using a larger telescope resolution!')
-        if val != 0:
+        if val != 0 or self.user_modulation_path is not None:
             self.modulation_path = []
             if self.user_modulation_path is not None:
                 self.modulation_path = self.user_modulation_path
@@ -1106,22 +1126,19 @@ class Pyramid:
                 # define the modulation points
                 perimeter = np.pi*2*self._modulation
                 if self.nTheta_user_defined is None:
-                    self.nTheta = 4 * \
-                        int((self.extraModulationFactor+np.ceil(perimeter/4)))
+                    self.nTheta = 4 * int((self.extraModulationFactor+np.ceil(perimeter/4)))
                 else:
                     self.nTheta = self.nTheta_user_defined
-
-                self.thetaModulation = np.linspace(
-                    0+self.delta_theta, 2*np.pi+self.delta_theta, self.nTheta, endpoint=False)
+                self.thetaModulation = np.linspace(0+self.delta_theta,
+                                                   2*np.pi+self.delta_theta,
+                                                   self.nTheta,
+                                                   endpoint=False)
                 for i in range(self.nTheta):
                     dTheta = self.thetaModulation[i]
-                    self.modulation_path.append(
-                        [self.modulation*np.cos(dTheta)+self.delta_Tip, self.modulation*np.sin(dTheta)+self.delta_Tilt])
+                    self.modulation_path.append([self.modulation*np.cos(dTheta)+self.delta_Tip, self.modulation*np.sin(dTheta)+self.delta_Tilt])
 
-            self.phaseBuffModulation = np.zeros(
-                [self.nTheta, self.nRes, self.nRes]).astype(xp.float32)
-            self.phaseBuffModulationLowres = np.zeros(
-                [self.nTheta, self.telescope.resolution, self.telescope.resolution]).astype(xp.float32)
+            self.phaseBuffModulation = np.zeros([self.nTheta, self.nRes, self.nRes]).astype(xp.float32)
+            self.phaseBuffModulationLowres = np.zeros([self.nTheta, self.telescope.resolution, self.telescope.resolution]).astype(xp.float32)
 
             for i in range(self.nTheta):
                 self.TT = (

@@ -61,7 +61,7 @@ Na_profile[1,:] = 1/n # Na density profile, here considered to be uniform
 # list of sources to be considered
 list_source = []
 # first source is the NGS
-# list_source.append(ngs)
+list_source.append(ngs)
 # the rest are LGS sources
 for i_theta in theta:
     lgs = Source(optBand   ='Na',\
@@ -76,9 +76,7 @@ for i_theta in theta:
     
 from OOPAO.Asterism import Asterism
 ast = Asterism(list_src=list_source)
-
-# This only works after ast*atm
-# ast*tel
+ast*tel
 
 # display the asterism geometry
 ast.display_asterism()
@@ -96,23 +94,17 @@ atm=Atmosphere(telescope     = tel,
                altitude      = [0,10000])# initialize atmosphere
 atm.initializeAtmosphere(tel)
 
-
-ast**atm*tel
-
-# This is still not working well before the first propagation because the atm has no sources
 atm.display_atm_layers()
 
 #%% -----------------------     DEFORMABLE MIRROR   ----------------------------------
 # mis-registrations object
 misReg = MisRegistration()
-# if no coordinates specified, create a cartesian dm
+# if no coordonates specified, create a cartesian dm
 dm=DeformableMirror(telescope    = tel,\
                     nSubap       = n_subaperture,\
                     mechCoupling = 0.45,\
                     misReg       = misReg)
-
-#%%
-
+    
 # Same DM in altitude (illustration of )
 dm_altitude=DeformableMirror(telescope    = tel,\
                     nSubap       = n_subaperture,\
@@ -125,19 +117,24 @@ dm_altitude=DeformableMirror(telescope    = tel,\
 from OOPAO.ShackHartmann import ShackHartmann
 
 plt.close('all')
-
-wfs_ngs = ShackHartmann(2, tel, lightRatio=0.1,shannon_sampling=True) # 2x2 NGS WFS
-
-wfs_lgs = ShackHartmann(n_subaperture, tel, lightRatio=0.1,pixel_scale=1.5) #  LGS WFS
-
+list_wfs=[]
+count =0
+for i_src in list_source:
+    count+=1
+    i_src*tel
+    if i_src.type == 'NGS':
+        wfs = ShackHartmann(2, tel, lightRatio=0.1,shannon_sampling=True) # 2x2 NGS WFS
+    else:
+        wfs = ShackHartmann(n_subaperture, tel, lightRatio=0.1,pixel_scale=1.5) #  LGS WFS        
+    list_wfs.append(wfs)
+    
 # geometric SH for the calibration
 wfs_geo = ShackHartmann(n_subaperture, tel, lightRatio=0.1,pixel_scale=1.5,is_geometric=True) #  LGS WFS
-
 
 #%% Propagation and interaction with OOPAO objects
 plt.close('all')
 
-# poking on both DM to show the optical propagation
+# poking on both DM to show the optical propagation 
 poke = np.zeros(dm_altitude.nValidAct)
 poke[140] = 3e-6
 dm_altitude.coefs = poke
@@ -145,77 +142,48 @@ dm_altitude.coefs = poke
 poke = np.zeros(dm.nValidAct)
 poke[140] = 3e-6
 dm.coefs = -poke
-
 # propagating through the whole system
-ast**atm*tel*dm*dm_altitude*wfs_lgs
-ngs**atm*tel*dm*dm_altitude*wfs_ngs
-
-# plt.figure(10)
-
-plt.figure(10, figsize=(30, 20))
+atm*ast*tel*dm*dm_altitude*list_wfs
 
 
-count = 0
-
-count+=1
-
-plt.subplot(4, len(ast.src)+1, count)
-plt.imshow(ngs.OPD)
-plt.title(f'OPD {str(count)} seen by WFS NGS')
-
-plt.subplot(4, len(ast.src)+1, count + (len(ast.src)+1))
-plt.imshow(wfs_ngs.signal_2D[0])
-plt.title(f'Signal# {str(count)} from WFS NGS')
-
-plt.subplot(4, len(ast.src)+1, count + (len(ast.src)+1) * 2)
-plt.imshow(wfs_ngs.frames[0])
-plt.title(f'Detector# {str(count)} from WFS')
-
-
-
-for i_src in range(len(ast.src)):
+count=0
+for i_wfs in list_wfs:
     count+=1
-    plt.figure(10, figsize=(30, 20))
+    plt.figure(10)
+    plt.subplot(4,len(list_wfs),count)
+    plt.imshow(tel.OPD[count-1])
+    plt.title('OPD seen by WFS#' +str(count))
+    plt.subplot(4,len(list_wfs),count+len(list_wfs))
+    plt.imshow(i_wfs.signal_2D)
+    plt.title('Signal from WFS#' +str(count))
+    plt.subplot(4,len(list_wfs),count+len(list_wfs)*2)
+    plt.imshow(i_wfs.cam.frame)
+    plt.title('Detector from WFS#' +str(count))
 
-    plt.subplot(4,(len(ast.src)+1),count)
-    plt.imshow(ast.OPD[i_src])
-    plt.title(f'OPD# {str(count)} seen by WFS')
-
-    plt.subplot(4, len(ast.src)+1, count + (len(ast.src)+1))
-    plt.imshow(wfs_lgs.signal_2D[i_src])
-    plt.title(f'Signal# {str(count)} from WFS')
-
-    plt.subplot(4,len(ast.src)+1,count+(len(ast.src)+1)*2)
-    plt.imshow(wfs_lgs.frames[i_src])
-    plt.title(f'Detector# {str(count)} from WFS')
-
-
-plt.subplot(4,len(ast.src)+1,count+2+(len(ast.src)+1)*2)
+plt.subplot(4,len(list_wfs),count+2+len(list_wfs)*2)
 plt.imshow(dm.OPD,extent=[-dm.D/2,dm.D/2,-dm.D/2,dm.D/2])
-plt.title('OPD DM@0 m')
-plt.xlabel('[m]')
-plt.ylabel('[m]')
+plt.title('OPD DM@0 m')    
+plt.xlabel('[m]')     
+plt.ylabel('[m]') 
 
-plt.subplot(4,len(ast.src)+1,count+3+(len(ast.src)+1)*2)
+plt.subplot(4,len(list_wfs),count+3+len(list_wfs)*2)
 plt.imshow(dm_altitude.OPD,extent=[-dm_altitude.D/2,dm_altitude.D/2,-dm_altitude.D/2,dm_altitude.D/2])
-plt.title('OPD Altitude DM@'+str(dm_altitude.altitude)+'m')
-plt.xlabel('[m]')
-plt.ylabel('[m]')
-
-
+plt.title('OPD Altitude DM@'+str(dm_altitude.altitude)+'m')   
+plt.xlabel('[m]')     
+plt.ylabel('[m]')     
 
 #%% Modal Basis:
-ngs**tel
+ngs*tel
 from OOPAO.calibration.compute_KL_modal_basis import compute_KL_basis
 # use the default definition of the KL modes with forced Tip and Tilt. For more complex KL modes, consider the use of the compute_KL_basis function. 
-M2C_KL = compute_KL_basis(ngs,tel,atm,dm,lim = 1e-2) # matrix to apply modes on the DM
+M2C_KL = compute_KL_basis(tel, atm, dm,lim = 1e-2) # matrix to apply modes on the DM
 
 # apply the 10 first KL modes
 dm.coefs = M2C_KL[:,:10]
 # propagate through the DM
-ngs**tel*dm
+ngs*tel*dm
 # show the first 10 KL modes applied on the DM
-displayMap(ngs.OPD)
+displayMap(tel.OPD)
 
 #%% Calibration
 from OOPAO.calibration.InteractionMatrix import InteractionMatrix
@@ -241,13 +209,13 @@ calib_HO = InteractionMatrix(ngs            = ngs,
                                 display        = True,      # display the time using tqdm
                                 single_pass    = True)      # only push to compute the interaction matrix instead of push-pull
 
-wfs_ngs.is_geometric=True
+list_wfs[0].is_geometric=True
 # zonal interaction matrix
 calib_LO = InteractionMatrix(ngs            = ngs,
                                 atm            = atm,
                                 tel            = tel,
                                 dm             = dm,
-                                wfs            = wfs_ngs,
+                                wfs            = list_wfs[0],   
                                 M2C            = M2C_modal[:,:2], # M2C matrix used 
                                 stroke         = stroke,    # stroke for the push/pull in M2C units
                                 nMeasurements  = 12,        # number of simultaneous measurements
@@ -255,55 +223,57 @@ calib_LO = InteractionMatrix(ngs            = ngs,
                                 display        = True,      # display the time using tqdm
                                 single_pass    = True)      # only push to compute the interaction matrix instead of push-pull
 
-wfs_ngs.is_geometric=False
+list_wfs[0].is_geometric=False
 
 
 #%% setup of the Weighted cOg for the NGS WFS based on the atmosphere properties
 
-# tel+atm
+tel+atm
 # typical spot size from atmosphere: 
 r0_ngs_wvl, seeing_ngs_wvl = atm.print_atm_at_wavelength(ast.src[0].wavelength)
 
-wfs_ngs.set_weighted_centroiding_map(is_lgs=False,is_gaussian=True,fwhm_factor=5)
+list_wfs[0].set_weighted_centroiding_map(is_lgs=False,is_gaussian=True,fwhm_factor=5)
 
-ast**atm*tel*wfs_lgs
-ngs**atm*tel*wfs_ngs
-
+atm*ast*tel*list_wfs
 plt.figure()
 plt.subplot(1,2,1)
-plt.imshow(wfs_ngs.merge_data_cube(wfs_ngs.weighting_map))
+plt.imshow(list_wfs[0].merge_data_cube(list_wfs[0].weighting_map))
 plt.subplot(1,2,2)
-plt.imshow(wfs_ngs.cam.frame)
+plt.imshow(list_wfs[0].cam.frame)
 
 
 #%% setup of the Weighted cOg for the LGS WFS based on the LGS elongation profile
-for i_src in range(len(ast.src)):
-    wfs_lgs.set_weighted_centroiding_map(is_lgs=True,
+for i_wfs in list_wfs[1:]:
+    i_wfs.set_weighted_centroiding_map(is_lgs=True,
                                        is_gaussian=True,
                                        fwhm_factor=1.2) # use assymetric gaussian maps with a FWHM twice larger than the FWHM of the LGS spots in each direction
     plt.figure()
     plt.subplot(1,2,1)
-    plt.imshow(wfs_lgs.merge_data_cube(wfs_lgs.weighting_map))
+    plt.imshow(i_wfs.merge_data_cube(i_wfs.weighting_map))
     plt.subplot(1,2,2)
-    plt.imshow(wfs_lgs.frames[0])
+    plt.imshow(i_wfs.cam.frame)
 
 
 
 #%% calibrate the LGS WFS gains due to the spot elongation and potential wCog
 
-ast**tel*wfs_lgs
-wfs_lgs.slopes_units = 1
+tel-atm
+tel.resetOPD()
+dm.coefs=0
 
+ast*tel*list_wfs
+for i_wfs in list_wfs[1:]:
+        i_wfs.slopes_units = 1
+    
 for i in range(1):
-    dm.coefs = M2C_KL[:, 0] * 1e-9
-    ast ** tel * dm * wfs_lgs
-    signal_ngs_wfs = wfs_lgs.signal
-    signal_lgs_wfs = np.vstack(wfs_lgs.signal)
-    rec = (calib_HO.M @ np.mean(signal_lgs_wfs, axis=0))[0]
-
-    wfs_lgs.slopes_units = rec / 1e-9
-
-
+    dm.coefs = M2C_KL[:,0]*1e-9
+    ast*tel*dm*list_wfs
+    signal_ngs_wfs = list_wfs[0].signal
+    signal_lgs_wfs = np.vstack([list_wfs[1].signal,list_wfs[2].signal,list_wfs[3].signal,list_wfs[4].signal])
+    rec = (calib_HO.M@np.mean(signal_lgs_wfs,axis=0))[0]
+    
+    for i_wfs in list_wfs[1:]:
+        i_wfs.slopes_units = rec/1e-9
 
 
 
@@ -314,20 +284,20 @@ from OOPAO.tools.displayTools import cl_plot
 
 src=Source(optBand   = 'K',\
            magnitude = 4,)
-src**atm*tel
+src*tel
 # instrument path
 src_cam = Detector(tel.resolution)
 src_cam.psf_sampling = 4
 src_cam.integrationTime = tel.samplingTime*10
 
 # initialize Telescope DM commands
-src.resetOPD()
+tel.resetOPD()
 dm.coefs=0
 
 # Update the r0 parameter, generate a new phase screen for the atmosphere and combine it with the Telescope
 atm.generateNewPhaseScreen(seed = 10)
-
-ast**atm*tel*wfs_lgs
+tel+atm
+atm*ast*tel*list_wfs
 
 plt.close('all')
 
@@ -339,23 +309,20 @@ total                       = np.zeros(nLoop)
 residual_SRC                = np.zeros(nLoop)
 residual_NGS                = np.zeros(nLoop)
 
-wfsSignal_LO               = np.arange(0,wfs_ngs.nSignal)*0
+wfsSignal_LO               = np.arange(0,list_wfs[0].nSignal)*0
 wfsSignal_HO               = np.arange(0,wfs_geo.nSignal)*0
 
-src**atm*tel
-
-tel.computePSF()
-
+atm*src*tel
 plot_obj = cl_plot(list_fig          = [atm.OPD,
-                                        src.OPD,
+                                        tel.mean_removed_OPD,
                                         [[0,0],[0,0]],
                                         np.log10(tel.PSF),
                                         dm.OPD,
-                                        wfs_ngs.frames[0],
-                                        wfs_lgs.frames[0],
-                                        wfs_lgs.frames[1],
-                                        wfs_lgs.frames[2],
-                                        wfs_lgs.frames[3]],
+                                        list_wfs[0].cam.frame,
+                                        list_wfs[1].cam.frame,
+                                        list_wfs[2].cam.frame,
+                                        list_wfs[3].cam.frame,
+                                        list_wfs[4].cam.frame],
                     type_fig          = ['imshow',
                                         'imshow',
                                         'plot',
@@ -419,22 +386,18 @@ for i in range(nLoop):
     a=time.time()
     # update phase screens => overwrite tel.OPD and consequently tel.src.phase
     atm.update()
-
-    src**atm*tel
-
     # save phase variance
-    total[i]=np.std(src.OPD[np.where(tel.pupil>0)])*1e9
+    total[i]=np.std(tel.OPD[np.where(tel.pupil>0)])*1e9
 
     # propagate light from the SRC through the atmosphere, telescope, DM to the Instrument camera
-    ast**atm*tel*dm*wfs_lgs
-    ngs**atm*tel*dm*wfs_ngs
-    signal_ngs_wfs = wfs_ngs.signal[0]
-    signal_lgs_wfs = np.vstack(wfs_lgs.signal)
+    atm*ast*tel*dm*list_wfs
+    signal_ngs_wfs = list_wfs[0].signal
+    signal_lgs_wfs = np.vstack([list_wfs[1].signal,list_wfs[2].signal,list_wfs[3].signal,list_wfs[4].signal])
     
-    src**atm*tel*dm*src_cam
-    OPD_SRC = src.OPD.copy()
+    atm*src*tel*dm*src_cam
+    OPD_SRC = tel.OPD.copy()
     # save residuals corresponding to the NGS
-    residual_SRC[i] = np.std(src.OPD[np.where(tel.pupil>0)])*1e9
+    residual_SRC[i] = np.std(tel.OPD[np.where(tel.pupil>0)])*1e9
     if frame_delay ==1:        
         wfsSignal_HO=np.mean(signal_lgs_wfs,axis=0) # GLAO like 
         wfsSignal_LO=signal_ngs_wfs 
@@ -476,11 +439,11 @@ for i in range(nLoop):
                               [np.arange(i+1),residual_SRC[:i+1]],
                               SRC_PSF,                                       
                               dm.OPD,
-                              wfs_ngs.frames[0],
-                              wfs_lgs.frames[0],
-                              wfs_lgs.frames[1],
-                              wfs_lgs.frames[2],
-                              wfs_lgs.frames[3]],
+                              list_wfs[0].cam.frame,
+                              list_wfs[1].cam.frame,
+                              list_wfs[2].cam.frame,
+                              list_wfs[3].cam.frame,
+                              list_wfs[4].cam.frame],
                                 plt_obj = plot_obj)
         plt.draw()
         plt.pause(0.01)

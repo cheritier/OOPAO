@@ -34,6 +34,7 @@ class Atmosphere:
                  windDirection: list,
                  altitude: list,
                  mode: float = 2,
+                 src=None,
                  param=None):
         """ ATMOSPHERE.
         An Atmosphere is made of one or several layer of turbulence that follow the Van Karmann statistics.
@@ -168,7 +169,20 @@ class Atmosphere:
         # case when multiple sources are considered (LGS and NGS)
 
         # <JM @ SpaceODT> Moved this part to __mul__
-        self.asterism = None
+        if src is None and self.telescope.src is None:
+            raise OopaoError(
+                "The Atmosphere object requires a Source. " 
+                "Either provide a Source directly as an attribute, or propagate the Source through the Telescope before creating the Atmosphere."
+            )  
+        if src:
+            self.src = src
+        else:
+            self.src = self.telescope.src
+
+        if self.src.type == 'asterism':
+            self.asterism = self.src
+        else:
+            self.asterism = None
         # if telescope.src.type == 'asterism':
         #     self.asterism = telescope.src
         # else:
@@ -264,63 +278,47 @@ class Atmosphere:
 
         layer.center = layer.resolution//2
 
-        [x_z, y_z] = pol2cart(layer.altitude*xp.tan(0/206265)* layer.resolution / layer.D,
-                                xp.deg2rad(0))
-        center_x = int(y_z)+layer.resolution//2
-        center_y = int(x_z)+layer.resolution//2
+        # [x_z, y_z] = pol2cart(layer.altitude*xp.tan(0/206265)* layer.resolution / layer.D,
+        #                         xp.deg2rad(0))
+        # center_x = int(y_z)+layer.resolution//2
+        # center_y = int(x_z)+layer.resolution//2
         
-        layer.pupil_footprint = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
-        layer.pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution //
+        # layer.pupil_footprint = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
+        # layer.pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution //
+        #                         2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
+
+
+        if self.asterism is None:
+            [x_z, y_z] = pol2cart(layer.altitude*xp.tan(self.src.coordinates[0]/206265)* layer.resolution / layer.D,
+                                   xp.deg2rad(self.src.coordinates[1]))
+            center_x = int(y_z)+layer.resolution//2
+            center_y = int(x_z)+layer.resolution//2
+
+
+            layer.pupil_footprint = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
+            layer.pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution //
+                                  2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
+
+        else:
+            layer.pupil_footprint = []
+            layer.extra_sx = []
+            layer.extra_sy = []
+            for i in range(self.asterism.n_source):
+                
+                [x_z, y_z] = pol2cart(layer.altitude*xp.tan(self.src.coordinates[i][0]/206265)
+                                    * layer.resolution / layer.D, xp.deg2rad(self.src.coordinates[i][1]))
+                layer.extra_sx.append(int(x_z)-x_z)
+                layer.extra_sy.append(int(y_z)-y_z)
+                center_x = int(y_z)+layer.resolution//2
+                center_y = int(x_z)+layer.resolution//2
+
+
+                pupil_footprint = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
+                pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution //
                                 2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
 
 
-        # if self.asterism is None:
-        # if self.telescope.src.tag == "source":
-        #     [x_z, y_z] = pol2cart(layer.altitude*xp.tan(self.telescope.src.coordinates[0]/206265)* layer.resolution / layer.D,
-        #                            xp.deg2rad(self.telescope.src.coordinates[1]))
-        #     center_x = int(y_z)+layer.resolution//2
-        #     center_y = int(x_z)+layer.resolution//2
-
-        #     # print(f"center_x: {center_x}, center_y: {center_y}")
-
-
-        #     layer.pupil_footprint = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
-        #     layer.pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution //
-        #                           2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
-
-        #     # print(layer.pupil_footprint.shape)
-        #     # plt.imshow(layer.pupil_footprint)
-        #     # plt.show()
-
-        # else:
-        #     layer.pupil_footprint = []
-        #     layer.extra_sx = []
-        #     layer.extra_sy = []
-        #     # for i in range(self.asterism.n_source):
-        #     for i in range(self.telescope.src.n_source):
-        #         # print(self.telescope.src.coordinates[i][0])
-        #         # [x_z, y_z] = pol2cart(layer.altitude*xp.tan(self.telescope.src.coordinates[i][0]/206265)
-        #         #                       * layer.resolution / layer.D, xp.deg2rad(self.asterism.coordinates[i][1]))
-                
-        #         [x_z, y_z] = pol2cart(layer.altitude*xp.tan(self.telescope.src.coordinates[i][0]/206265)
-        #                             * layer.resolution / layer.D, xp.deg2rad(self.telescope.src.coordinates[i][1]))
-        #         layer.extra_sx.append(int(x_z)-x_z)
-        #         layer.extra_sy.append(int(y_z)-y_z)
-        #         center_x = int(y_z)+layer.resolution//2
-        #         center_y = int(x_z)+layer.resolution//2
-
-        #         # print(f"center_x: {center_x}, center_y: {center_y}")
-
-
-        #         pupil_footprint = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
-        #         pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution //
-        #                         2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
-
-        #         # print(pupil_footprint.shape)
-        #         # plt.imshow(pupil_footprint)
-        #         # plt.show()
-
-        #         layer.pupil_footprint.append(pupil_footprint)
+                layer.pupil_footprint.append(pupil_footprint)
 
         # layer pixel size
 
@@ -411,8 +409,8 @@ class Atmosphere:
                         raise OopaoError('The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')
                 else:
                     chromatic_shift = 0
-                [x_z, y_z] = pol2cart(layer.altitude*xp.tan((src.coordinates[0]+chromatic_shift)/206265)
-                                      * layer.resolution / layer.D, xp.deg2rad(src.coordinates[1]))
+                [x_z, y_z] = pol2cart(layer.altitude*xp.tan((self.src.coordinates[0]+chromatic_shift)/self.rad2arcsec)
+                                      * layer.resolution / layer.D, xp.deg2rad(self.src.coordinates[1]))
                 layer.extra_sx = int(x_z)-x_z
                 layer.extra_sy = int(y_z)-y_z
 
@@ -542,10 +540,7 @@ class Atmosphere:
 
 
     def relay(self, src):
-        from copy import deepcopy
-
-        # src_tmp = deepcopy(self.telescope.src)
-
+        self.src = src
 
         if src.tag == 'source':
             self.src_list = [src]
@@ -585,18 +580,31 @@ class Atmosphere:
 
         # if self.telescope.src.tag == "source":
         if self.asterism is None:
+            if self.src.altitude <= tmpLayer.altitude:
+                raise OopaoError('The source altitude ('+str(self.src.altitude)+' m) is below or at the same altitude as the atmosphere layer ('+str(tmpLayer.altitude)+' m)')
             _im = tmpLayer.phase.copy()
-            if tmpLayer.extra_sx != 0 or tmpLayer.extra_sy != 0:
-                pixel_size_in = 1
-                pixel_size_out = 1
-                resolution_out = _im.shape[0]
+            h = self.src.altitude-tmpLayer.altitude
+            if xp.isinf(h):
+                # magnification due to cone effect not considered
+                magnification_cone_effect = 1
+                interpolate_im = False
+            else:
+                # magnification due to cone effect not considered
+                magnification_cone_effect = (h)/self.src.altitude
+                interpolate_im = True
+            pixel_size_in = 1
+            pixel_size_out = pixel_size_in*magnification_cone_effect
+            resolution_out = tmpLayer.resolution
+
+            if tmpLayer.extra_sx != 0 or tmpLayer.extra_sy != 0 or interpolate_im is True:
                 _im = xp.squeeze(interpolate_image(_im, pixel_size_in, pixel_size_out,
                                  resolution_out, shift_x=tmpLayer.extra_sx, shift_y=tmpLayer.extra_sy))
-            
             phase_support += xp.reshape(_im[xp.where(tmpLayer.pupil_footprint == 1)], [
                                         self.telescope.resolution, self.telescope.resolution]) * xp.sqrt(self.fractionalR0[i_layer])
         else:
             for i in range(self.asterism.n_source):
+                if self.asterism.altitude[i] <= tmpLayer.altitude:
+                    raise OopaoError('The source altitude ('+str(self.asterism.altitude[i])+' m) is below or at the same altitude as the atmosphere layer ('+str(tmpLayer.altitude)+' m)')
                 _im = tmpLayer.phase.copy()
 
                 if tmpLayer.extra_sx[i] != 0 or tmpLayer.extra_sy[i] != 0:
@@ -615,18 +623,20 @@ class Atmosphere:
                         self.telescope.D/2/self.asterism.altitude[i])
                     h = self.asterism.altitude[i]-tmpLayer.altitude
                     if xp.isinf(h):
-                        r = self.telescope.D/2
+                        # magnification due to cone effect not considered
+                        magnification_cone_effect = 1
+                        interpolate_im = False
                     else:
-                        r = h*xp.tan(alpha_cone)
-                    ratio = self.telescope.D/r/2
+                        # magnification due to cone effect not considered
+                        magnification_cone_effect = (h)/self.src.altitude
+                        interpolate_im = True
                     cube_in = xp.atleast_3d(sub_im).T
 
-                    pixel_size_in = tmpLayer.D/tmpLayer.resolution
-                    pixel_size_out = pixel_size_in/ratio
+                    pixel_size_in = 1
+                    pixel_size_out = pixel_size_in*magnification_cone_effect
                     resolution_out = self.telescope.resolution
 
-                    phase_support[i] += xp.squeeze(interpolate_cube(
-                        cube_in, pixel_size_in, pixel_size_out, resolution_out)).T * xp.sqrt(self.fractionalR0[i_layer])
+                    phase_support[i] += xp.squeeze(interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out)).T * xp.sqrt(self.fractionalR0[i_layer])
                 else:
                     # print(_im[xp.where(tmpLayer.pupil_footprint[i] == 1)].shape)
                     # plt.imshow(tmpLayer.pupil_footprint[i])
@@ -937,15 +947,12 @@ class Atmosphere:
             col = []
             for i_source in range(len(list_src)):
                 col.append(cm(1.*i_source/len(list_src)))
-                [x_c, y_c] = pol2cart(
-                    self.telescope.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
-                alpha_cone = xp.arctan(
-                    self.telescope.D/2/list_src[i_source].altitude)
+                [x_c, y_c] = pol2cart(self.telescope.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
                 h = list_src[i_source].altitude-tmpLayer.altitude
                 if xp.isinf(h):
                     r = self.telescope.D/2
                 else:
-                    r = h*xp.tan(alpha_cone)
+                    r = (h)/self.telescope.src.altitude*self.telescope.D/2
                 [x_cone, y_cone] = pol2cart(
                     r, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
                 if list_src[i_source].chromatic_shift is not None:
@@ -956,7 +963,7 @@ class Atmosphere:
                 else:
                     chromatic_shift = 0
                 [x_z, y_z] = pol2cart(tmpLayer.altitude*xp.tan((list_src[i_source].coordinates[0] +
-                                      chromatic_shift)/206265), xp.deg2rad(list_src[i_source].coordinates[1]))
+                                      chromatic_shift)/self.rad2arcsec), xp.deg2rad(list_src[i_source].coordinates[1]))
                 center = 0
                 [x_c, y_c] = pol2cart(
                     tmpLayer.D_fov/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
@@ -970,31 +977,8 @@ class Atmosphere:
             ax.set_ylabel('[m]')
             ax.set_title('Altitude '+str(tmpLayer.altitude)+' m')
             ax.plot(x_tel+center, y_tel+center, '--', color='k')
-
-            if len(list_src) > 0:
-                ax.legend(loc='upper left')
-
+            ax.legend(loc='upper left')
             makeSquareAxes(plt.gca())
-            ax.arrow(center,
-                     center,
-                     center +
-                     normalized_speed[i_l]*(tmpLayer.D_fov/2) *
-                     xp.cos(xp.deg2rad(tmpLayer.direction)),
-                     center +
-                     normalized_speed[i_l]*(tmpLayer.D_fov/2) *
-                     xp.sin(xp.deg2rad(tmpLayer.direction)),
-                     length_includes_head=True,
-                     width=0.5,
-                     facecolor=[0, 0, 0],
-                     alpha=0.3,
-                     edgecolor=None)
-            ax.text(center+tmpLayer.D_fov/8*xp.cos(xp.deg2rad(tmpLayer.direction)),
-                    center+tmpLayer.D_fov/8 *
-                    xp.sin(xp.deg2rad(tmpLayer.direction)),
-                    str(self.windSpeed[i_l])+' m/s',
-                    fontweight=100,
-                    color=[1, 1, 1],
-                    fontsize=18)
 
     @property
     def r0(self):
@@ -1005,7 +989,7 @@ class Atmosphere:
         self._r0 = val
         if self.hasNotBeenInitialized is False:
             print('Updating the Atmosphere covariance matrices...')
-            self.seeingArcsec = 206265*(self.wavelength/val)
+            self.seeingArcsec = self.rad2arcsec*(self.wavelength/val)
             self.cn2 = (self.r0**(-5. / 3) / (0.423 * (2*np.pi/self.wavelength)**2))/np.max([1, np.max(self.altitude)])  # Cn2 m^(-2/3)
             if self.compute_covariance:
                 for i_layer in range(self.nLayer):

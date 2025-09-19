@@ -32,9 +32,13 @@ def displayMap(A,norma=False,axis=2,mask=0,returnOutput = False):
     if dimA == 2:
         n1,n2 = A.shape
         if n1 == n2:
-            plt.figure()
-            plt.imshow(A)
-            return -1
+            if returnOutput:
+                return A
+            else:
+                plt.figure()
+                plt.imshow(A)
+                plt.axis('off')
+                return
 
         else:
             if math.log(n1,np.sqrt(n1)) == 2.0:
@@ -75,12 +79,14 @@ def displayMap(A,norma=False,axis=2,mask=0,returnOutput = False):
                 tmp = np.pad(tmp,(r,r),'constant',constant_values=(np.inf,np.inf))
                 S[ i*(nPix1_-1) : nPix1_ +i*(nPix1_-1) , j*(nPix2_-1) : nPix2_ +j*(nPix2_-1)] = tmp
     
-    
-    plt.figure()
-    plt.imshow(S)
-    plt.axis('off')
     if returnOutput:
         return S
+    else:
+        plt.figure()
+        plt.imshow(S)
+        plt.axis('off')
+        return
+
 
 def makeSquareAxes(ax=None):
     """Make an axes square in screen units.
@@ -101,14 +107,14 @@ def display_wfs_signals(wfs,signals,returnOutput=False, norma = False):
     
     if wfs.tag == 'pyramid' or wfs.tag == 'bioEdge':
         A= np.zeros(wfs.validSignal.shape)
-        print(A.shape)
         A[:]=np.inf
         # one signal only
         if np.ndim(signals)==1:
             if wfs.validSignal.sum() == signals.shape:
                 A[np.where(wfs.validSignal==1)]=signals
-            plt.figure()
-            plt.imshow(A)
+            if returnOutput is False:
+                plt.figure()
+                plt.imshow(A)
             out =A
         else:
             B= np.zeros([wfs.validSignal.shape[0],wfs.validSignal.shape[1],signals.shape[1]])
@@ -122,20 +128,19 @@ def display_wfs_signals(wfs,signals,returnOutput=False, norma = False):
                     if norma:
                         A/= np.max(np.abs(signals[:,i]))
                     B[:,:,i] = A
-                print(B.shape)
                 out = displayMap(B,axis=2,returnOutput=True)
         if returnOutput:
             return out
     if wfs.tag == 'shackHartmann':
         A= np.zeros(wfs.valid_slopes_maps.shape)
-        print(A.shape)
         A[:]=np.inf
         # one signal only
         if np.ndim(signals)==1:
             if wfs.valid_slopes_maps.sum() == signals.shape:
                 A[np.where(wfs.valid_slopes_maps==1)]=signals
-            plt.figure()
-            plt.imshow(A)
+            if returnOutput is False:
+                plt.figure()
+                plt.imshow(A)
             out =A
         else:
             B= np.zeros([wfs.valid_slopes_maps.shape[0],wfs.valid_slopes_maps.shape[1],signals.shape[1]])
@@ -345,7 +350,7 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = 
         plt_obj.list_title = list_title        
 
         plt_obj.keep_going = True
-        f = plt.figure(fig_number,figsize = [n_sp*4,n_sp_y*2],facecolor=[0,0.1,0.25], edgecolor = None)
+        f = plt.figure(fig_number,figsize = [n_sp*4,n_sp_y*3],facecolor=[0,0.1,0.25], edgecolor = None)
         COLOR = 'white'
         mpl.rcParams['text.color'] = COLOR
         mpl.rcParams['axes.labelcolor'] = COLOR

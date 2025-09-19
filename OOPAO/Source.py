@@ -164,8 +164,8 @@ class Source:
         # TODO: By default, the OPD for each source is initialized as a zero array with shape (100, 100). 
         # This leads to issues when the initial propagation does not involve the atmosphere.
         # A solution for this case still needs to be determined.
-        self._OPD = np.zeros((100,100))          
-        self._OPD_no_pupil = np.zeros((100,100)) 
+        self._OPD = None        
+        self._OPD_no_pupil = None 
 
         # mask to create to compute the OPD with pupil. 
         # Initally set to 1 so it doesnt do anything until the source is propagated through the telescope.
@@ -185,7 +185,6 @@ class Source:
     # <JM @ SpaceODT>
     def __pow__(self, obj):
         # Re-propagation function. Same as .* in OOMAO
-
         obj.src = self
         self.optical_path = [[self.type + '(' + self.optBand + ')', self]]
         self.resetOPD()
@@ -205,8 +204,9 @@ class Source:
 
     def resetOPD(self):
         self.mask = 1
-        self.OPD = np.zeros((self.OPD.shape[0], self.OPD.shape[1]))
-        self.OPD_no_pupil = np.zeros((self.OPD_no_pupil.shape[0], self.OPD_no_pupil.shape[1]))
+        self.OPD = None
+        self.OPD_no_pupil = None
+        
 
 
     def print_optical_path(self):
@@ -224,7 +224,11 @@ class Source:
 
     @OPD.setter
     def OPD(self, val):
-        self._OPD = np.array(val)
+        if val is not None:
+            self._OPD = np.array(val)
+        else:
+            self._OPD = None
+            
 
 
     @property
@@ -233,13 +237,17 @@ class Source:
 
     @OPD_no_pupil.setter
     def OPD_no_pupil(self, val):
-        self._OPD_no_pupil = np.array(val)
+        if val is not None:
+            self._OPD_no_pupil = np.array(val)
 
-        if len(val.shape) > 2:
-            self.OPD = self._OPD_no_pupil*self.mask[:, :, np.newaxis]
+            if len(val.shape) > 2:
+                self.OPD = self._OPD_no_pupil*self.mask[:, :, np.newaxis]
+            else:
+                self.OPD = self._OPD_no_pupil*self.mask
         else:
-            self.OPD = self._OPD_no_pupil*self.mask
+            self._OPD_no_pupil = None
 
+            
 
     @property
     def phase(self):

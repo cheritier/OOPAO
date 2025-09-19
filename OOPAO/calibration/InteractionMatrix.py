@@ -11,16 +11,17 @@ from .CalibrationVault import CalibrationVault
 
 
 def InteractionMatrix(ngs,
-                      atm,
                       tel,
                       dm,
                       wfs,
                       M2C,
                       stroke,
+                      atm = None,
                       phaseOffset = 0,
                       nMeasurements = 50,
                       noise = 'off',
                       invert = True,
+                      nTrunc = 0,
                       print_time = False,
                       display = False,
                       single_pass = True):
@@ -73,7 +74,7 @@ def InteractionMatrix(ngs,
     
     # separate tel from ATM
     tel.isPaired = False
-    ngs**tel
+    ngs*tel
 
     try: 
         nModes = M2C.shape[1]
@@ -95,10 +96,8 @@ def InteractionMatrix(ngs,
     else:
         phaseBuffer = phaseOffset
 
-    for i in iterate(range(nCycle)):
-
-        ngs**tel
-
+    for i in iterate(range(nCycle)):  
+        
         if nModes>1:
             if i==nCycle-1:
                 if nExtra != 0:
@@ -116,21 +115,12 @@ def InteractionMatrix(ngs,
             
         a= time.time()
         # push
-
         dm.coefs = intMatCommands*stroke
-        # print("\n----------------")
-        # print("Got Coefs")
-
-        ngs**tel*dm
-        # print("Propagated through DM")
-        ngs.phase+=phaseBuffer
+        tel*dm
+        tel.src.phase+=phaseBuffer
         # tel.src.phase_no_pupil+=phaseBuffer # this was needed when using the old geometric SH
-        # print("Updated Phase")
-
-        # print(f"{np.min(ngs.phase)}, {np.max(ngs.phase)}")
-        ngs*wfs
+        tel*wfs
         sp = wfs.signal
-        # print("Propagated through WFS")
 
         # pull
         if single_pass:
@@ -138,15 +128,12 @@ def InteractionMatrix(ngs,
             factor = 2
         else:
             dm.coefs=-intMatCommands*stroke
-            ngs**tel*dm
-            ngs.phase += phaseBuffer
+            tel*dm
+            tel.src.phase += phaseBuffer
             # tel.src.phase_no_pupil += phaseBuffer  # this was needed when using the old geometric SH
-            ngs*wfs
+            tel*wfs
             sm = wfs.signal
             factor = 1
-
-        # print(f"Did single pass: {single_pass}")
-
 
         if i==nCycle-1:
             if nExtra !=0:
@@ -175,7 +162,7 @@ def InteractionMatrix(ngs,
             b=time.time()
             print('Time elapsed: '+str(b-a)+' s' )
     
-    out=CalibrationVault(factor*intMat,invert=invert)
+    out = CalibrationVault(factor*intMat, invert=invert, nTrunc=nTrunc)
        
     return out
 

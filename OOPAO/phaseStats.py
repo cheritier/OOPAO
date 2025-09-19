@@ -185,7 +185,7 @@ def ift2(G, delta_f):
     return g
 
 
-def ft_phase_screen(atm, N, delta, l0=1e-10, seed=None):
+def ft_phase_screen(atm, N, delta, l0=1e-10, seed=None, return_PSD = False):
     '''
         ------------ Function adapted from aotools ----------------------
 
@@ -229,11 +229,13 @@ def ft_phase_screen(atm, N, delta, l0=1e-10, seed=None):
           * np.sqrt(PSD_phi)*del_f)
 
     phs = ift2(cn, 1).real
+    if return_PSD:
+        return phs, PSD_phi
+    else:
+        return phs
 
-    return phs
 
-
-def ft_sh_phase_screen(atm, N, delta, l0=1e-10, seed=None):
+def ft_sh_phase_screen(atm, N, delta, l0=1e-10, seed=None, return_PSD=False):
     """
     ------------ Function adapted from aotools ----------------------
 
@@ -307,4 +309,7 @@ def ft_sh_phase_screen(atm, N, delta, l0=1e-10, seed=None):
 
     phs = phs_lo+phs_hi
 
-    return phs
+    if return_PSD:
+        return phs, PSD_phi
+    else:
+        return phs
