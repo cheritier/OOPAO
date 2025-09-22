@@ -115,6 +115,7 @@ def InteractionMatrix(ngs,
             
         a= time.time()
         # push
+        tel.resetOPD()
         dm.coefs = intMatCommands*stroke
         tel*dm
         tel.src.phase+=phaseBuffer
@@ -127,6 +128,7 @@ def InteractionMatrix(ngs,
             sm = 0*wfs.signal
             factor = 2
         else:
+            tel.resetOPD()
             dm.coefs=-intMatCommands*stroke
             tel*dm
             tel.src.phase += phaseBuffer
