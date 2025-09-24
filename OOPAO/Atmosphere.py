@@ -246,7 +246,7 @@ class Atmosphere:
         layer.resolution_fov = int(
             xp.ceil((self.telescope.resolution/self.telescope.D)*layer.D_fov))
         # 4 pixels are added as a margin for the edges
-        layer.resolution = layer.resolution_fov + 4
+        layer.resolution = layer.resolution_fov
         layer.D = layer.resolution * self.telescope.D / self.telescope.resolution
         layer.center = layer.resolution//2
         if self.asterism is None:
@@ -739,9 +739,9 @@ class Atmosphere:
             layer_index = list(xp.arange(self.nLayer))
             n_sp = len(layer_index)
             display_cn2 = True
+            display_cn2 = True
         else:
             n_sp = len(layer_index)
-            display_cn2 = True
 
         if type(layer_index) is not list:
             raise OopaoError('layer_index should be a list')
