@@ -898,7 +898,15 @@ class Atmosphere:
         #     else:
         #         list_src = [self.telescope.src]
 
-        list_src = self.src_list
+        # when sources not yet propagated through atmosphere, we need to use src_list from telescope
+        if len(self.src_list) == 0:
+            if len(self.telescope.src_list) >= 1:
+                list_src = self.telescope.src_list
+            else:
+                raise OopaoError('No sources yet associated/propagated either through atmosphere or telescope')
+        # when already propagated through atmosphere
+        else:
+            list_src = self.src_list
         
         plt.figure(fig_index, figsize=[
                    n_sp*4, 3*(1+display_cn2)], edgecolor=None)
