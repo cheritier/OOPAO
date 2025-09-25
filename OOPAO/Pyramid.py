@@ -217,6 +217,8 @@ class Pyramid:
             raise OopaoError('The resolution should be an even number and be a multiple of 2**i where i>=2')
         if self.telescope.src is None:
             raise OopaoError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
+        # save wavelength used for the calibration of the Pyramid to avoid conflicts
+        self.wavelength_calibration = self.telescope.src.wavelength
         # delta theta in degree to change the position of the modulation point (default is 0 <=> modulation point on the edge of two sides of the pyramid)
         self.delta_theta = delta_theta
         # user defined number of modulation point
@@ -635,6 +637,10 @@ class Pyramid:
             return None, None
 
     def wfs_measure(self, phase_in=None, integrate=True):
+        if self.isInitialized and self.isCalibrated:
+            if self.wavelength_calibration != self.telescope.src.wavelength:
+                raise OopaoError('A change in wavelength was detected in the WFS object \n' +
+                                 'Make sure that the correct source is propagated in the WFS object or re-calibrate with the correct source.')
         if phase_in is not None:
             self.telescope.src.phase = phase_in
         # mask amplitude for the light propagation
