@@ -110,15 +110,18 @@ def zero_pad_array(array,padding:int):
     
 
 
-def strehlMeter(PSF, tel, zeroPaddingFactor = 2, display = True, title = ''):
+def strehlMeter(PSF, tel, PSF_ref = None, zeroPaddingFactor = 2, display = True, title = ''):
     # Measures the Strehl ratio from a focal plane image PSF
     # Method : compute the ratio of the OTF on the OTF of Airy pattern
     # Airy pattern is computed from tel.pupil function, with a sampling of zeroPaddingFactor
     
     # Compute Airy pattern : zero OPD PSF from tel objet
-    tel.resetOPD()
-    tel.computePSF(zeroPaddingFactor)    
-    Airy = tel.PSF
+    if PSF_ref is None:
+        tel.resetOPD()
+        tel.computePSF(zeroPaddingFactor)
+        Airy = tel.PSF
+    else:
+        Airy = PSF_ref
     sizeAiry = Airy.shape[0]
     sizePSF  = PSF.shape[0]
     sizeMin  = np.min((sizeAiry, sizePSF))
@@ -161,7 +164,7 @@ def strehlMeter(PSF, tel, zeroPaddingFactor = 2, display = True, title = ''):
         # plt.imshow(np.log(crop(Airy, np.int16(8 * zeroPaddingFactor), 3)), extent = [0.5, 0.7, 0.3, 0.5])
         # plt.text(0.55,0.275, 'Airy')
         # plt.title('Strehl ' + np.str_(round(np.sum(OTF) / np.sum(OTFa) * 100)) + '%')
-    print('Strehl ratio [%] : ', np.sum(OTF) / np.sum(OTFa) * 100)
+        print('Strehl ratio [%] : ', np.sum(OTF) / np.sum(OTFa) * 100)
     return np.sum(OTF) / np.sum(OTFa) * 100
 
         
