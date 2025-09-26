@@ -200,11 +200,11 @@ class Telescope:
         self.src = src
 
         if src.tag == 'source':
-            src_list = [src]
+            self.src_list = [src]
         elif src.tag == 'asterism':
-            src_list = src.src
+            self.src_list = src.src
 
-        for src in src_list:
+        for src in self.src_list:
             src.optical_path.append([self.tag, self])
             src.tel = self
             src.mask = self.pupil.copy()
