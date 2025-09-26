@@ -18,7 +18,9 @@ from joblib import Parallel, delayed
 from .MisRegistration import MisRegistration
 from .tools.interpolateGeometricalTransformation import interpolate_cube
 from .tools.tools import emptyClass, pol2cart, print_, OopaoError, warning
-
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+from .tools.displayTools import makeSquareAxes
 
 class DeformableMirror:
     def __init__(self,
@@ -497,16 +499,15 @@ class DeformableMirror:
         else:
             dm_OPD = self.OPD
         # case where the telescope is paired to an atmosphere
-        # if telescope.isPaired:
         if telescope.isPetalFree:
             telescope.removePetalling()
         # case with single OPD
         if np.ndim(self.OPD) == 2:
-            OPD_out_no_pupil = OPD_in + dm_OPD
+            OPD_out_no_pupil = OPD_in*telescope.isPaired + dm_OPD
         # case with multiple OPD
         if np.ndim(self.OPD) == 3:
             OPD_out_no_pupil = np.tile(
-                OPD_in[..., None], (1, 1, self.OPD.shape[2]))+dm_OPD
+                OPD_in[..., None], (1, 1, self.OPD.shape[2]))*telescope.isPaired+dm_OPD
 
         return OPD_out_no_pupil
 
@@ -559,6 +560,55 @@ class DeformableMirror:
 
         return output
 
+    def display_dm(self, fig_index=None, list_src=None, input_opd=None):
+        if list_src is None:
+            if self.telescope.src.tag == 'asterism':
+                list_src = self.telescope.src.src
+            else:
+                list_src = [self.telescope.src]
+        plt.figure(fig_index, figsize=[6, 6], edgecolor=None)
+        gs = gridspec.GridSpec(1, 1,
+                               height_ratios=[1],
+                               width_ratios=[1],
+                               hspace=0.5,
+                               wspace=0.5)
+        ax = plt.subplot(gs[0, 0])
+        if input_opd is None:
+            input_opd = np.reshape(np.sum(self.modes**5, axis=1), [self.resolution, self.resolution])
+        ax.imshow(input_opd,
+                  extent=[-self.D/2, self.D/2, -self.D/2, self.D/2])
+        center = self.D/2
+        [x_tel, y_tel] = pol2cart(self.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+        cm = plt.get_cmap('gist_rainbow')
+        col = []
+        for i_source in range(len(list_src)):
+            col.append(cm(1.*i_source/len(list_src)))
+            [x_c, y_c] = pol2cart(self.telescope.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+            if self.altitude is None:
+                h = list_src[i_source].altitude
+            else:
+                h = list_src[i_source].altitude-self.altitude
+            if xp.isinf(h):
+                r = self.telescope.D/2
+            else:
+                r = (h)/self.telescope.src.altitude*self.telescope.D/2
+            [x_cone, y_cone] = pol2cart(r, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+            [x_z, y_z] = pol2cart(list_src[i_source].altitude*xp.tan((list_src[i_source].coordinates[0])/self.rad2arcsec), xp.deg2rad(list_src[i_source].coordinates[1]))
+            center = 0
+            [x_c, y_c] = pol2cart(
+                self.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+            nm = (list_src[i_source].type) + '@' + \
+                str(list_src[i_source].coordinates[0])+'"'
+            ax.plot(x_cone+x_z+center, y_cone+y_z+center,
+                    '-', color=col[i_source], label=nm)
+            ax.fill(x_cone+x_z+center, y_cone+y_z+center,
+                    y_z+center, alpha=0., color=col[i_source])
+        ax.set_xlabel('[m]')
+        ax.set_ylabel('[m]')
+        ax.set_title('Altitude '+str(self.altitude)+' m')
+        ax.plot(x_tel+center, y_tel+center, '--', color='k')
+        ax.legend(loc='upper left')
+        makeSquareAxes(plt.gca())
     @property
     def coefs(self):
         return self._coefs
