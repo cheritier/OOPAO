@@ -137,21 +137,20 @@ class Source:
         self.chromatic_shift = chromatic_shift
 
         # TODO: These shouldn't both exist
-        if self.altitude != np.inf:
+        # if self.altitude != np.inf:
+        #     self.type = 'LGS'
+        # else:
+        #     self.type = 'NGS'
+        
+        if Na_profile is not None and FWHM_spot_up is not None:
+            self.Na_profile = Na_profile
+            self.FWHM_spot_up = FWHM_spot_up
+
+            # consider the altitude weigthed by Na profile
+            self.altitude = np.sum(Na_profile[0, :]*Na_profile[1, :])
             self.type = 'LGS'
         else:
             self.type = 'NGS'
-
-        # if Na_profile is not None and FWHM_spot_up is not None:
-        #     self.Na_profile = Na_profile
-        #     self.FWHM_spot_up = FWHM_spot_up
-
-        #     # consider the altitude weigthed by Na profile
-        #     self.altitude = np.sum(Na_profile[0, :]*Na_profile[1, :])
-        #     self.type = 'LGS'
-
-        # else:
-        #     self.type = 'NGS'
 
         if self.display_properties:
             print(self)
@@ -161,9 +160,6 @@ class Source:
 
         # <JM @ SpaceODT>
 
-        # TODO: By default, the OPD for each source is initialized as a zero array with shape (100, 100). 
-        # This leads to issues when the initial propagation does not involve the atmosphere.
-        # A solution for this case still needs to be determined.
         self._OPD = None        
         self._OPD_no_pupil = None 
 
