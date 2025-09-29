@@ -448,13 +448,13 @@ class DeformableMirror:
         self.altitude_layer.extra_sx = int(x_z)-x_z
         self.altitude_layer.extra_sy = int(y_z)-y_z
 
-        center_x = int(y_z)+self.altitude_layer.resolution//2
-        center_y = int(x_z)+self.altitude_layer.resolution//2
+        self.altitude_layer.center_x = int(y_z)+self.altitude_layer.resolution//2
+        self.altitude_layer.center_y = int(x_z)+self.altitude_layer.resolution//2
 
         self.altitude_layer.pupil_footprint = xp.zeros(
             [self.altitude_layer.resolution, self.altitude_layer.resolution], dtype=self.precision())
-        self.altitude_layer.pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution //
-                                            2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
+        self.altitude_layer.pupil_footprint[self.altitude_layer.center_x-self.telescope.resolution//2:self.altitude_layer.center_x+self.telescope.resolution //
+                                            2, self.altitude_layer.center_y-self.telescope.resolution//2:self.altitude_layer.center_y+self.telescope.resolution//2] = 1
 
     def get_OPD_altitude(self, src):
         self.set_pupil_footprint(src)
