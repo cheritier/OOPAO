@@ -163,7 +163,6 @@ class ShackHartmann:
         self.telescope = telescope
 
         self.src = self.telescope.src
-
         if self.telescope.src is None:
             raise OopaoError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
         if self.src.type == 'LGS':
@@ -171,6 +170,9 @@ class ShackHartmann:
             self.convolution_tag = 'FFT'
         else:
             self.is_LGS = False
+
+        self._valid_subapertures = None
+
         self.is_geometric = is_geometric
         self.nSubap = nSubap
         self.d_subap = telescope.D/self.nSubap
@@ -352,28 +354,6 @@ class ShackHartmann:
         self.frames = np.array(frames_list)
 
 
-
-        # elif src.tag == 'asterism':
-        #     src_list = src.src
-        #     signal_2D_list = []
-        #     signal_list = []
-
-        #     frames_list = []
-
-        #     for src in src_list:
-        #         src.optical_path.append([self.tag, self])
-        #         self.src = src
-        #         self.wfs_measure(phase_in=self.src.phase)
-        #         signal_2D_list.append(self.signal_2D)
-        #         signal_list.append(self.signal)
-        #         frames_list.append(self.cam.frame)
-
-        #     self.signal_2D = np.array(signal_2D_list)
-        #     self.signal = np.array(signal_list)
-        #     self.frames = np.array(frames_list)
-
-
-            # np.hstack(shwfs.signal)
 
 
 
@@ -789,8 +769,8 @@ class ShackHartmann:
             coordinates_3D_ref[:, i] = coordinates_3D[:, i] - coordinates_3D[:, len(self.src.Na_profile[0, :])//2]
         distance_to_llt = np.sqrt((X-X0)**2 + (Y-Y0)**2)
         tmp = (np.where(distance_to_llt == np.max(distance_to_llt)))
-        if len(tmp) > 1:
-            tmp = tmp[0]
+        if len(tmp[0]) > 1:
+            tmp = [tmp[0][0], tmp[1][0]]
         x_max = x_subap[tmp[0]]
         y_max = y_subap[tmp[1]]
         shift_X = np.zeros(len(self.src.Na_profile[0, :]))
@@ -1118,13 +1098,6 @@ class ShackHartmann:
                     self.signal[:, i] = m[i][1]
                     self.maps_intensity[i, :, :, :] = m[i][2]
 
-                # else:
-                #     self.signal_2D = np.zeros([m[0][0].shape[1],
-                #                                m[0][0].shape[2],
-                #                                self.phase_buffer.shape[0]])
-                #
-                #     self.signal = np.zeros([m[0][1].shape[0],
-                #                             self.phase_buffer.shape[0]])
 
 
 
@@ -1238,6 +1211,23 @@ class ShackHartmann:
                 print('Re-initializing WFS...')
                 self.initialize_wfs()
                 print('Done!')
+
+
+    @property
+    def valid_subapertures(self):
+        return self._valid_subapertures
+
+
+
+    @valid_subapertures.setter
+    def valid_subapertures(self, val):
+        self._valid_subapertures = val.copy()
+        self.valid_subapertures_1D = np.reshape(self.valid_subapertures, [self.nSubap**2])
+        [self.validLenslets_x, self.validLenslets_y] = np.where(self.valid_subapertures)
+        self.valid_slopes_maps = np.concatenate((self.valid_subapertures, self.valid_subapertures))
+        self.nValidSubaperture = np.count_nonzero(self.valid_subapertures)
+        self.nSignal = 2*self.nValidSubaperture
+
 
     def __mul__(self, obj):
         if obj.tag == 'detector':
