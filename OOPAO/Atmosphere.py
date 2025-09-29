@@ -611,7 +611,6 @@ class Atmosphere:
                                      resolution_out, shift_x=tmpLayer.extra_sx[i], shift_y=tmpLayer.extra_sy[i]))
 
                 if self.asterism.src[i].type == 'LGS':
-                    # print("LGS")
                     sub_im = xp.reshape(_im[xp.where(tmpLayer.pupil_footprint[i] == 1)], [
                                         self.telescope.resolution, self.telescope.resolution])
                     alpha_cone = xp.arctan(
@@ -624,7 +623,7 @@ class Atmosphere:
                     else:
                         # magnification due to cone effect not considered
 
-                        magnification_cone_effect = (h)/self.src.altitude
+                        magnification_cone_effect = (h)/self.src.altitude[i]
 
                         interpolate_im = True
                     cube_in = xp.atleast_3d(sub_im).T
@@ -948,7 +947,7 @@ class Atmosphere:
                 if xp.isinf(h):
                     r = self.telescope.D/2
                 else:
-                    r = (h)/self.telescope.src.altitude*self.telescope.D/2
+                    r = (h)/self.src.altitude[i_source]*self.telescope.D/2
                 [x_cone, y_cone] = pol2cart(
                     r, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
                 if list_src[i_source].chromatic_shift is not None:
