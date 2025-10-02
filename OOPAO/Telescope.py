@@ -160,6 +160,7 @@ class Telescope:
         self.isInitialized = False                        # Resolution of the telescope
         self.resolution = resolution                   # Resolution of the telescope
         self.D = diameter                     # Diameter in m
+        self.initial_D = diameter                     # Diameter in m
         self.pixelSize = self.D/self.resolution       # size of the pixels in m
         self.centralObstruction = centralObstruction           # central obstruction
         self.fov = fov                          # Field of View in arcsec converted in radian
@@ -194,6 +195,7 @@ class Telescope:
         print(self)
         self.isInitialized = True
         self.apply_off_axis_tip_tilt = True
+        self.initial_pupil = self.pupil.copy()
 
     def set_pupil(self):
         # Case where the pupil is not input: circular pupil with central obstruction
@@ -414,7 +416,6 @@ class Telescope:
 
     def resetOPD(self):
         if self.src is not None:
-
             if self.src.tag == 'asterism':
                 self.optical_path = [[self.src.type, id(self.src)]]
                 self.optical_path.append([self.tag, id(self)])
@@ -465,8 +466,22 @@ class Telescope:
             self.set_pupil()
         return
 
-    def showPSF(self, zoom=1, GEO=False):
-        raise DeprecationWarning('This method has been deprecated.')
+    def pad(self, padding_values=0):
+        """
+        This functions allows to pad the pupil of padding_values pixels on both sides.
+        The Telescope properties associated to it are automatically updated.
+        Returns
+        -------
+        None.
+
+        """
+        pupil_padded = np.pad(self.initial_pupil, [padding_values, padding_values])
+        self.resolution = pupil_padded.shape[0]
+        self.D = self.resolution * self.pixelSize
+        self.pupil = pupil_padded.copy()
+        self.OPD = self.pupil.astype(self.precision())     # set the initial OPD
+        self.OPD_no_pupil = 1+self.pupil.astype(self.precision())*0  # set the initial OPD
+        return
 
     @property
     def pupil(self):
