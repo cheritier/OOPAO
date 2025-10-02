@@ -15,7 +15,7 @@ import matplotlib.gridspec as gridspec
 from .phaseStats import ft_phase_screen, ft_sh_phase_screen, makeCovarianceMatrix
 from .tools.displayTools import makeSquareAxes
 from .tools.interpolateGeometricalTransformation import interpolate_cube, interpolate_image
-from .tools.tools import createFolder, emptyClass, globalTransformation, pol2cart, translationImageMatrix, OopaoError
+from .tools.tools import createFolder, emptyClass, globalTransformation, pol2cart, translationImageMatrix, OopaoError,warning
 try:
     import cupy as xp
     global_gpu_flag = True
@@ -826,6 +826,10 @@ class Atmosphere:
     def r0(self, val):
         self._r0 = val
         if self.hasNotBeenInitialized is False:
+            if self.telescope.pixelSize*2 > val:
+                warning('The r0 @500 nm is smaller is sampled below Shannon precision with respect to the Telescope Pixel Size\n' +
+                        'This may cause issues with the Turbulent phase-screens statistics\n' +
+                        'Considering increasing the value of r0 or adding more pixels in the telescope resolution')
             print('Updating the Atmosphere covariance matrices...')
             self.seeingArcsec = self.rad2arcsec*(self.wavelength/val)
             self.cn2 = (self.r0**(-5. / 3) / (0.423 * (2*np.pi/self.wavelength)**2))/np.max([1, np.max(self.altitude)])  # Cn2 m^(-2/3)
