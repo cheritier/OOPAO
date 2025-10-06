@@ -116,10 +116,11 @@ def InteractionMatrix(ngs,
         a= time.time()
         # push
         dm.coefs = intMatCommands*stroke
-        tel*dm
-        tel.src.phase+=phaseBuffer
+        ngs**tel*dm
+        ngs.phase += phaseBuffer
+        ngs.phase_no_pupil = ngs.phase*tel.pupil # --> this should be automatically done when we set a phase
         # tel.src.phase_no_pupil+=phaseBuffer # this was needed when using the old geometric SH
-        tel*wfs
+        ngs*tel*wfs
         sp = wfs.signal
 
         # pull
@@ -128,10 +129,11 @@ def InteractionMatrix(ngs,
             factor = 2
         else:
             dm.coefs=-intMatCommands*stroke
-            tel*dm
-            tel.src.phase += phaseBuffer
+            ngs**tel*dm
+            ngs.phase += phaseBuffer
+            ngs.phase_no_pupil = ngs.phase * tel.pupil
             # tel.src.phase_no_pupil += phaseBuffer  # this was needed when using the old geometric SH
-            tel*wfs
+            ngs*tel*wfs
             sm = wfs.signal
             factor = 1
 
