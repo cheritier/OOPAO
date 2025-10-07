@@ -514,7 +514,7 @@ class Telescope:
     def OPD_no_pupil(self):
         return self.src.OPD_no_pupil
 
-    @OPD.setter
+    @OPD_no_pupil.setter
     def OPD_no_pupil(self, val):
         self.src.OPD_no_pupil = val
 
