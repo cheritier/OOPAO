@@ -165,11 +165,23 @@ class ShackHartmann:
         self.src = self.telescope.src
         if self.telescope.src is None:
             raise OopaoError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
-        if self.src.type == 'LGS':
-            self.is_LGS = True
-            self.convolution_tag = 'FFT'
+        
+        
+        if self.src.type == 'asterism':
+            if self.src.src[0].type == 'LGS':
+                self.is_LGS = True
+                self.convolution_tag = 'FFT'
+            else:
+                self.is_LGS = False
+
         else:
-            self.is_LGS = False
+            if self.src.type == 'LGS':
+                self.is_LGS = True
+                self.convolution_tag = 'FFT'
+            else:
+                self.is_LGS = False
+
+
 
         self._valid_subapertures = None
 
@@ -293,8 +305,8 @@ class ShackHartmann:
         # number of valid lenslet
         self.nValidSubaperture = int(np.sum(self.valid_subapertures))
         self.nSignal = 2*self.nValidSubaperture
-        if self.is_LGS:
-            self.shift_x_buffer, self.shift_y_buffer, self.spot_kernel_elongation_fft, self.spot_kernel_elongation = self.get_convolution_spot(compute_fft_kernel=True)
+        # if self.is_LGS:
+        #     self.shift_x_buffer, self.shift_y_buffer, self.spot_kernel_elongation_fft, self.spot_kernel_elongation = self.get_convolution_spot(compute_fft_kernel=True)
         
 
         if self.src.tag == 'source':
@@ -307,6 +319,15 @@ class ShackHartmann:
 
         for src in src_list:
             self.src = src
+
+            if self.src.type == "LGS":
+                self.is_LGS = True
+            else: 
+                self.is_LGS = False
+
+            if self.is_LGS:
+                self.shift_x_buffer, self.shift_y_buffer, self.spot_kernel_elongation_fft, self.spot_kernel_elongation = self.get_convolution_spot(compute_fft_kernel=True)
+        
             self.initialize_wfs()
 
             signal_2D_list.append(self.signal_2D)
@@ -334,6 +355,16 @@ class ShackHartmann:
         for src in src_list:
             src.optical_path.append([self.tag, self])
             self.src = src
+
+            if self.src.type == "LGS":
+                self.is_LGS = True
+            else:
+                self.is_LGS = False
+
+            if self.is_LGS:
+                self.shift_x_buffer, self.shift_y_buffer, self.spot_kernel_elongation_fft, self.spot_kernel_elongation = self.get_convolution_spot(compute_fft_kernel=True)
+       
+
             self.wfs_measure(phase_in=self.src.phase)
             signal_2D_list.append(self.signal_2D)
             signal_list.append(self.signal)
@@ -1134,9 +1165,7 @@ class ShackHartmann:
         self.nValidSubaperture = np.count_nonzero(self.valid_subapertures)
         self.nSignal = 2*self.nValidSubaperture
 
-        if self.is_LGS:
-            self.shift_x_buffer, self.shift_y_buffer, self.spot_kernel_elongation_fft, self.spot_kernel_elongation = self.get_convolution_spot(compute_fft_kernel=True)
-       
+
         if self.src.tag == 'source':
             self.src_list = [self.src]
 
@@ -1145,6 +1174,13 @@ class ShackHartmann:
 
         for src in self.src_list:
             self.src = src
+            
+            if self.src.type == "LGS":
+                self.is_LGS = True
+
+            if self.is_LGS:
+                self.shift_x_buffer, self.shift_y_buffer, self.spot_kernel_elongation_fft, self.spot_kernel_elongation = self.get_convolution_spot(compute_fft_kernel=True)
+       
             self.initialize_wfs()
     
 
