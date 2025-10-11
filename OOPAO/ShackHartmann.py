@@ -165,11 +165,23 @@ class ShackHartmann:
         self.src = self.telescope.src
         if self.telescope.src is None:
             raise OopaoError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
-        if self.src.type == 'LGS':
-            self.is_LGS = True
-            self.convolution_tag = 'FFT'
+        
+        
+        if self.src.type == 'asterism':
+            if self.src.src[0].type == 'LGS':
+                self.is_LGS = True
+                self.convolution_tag = 'FFT'
+            else:
+                self.is_LGS = False
+
         else:
-            self.is_LGS = False
+            if self.src.type == 'LGS':
+                self.is_LGS = True
+                self.convolution_tag = 'FFT'
+            else:
+                self.is_LGS = False
+
+
 
         self._valid_subapertures = None
 
@@ -293,12 +305,10 @@ class ShackHartmann:
         # number of valid lenslet
         self.nValidSubaperture = int(np.sum(self.valid_subapertures))
         self.nSignal = 2*self.nValidSubaperture
-        if self.is_LGS:
-            self.shift_x_buffer, self.shift_y_buffer, self.spot_kernel_elongation_fft, self.spot_kernel_elongation = self.get_convolution_spot(compute_fft_kernel=True)
-        # WFS initialization
-        # self.initialize_wfs()
-
+        # if self.is_LGS:
+        #     self.shift_x_buffer, self.shift_y_buffer, self.spot_kernel_elongation_fft, self.spot_kernel_elongation = self.get_convolution_spot(compute_fft_kernel=True)
         
+
         if self.src.tag == 'source':
             src_list = [self.src]
         elif self.src.tag == 'asterism':
@@ -309,6 +319,15 @@ class ShackHartmann:
 
         for src in src_list:
             self.src = src
+
+            if self.src.type == "LGS":
+                self.is_LGS = True
+            else: 
+                self.is_LGS = False
+
+            if self.is_LGS:
+                self.shift_x_buffer, self.shift_y_buffer, self.spot_kernel_elongation_fft, self.spot_kernel_elongation = self.get_convolution_spot(compute_fft_kernel=True)
+        
             self.initialize_wfs()
 
             signal_2D_list.append(self.signal_2D)
@@ -322,15 +341,7 @@ class ShackHartmann:
         self.src.signal = signal_list.copy()
 
 
-
     def relay(self, src):
-
-        # if src.tag == 'source':
-        #     src.optical_path.append([self.tag, self])
-        #     self.src = src
-        #     self.wfs_measure(phase_in=self.src.phase)
-
-
         if src.tag == 'source':
             src_list = [src]
         elif src.tag == 'asterism':
@@ -344,6 +355,16 @@ class ShackHartmann:
         for src in src_list:
             src.optical_path.append([self.tag, self])
             self.src = src
+
+            if self.src.type == "LGS":
+                self.is_LGS = True
+            else:
+                self.is_LGS = False
+
+            if self.is_LGS:
+                self.shift_x_buffer, self.shift_y_buffer, self.spot_kernel_elongation_fft, self.spot_kernel_elongation = self.get_convolution_spot(compute_fft_kernel=True)
+       
+
             self.wfs_measure(phase_in=self.src.phase)
             signal_2D_list.append(self.signal_2D)
             signal_list.append(self.signal)
@@ -352,95 +373,11 @@ class ShackHartmann:
         self.signal_2D = np.array(signal_2D_list)
         self.signal = np.array(signal_list)
         self.frames = np.array(frames_list)
-
-
-
-
-
-        
-        if self.src.tag == 'source':
-            src_list = [self.src]
-        elif self.src.tag == 'asterism':
-            src_list = self.src.src
-
-        signal_2D_list = []
-        signal_list = []
-
-        for src in src_list:
-            self.src = src
-            self.initialize_wfs()
-
-            signal_2D_list.append(self.signal_2D)
-            signal_list.append(self.signal)
-
-
-        self.signal_2D = signal_2D_list.copy()
-        self.signal = signal_list.copy()
-
-        self.src.signal_2D = signal_2D_list.copy()
-        self.src.signal = signal_list.copy()
-
-
-
-    def relay(self, src):
-
-        # if src.tag == 'source':
-        #     src.optical_path.append([self.tag, self])
-        #     self.src = src
-        #     self.wfs_measure(phase_in=self.src.phase)
-
-
-        if src.tag == 'source':
-            src_list = [src]
-        elif src.tag == 'asterism':
-            src_list = src.src
-
-        
-        signal_2D_list = []
-        signal_list = []
-        frames_list = []
-
-        for src in src_list:
-            src.optical_path.append([self.tag, self])
-            self.src = src
-            self.wfs_measure(phase_in=self.src.phase)
-            signal_2D_list.append(self.signal_2D)
-            signal_list.append(self.signal)
-            frames_list.append(self.cam.frame)
-
-        self.signal_2D = np.array(signal_2D_list)
-        self.signal = np.array(signal_list)
-        self.frames = np.array(frames_list)
-
-
-
-        # elif src.tag == 'asterism':
-        #     src_list = src.src
-        #     signal_2D_list = []
-        #     signal_list = []
-
-        #     frames_list = []
-
-        #     for src in src_list:
-        #         src.optical_path.append([self.tag, self])
-        #         self.src = src
-        #         self.wfs_measure(phase_in=self.src.phase)
-        #         signal_2D_list.append(self.signal_2D)
-        #         signal_list.append(self.signal)
-        #         frames_list.append(self.cam.frame)
-
-        #     self.signal_2D = np.array(signal_2D_list)
-        #     self.signal = np.array(signal_list)
-        #     self.frames = np.array(frames_list)
-
-
-            # np.hstack(shwfs.signal)
 
 
 
     def initialize_wfs(self):
         tmp_opd = self.src.OPD.copy()
-        # tmp_opd_no_pupil = self.telescope.OPD_no_pupil.copy()
 
         self.isInitialized = False
         readoutNoise = np.copy(self.cam.readoutNoise)
@@ -558,8 +495,13 @@ class ShackHartmann:
 
         self.wfs_measure(self.src.phase)
 
+        if self.is_geometric is False:
+            self.slopes_units = np.mean(self.signal)
+        else:
+            self.slopes_units = np.mean(self.signal_2D[self.lighted_subap*self.valid_slopes_maps])
 
-        self.slopes_units = np.mean(self.signal)
+
+
         self.cam.photonNoise = photonNoise
         self.cam.readoutNoise = readoutNoise
         self.src.OPD = tmp_opd
@@ -729,6 +671,8 @@ class ShackHartmann:
         [SLx, SLy] = self.gradient_2D(arr)
         sy = bin_ndarray(ndarray=SLx, new_shape=(self.nSubap, self.nSubap), operation="mean", ignore_zeros=True)
         sx = bin_ndarray(ndarray=SLy, new_shape=(self.nSubap, self.nSubap), operation="mean", ignore_zeros=True)
+
+        self.lighted_subap = np.concatenate((sx.astype(bool), sy.astype(bool)))
 
         return np.concatenate((sx, sy))
 
@@ -944,12 +888,6 @@ class ShackHartmann:
                     phase = self.phase_filtered
                     self.initialize_flux(((self.telescope.amplitude_filtered)**2).T*self.src.fluxMap.T)
 
-                # plt.imshow(phase)
-                # plt.colorbar()
-                # plt.show()
-                # np.mean(phase)
-                # breakpoint()
-
                 intensity = (np.abs(np.fft.fft2(np.asarray(self.get_lenslet_em_field(phase)), axes=[1, 2])/norma)**2)
                 # reduce to valid subaperture
                 intensity = intensity[self.valid_subapertures_1D, :, :]
@@ -1062,7 +1000,6 @@ class ShackHartmann:
                                           self.n_pix_subap*(self.nSubap)//self.binning_factor,
                                           self.n_pix_subap*(self.nSubap)//self.binning_factor], dtype=float)
 
-                # breakpoint()
                 # compute 2D intensity for multiple input wavefronts
                 def compute_diffractive_signals_multi():
                     Q = Parallel(n_jobs=1, prefer='processes')(delayed(self.wfs_measure)(i) for i in self.phase_buffer)
@@ -1108,7 +1045,7 @@ class ShackHartmann:
         else:
             # Geometric SH with single WF
             if np.ndim(self.src.phase) == 2:
-
+                
                 self.signal_2D = self.lenslet_propagation_geometric(
                     self.src.phase)*self.valid_slopes_maps/self.slopes_units
 
@@ -1227,6 +1164,25 @@ class ShackHartmann:
         self.valid_slopes_maps = np.concatenate((self.valid_subapertures, self.valid_subapertures))
         self.nValidSubaperture = np.count_nonzero(self.valid_subapertures)
         self.nSignal = 2*self.nValidSubaperture
+
+
+        if self.src.tag == 'source':
+            self.src_list = [self.src]
+
+        elif  self.src.tag == 'asterism':
+            self.src_list = self.src.src
+
+        for src in self.src_list:
+            self.src = src
+            
+            if self.src.type == "LGS":
+                self.is_LGS = True
+
+            if self.is_LGS:
+                self.shift_x_buffer, self.shift_y_buffer, self.spot_kernel_elongation_fft, self.spot_kernel_elongation = self.get_convolution_spot(compute_fft_kernel=True)
+       
+            self.initialize_wfs()
+    
 
 
     def __mul__(self, obj):

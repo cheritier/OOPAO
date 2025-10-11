@@ -610,7 +610,8 @@ class Atmosphere:
                     _im = xp.squeeze(interpolate_image(_im, pixel_size_in, pixel_size_out,
                                      resolution_out, shift_x=tmpLayer.extra_sx[i], shift_y=tmpLayer.extra_sy[i]))
 
-                if self.asterism.src[i].type == 'LGS':
+                # if self.asterism.src[i].type == 'LGS':
+                if self.asterism.src[i].altitude != np.inf:
                     sub_im = xp.reshape(_im[xp.where(tmpLayer.pupil_footprint[i] == 1)], [
                                         self.telescope.resolution, self.telescope.resolution])
                     alpha_cone = xp.arctan(
