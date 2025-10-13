@@ -9,13 +9,17 @@ import numpy as np
 import os
 from OOPAO.tools.tools import OopaoError
 from compute_papytwin import compute_papyrus_model
-from parameter_files.parameterFile_papytwin import initializeParameterFile
 from OOPAO.tools.interpolateGeometricalTransformation import interpolate_cube
 from OOPAO.MisRegistration import MisRegistration
 
 class Papyrus:
 
-    def __init__(self):
+    def __init__(self,advanced=False):
+        if advanced:
+            from parameter_files.parameterFile_papytwin_advanced import initializeParameterFile
+        else:
+            from parameter_files.parameterFile_papytwin import initializeParameterFile
+            
         self.param = initializeParameterFile()
 
         # BE SUR TO SET CONSOLE TO WORKING DIRECTORY BEFORE RUNNING
