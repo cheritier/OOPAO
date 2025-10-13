@@ -775,11 +775,9 @@ class Atmosphere:
 
         for i_l, ax in enumerate(axis_list):
             tmpLayer = getattr(self, 'layer_'+str(layer_index[i_l]+1))
-            ax.imshow(
-                tmpLayer.phase, extent=[-tmpLayer.D/2, tmpLayer.D/2, -tmpLayer.D/2, tmpLayer.D/2])
+            ax.imshow(tmpLayer.phase, extent=[-tmpLayer.D/2, tmpLayer.D/2, -tmpLayer.D/2, tmpLayer.D/2])
             center = tmpLayer.D/2
-            [x_tel, y_tel] = pol2cart(
-                tmpLayer.D_fov/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+            [x_tel, y_tel] = pol2cart(tmpLayer.D_fov/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
             # if list_src is not None:
             cm = plt.get_cmap('gist_rainbow')
             col = []
@@ -790,9 +788,10 @@ class Atmosphere:
                 if xp.isinf(h):
                     r = self.telescope.D/2
                 else:
-                    r = (h)/self.telescope.src.altitude*self.telescope.D/2
-                [x_cone, y_cone] = pol2cart(
-                    r, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+                    r = (h/self.telescope.src.altitude)*self.telescope.D/2
+                [x_cone, y_cone] = pol2cart(r, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+                print(r)
+                print(self.telescope.src.altitude)
                 if list_src[i_source].chromatic_shift is not None:
                     if len(list_src[i_source].chromatic_shift) == self.nLayer:
                         chromatic_shift = list_src[i_source].chromatic_shift[i_l]

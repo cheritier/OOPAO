@@ -464,8 +464,7 @@ class DeformableMirror:
         else:
             OPD = np.reshape(self.OPD[self.altitude_layer.center_x-self.telescope.resolution//2:self.altitude_layer.center_x+self.telescope.resolution//2, self.altitude_layer.center_y -
                              self.telescope.resolution//2:self.altitude_layer.center_y+self.telescope.resolution//2, :], [self.telescope.resolution, self.telescope.resolution, self.OPD.shape[2]])
-
-        if np.isinf(src.altitude) is False:
+        if np.isinf(src.altitude) is not True:
             if np.ndim(self.OPD) == 2:
                 sub_im = np.atleast_3d(OPD)
             else:
@@ -495,6 +494,7 @@ class DeformableMirror:
             OPD_in = telescope.OPD_no_pupil
             # warning('Multiple wave-front were already propagated at the telescope level. The telescope OPD is reset to a single flat wave-front.')
         if self.altitude is not None:
+            print("here")
             dm_OPD = self.get_OPD_altitude(src)
         else:
             dm_OPD = self.OPD
@@ -575,8 +575,7 @@ class DeformableMirror:
         ax = plt.subplot(gs[0, 0])
         if input_opd is None:
             input_opd = np.reshape(np.sum(self.modes**5, axis=1), [self.resolution, self.resolution])
-        ax.imshow(input_opd,
-                  extent=[-self.D/2, self.D/2, -self.D/2, self.D/2])
+        ax.imshow(input_opd,extent=[-self.D/2, self.D/2, -self.D/2, self.D/2])
         center = self.D/2
         [x_tel, y_tel] = pol2cart(self.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
         cm = plt.get_cmap('gist_rainbow')
@@ -591,24 +590,29 @@ class DeformableMirror:
             if xp.isinf(h):
                 r = self.telescope.D/2
             else:
-                r = (h)/self.telescope.src.altitude*self.telescope.D/2
+                r = (h/self.telescope.src.altitude)*self.telescope.D/2
             [x_cone, y_cone] = pol2cart(r, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
-            [x_z, y_z] = pol2cart(list_src[i_source].altitude*xp.tan((list_src[i_source].coordinates[0])/self.rad2arcsec), xp.deg2rad(list_src[i_source].coordinates[1]))
+            print(self.telescope.src.altitude)
+            if self.altitude is None:
+                [x_z, y_z] = [0, 0]
+            else:
+                [x_z, y_z] = pol2cart(self.altitude*xp.tan((list_src[i_source].coordinates[0])/self.rad2arcsec), xp.deg2rad(list_src[i_source].coordinates[1]))
             center = 0
-            [x_c, y_c] = pol2cart(
-                self.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+            [x_c, y_c] = pol2cart(self.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
             nm = (list_src[i_source].type) + '@' + \
                 str(list_src[i_source].coordinates[0])+'"'
             ax.plot(x_cone+x_z+center, y_cone+y_z+center,
                     '-', color=col[i_source], label=nm)
             ax.fill(x_cone+x_z+center, y_cone+y_z+center,
-                    y_z+center, alpha=0., color=col[i_source])
+                    y_z+center, alpha=0.1, color=col[i_source])
         ax.set_xlabel('[m]')
         ax.set_ylabel('[m]')
         ax.set_title('Altitude '+str(self.altitude)+' m')
         ax.plot(x_tel+center, y_tel+center, '--', color='k')
         ax.legend(loc='upper left')
         makeSquareAxes(plt.gca())
+        return
+    
     @property
     def coefs(self):
         return self._coefs
