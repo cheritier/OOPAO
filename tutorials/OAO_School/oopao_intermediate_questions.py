@@ -92,7 +92,15 @@ code_templates = [" # You will find some hints to answer the questions in this f
     "# Here is a useful function to apply a user_input_ncpa:\n"
     "from OOPAO.NCPA import NCPA\n"
     "ncpa = NCPA(tel, dm, atm, M2C = M2C_CL, coefficients=[0,0])\n"
-    "ncpa.OPD = user_defined_ncpa\n"
+    "ncpa.OPD = user_defined_ncpa\n",
+    "# You can change the parameters of the atmosphere directly:\n"
+    "atm.windspeed = [10] # adapt to the number of layers\n"
+    "atm.windDirection = [90] # adapt to the number of layers\n"
+    "atm.r0 = 0.15\n"
+    "# You can change the magnitude and coordinates of the stars:\n"
+    "ngs.magnitude = 0\n"
+    "ngs.coordinates = [10,90]  # #[zenith in arcsec, azimuth in deg] requires tel.fov to be different than 0 (see parameter file)\n"
+    "'The parameter file of the papytwin is located in /parameter_files/parameterFile_papytwin/'"
 ]
 
 oopao_templates = ["#You will find some generic OOPAO help in this frame\n"

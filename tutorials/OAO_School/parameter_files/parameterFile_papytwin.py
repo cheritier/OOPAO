@@ -28,7 +28,7 @@ def initializeParameterFile():
     param['altitude'             ] = [0, 1000,5000,10000,12000 ]                    # altitude of the different layers in [m]
                
                               
-    ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% M1 PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% TELESCOPE PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
     param['nSubaperture'         ] = 34                                                                           # number of PWFS subaperture along the telescope diameter
     param['nExtraSubaperture'    ] = 4                                                                            # extra subaperture on the edges
@@ -39,7 +39,7 @@ def initializeParameterFile():
     param['sizeSubaperture'      ] = param['diameter']/(param['nSubaperture'] + param['nExtraSubaperture'])       # size of a sub-aperture projected in the M1 space
     param['samplingTime'         ] = 1/1000                                                                        # loop sampling time in [s]
     param['m1_reflectivity'      ] = 0.01                                                                         # reflectivity of the pupil
-    
+    param['fieldOfView'          ] = 0 #field of view in arcsec => 0 is for the minimal value (speeding up the atmosphere computation)
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% NGS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
@@ -49,7 +49,7 @@ def initializeParameterFile():
     
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% DM PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    param['nActuator'            ] = 17                                             # number of actuators 
+    param['nActuator'            ] = 30                                             # number of actuators 
     param['mechanicalCoupling'   ] = 0.36
     param['isM4'                 ] = False                                          # tag for the deformable mirror class
     param['dm_coordinates'       ] = None                                           # tag for the deformable mirror class
@@ -62,7 +62,7 @@ def initializeParameterFile():
     param['anamorphosisAngle'    ] = 0                                              # anamorphosis angle of the DM in [degrees]
     param['tangentialScaling'    ] = 0
     param['radialScaling'        ] = 0                                           # radial scaling in percentage of diameter
-
+    param['dm_inf_funct_factor'  ] = 1 
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
     param['modulation'            ] = 5                                             # modulation radius in ratio of wavelength over telescope diameter
