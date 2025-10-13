@@ -4,20 +4,14 @@ Created on Fri Jun 20 14:34:13 2025
 
 @author: cheritier
 """
-from pymatreader import read_mat 
-import time
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-from OOPAO.calibration.CalibrationVault import CalibrationVault
-from OOPAO.calibration.InteractionMatrix import InteractionMatrix
-from OOPAO.tools.displayTools import cl_plot, displayMap, display_wfs_signals
 from OOPAO.tools.tools import OopaoError
 from compute_papytwin import compute_papyrus_model
 from parameter_files.parameterFile_papytwin import initializeParameterFile
 from OOPAO.tools.interpolateGeometricalTransformation import interpolate_cube
 from OOPAO.MisRegistration import MisRegistration
-from OOPAO.tools.tools import OopaoError
 
 class Papyrus:
 
