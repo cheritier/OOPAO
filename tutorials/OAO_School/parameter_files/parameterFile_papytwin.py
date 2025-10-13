@@ -49,7 +49,7 @@ def initializeParameterFile():
     
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% DM PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    param['nActuator'            ] = 30                                             # number of actuators 
+    param['nActuator'            ] = 17                                             # number of actuators 
     param['mechanicalCoupling'   ] = 0.36
     param['isM4'                 ] = False                                          # tag for the deformable mirror class
     param['dm_coordinates'       ] = None                                           # tag for the deformable mirror class
