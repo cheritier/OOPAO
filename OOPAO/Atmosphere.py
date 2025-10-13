@@ -790,8 +790,6 @@ class Atmosphere:
                 else:
                     r = (h/self.telescope.src.altitude)*self.telescope.D/2
                 [x_cone, y_cone] = pol2cart(r, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
-                print(r)
-                print(self.telescope.src.altitude)
                 if list_src[i_source].chromatic_shift is not None:
                     if len(list_src[i_source].chromatic_shift) == self.nLayer:
                         chromatic_shift = list_src[i_source].chromatic_shift[i_l]
