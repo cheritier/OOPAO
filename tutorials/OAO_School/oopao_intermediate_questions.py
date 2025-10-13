@@ -68,7 +68,7 @@ code_templates = [" # You will find some hints to answer the questions in this f
     "import sys\n"
     "xs = sys.path\n"
     "matching = [s for s in xs if 'OOPAO' in s]\n"
-    "sys.path.append(matching[0]+'/tutorials/ORP_AO_School/')\n"
+    "sys.path.append(matching[0]+'/tutorials/OAO_School/')\n"
     "loc = matching[0]+'/tutorials/PAPYRUS/'",
     
     "# Here is a summary of how to access the papytwin:\n"

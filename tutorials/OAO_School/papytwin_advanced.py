@@ -57,15 +57,9 @@ ngs*tel*wfs
 
 
 #%% PAPYRUS input data from the bench
-from pymatreader import read_mat
 from astropy.io import fits as fits
-
-import sys
-loc = 'C:/Users/cheritier/Documents/oopao_private/PAPYRUS/'
-M2C = read_mat(loc+'M2C_KL_OOPAO_synthetic_IF.mat')['M2C_KL']
-valid_pixel = read_mat(loc+'useful_pixels_20250604_0305.mat')['usefulPix']
-
-im = fits.getdata('C:/Users/cheritier/Documents/IMFull2025-09-29_23-02-11.fits')
+M2C = fits.getdata('C:/Users/cheritier/Documents/M2C.fits')
+im = fits.getdata('C:/Users/cheritier/Documents/IMFull.fits')
     
 # index of the KL modes included in the int-mat
 ind = [1, 5, 10, 20, 30, 50, 80, 100, 150]
@@ -79,8 +73,7 @@ var_im/=var_im.max()
 var_im = var_im>0.005
 
 # in case there is a mis-match set the key-word "correct" to True
-correct = True
-Papytwin.check_pwfs_pupils(valid_pixel_map = var_im, correct=correct)
+Papytwin.check_pwfs_pupils(valid_pixel_map = var_im)
 
 
 #%% PAPYRUS/PAPYTWIN Interaction Matrix Comparison 
@@ -112,16 +105,6 @@ b[np.isinf(b)] = 0
 from OOPAO.tools.displayTools import interactive_show
 interactive_show(a,b) # use right and left click to switch between PAPYRUS and PAPYTWIN
 
-
-#%% PAPYRUS KL Basis Computation (only for the bench)
-compute_kl_basis = False
-
-if compute_kl_basis:
-    from OOPAO.calibration.compute_KL_modal_basis import compute_KL_basis
-    M2C = compute_KL_basis(tel = tel,
-                           atm = atm,
-                           dm  = dm,
-                           lim = 1e-3)
 
 #%% PAPYRUS/PAPYTWIN DM/WFS Mis-registration calibration
 

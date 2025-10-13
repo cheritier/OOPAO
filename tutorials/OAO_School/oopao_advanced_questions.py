@@ -1,141 +1,128 @@
-# OOPAO / PAPYTWIN — Interactive Exercise Notebook (One-Question Reveal + Code Templates)
-# --------------------------------------------------
-# This version uses ipywidgets to reveal questions one by one, and includes code templates.
-
-# %%
+# -*- coding: utf-8 -*-
 """
-OOPAO Adaptive Optics — PAPYRUS Exercise
-Interactive version: only one question is shown at a time, with example code templates.
+Created on Mon Oct 13 12:37:28 2025
+
+@author: cheritier
 """
 
-# %%
-# Setup interactive reveal system
-from IPython.display import display, Markdown, clear_output
-import ipywidgets as widgets
+import streamlit as st
+from PIL import Image
+import os
+import re
 
+def format_question_text(text):
+    """Format question text with bold title and indented grey sub-items."""
+    # Split title and body
+    lines = text.strip().split('\n', 1)
+    title = lines[0].strip()
+    body = lines[1] if len(lines) > 1 else ""
+
+    # Convert (i), (ii), etc. to HTML-styled bullets
+    body = re.sub(
+        r'\s*\((?=[ivx]+\))',
+        r'<br>&nbsp;&nbsp;&nbsp;<span style="color:#cccccc;">• (',
+        body
+    )
+    # Close the <span> after each item (basic cleanup)
+    body = body.replace(")", ")</span>", 1)  # Close after first bullet properly
+
+    formatted = f"**{title}**<br><br>{body.strip()}"
+    return formatted
+# -------------------------------
+# QUESTIONS, CODE TEMPLATES, IMAGES
+# -------------------------------
 questions = [
-    "1️⃣ Load the papytwin objects",
-    "2️⃣ Perform a calibration of the system with `wfs.modulation = 0`",
-    "3️⃣ What test can you do to test the quality of the interaction matrix?",
-    "4️⃣ What test can you do to identify the maximum amplitude that can be properly reconstructed?",
-    "5️⃣ Recompute a new interaction matrix with `wfs.modulation = 3`. What does this parameter represent? How do you expect the previous test to change?",
-    "6️⃣ Once your calibration is satisfactory, create a closed loop with papytwin using 2.5″ seeing. Does the result look like the expected on-sky result?",
-    "7️⃣ What could explain the difference in the on-sky PSF and the one obtained in simulation?",
-    "8️⃣ Load the NCPA objects. Try to reproduce the expected level of NCPA playing with the modal coefficient index amplitude [clue: only one mode to apply]. Do you know why we see this NCPA?",
-    "9️⃣ Tune the NCPA to reach a target Strehl in the IR for a 2.5″ seeing and a windspeed of 5 m/s.",
-    "🔟 What parameter is driving the AO performance of PAPYRUS?",
-    "1️⃣1️⃣ How could we improve the AO performance of PAPYRUS?",
-    "1️⃣2️⃣ Anisoplanatism: How far would you need to put the source to reduce the SR by a factor 2?"
+    "Objective of the tutorial:\n"
+    "Compute a synthetic interaction matrix that you can use on the real system\n",
+    
+    "Load the papytwin objects.\nExplore the different objects and provide an illustration for their main properties.\n"
+    "Generate a synthetic interaction matrix and compare it to the experimental one.\n"
+    "What parameters of the model would you need to adapt from this first look?\n",
+    "Try to tune the parameters of the model to match the real system.\n"
+    " (i) Write a simple test to test the quality of the interaction matrix you computed.\n"
+    " (ii) Try to close the loop of the papytwin making use of the experimental interaction matrix"]
+code_templates = [" # You will find some hints to answer the questions in this frame.\n"
+    "# For instance, make sure that the following code is put at the beginning of your notebook:\n"
+    "import sys\n"
+    "xs = sys.path\n"
+    "matching = [s for s in xs if 'OOPAO' in s]\n"
+    "sys.path.append(matching[0]+'/tutorials/OAO_School/')\n"
+    "loc = matching[0]+'/tutorials/PAPYRUS/'\n"
+    "Some data are available here: 'https://drive.google.com/drive/folders/1OPrhTyuZHtHknvQ9StGYF9wPvsNOwtFk'\n"
+    " - 'IMFull.fits' is the interaction matrix of the system\n"
+    " - 'M2C.fits' is the mode-to-command matrix of PAPYRUS\n",
+    "Check the 'papytwin_advanced.py' \n"
+    "This script will be useful to understand how to:\n"
+    " - Tune the position of the pyramid pupils\n"
+    " - Tune the DM rotation\n"
+    " - Tune the DM/WFS fine registration\n",
+    "Check the 'papytwin_advanced.py' \n"
+    "This script will be useful to understand how to:\n"
+    " - Tune the position of the pyramid pupils\n"
+    " - Tune the DM rotation\n"
+    " - Tune the DM/WFS fine registration\n"
+    
+    ]
+
+oopao_templates = ["#You will find some generic OOPAO help in this frame\n"
+"tel.OPD  # Access the telescope Optical Path Difference\n"
+"src.phase  # Access the source phase at the source wavelength\n"
+"tel.src  # Access the telescope source object\n"                   
+"tel.resetOPD() # Reset the light propagation\n"
+"ngs*tel*dm*wfs  # Propagate the light through the system\n"
+"dm.coefs=M2C[:,10]  #apply the mode 10 on the dm\n"
+"wfs.modulation=val # update the modulation radius and re-compute the reference signal of the Pyramid\n"
+"tel+atm # couple the atmosphere and the telescope to go through the turbulence\n"
+"tel-atm # separate the atmosphere and the telescope to go in diffraction-limit case\n"
+"atm.update() # update the atmospheric phase-screen by 1 time-step".format(i+1) for i in range(len(questions))]
+
+
+
+question_images = [
+    None, None, None, None,None,
+    None,  # Example image for question 5
+    None, None, None, None, None
 ]
 
-i = 0
-out = widgets.Output()
+# -------------------------------
+# STREAMLIT UI SETUP
+# -------------------------------
+st.set_page_config(page_title="OOPAO / PAPYRUS AO Exercise", layout="wide")
 
-def next_question(_):
-    global i
-    with out:
-        clear_output()
-        if i < len(questions):
-            display(Markdown(f"### Question {i+1}\n{questions[i]}"))
-            # show example code template
-            if i == 0:
-                display(Markdown("""```python
-from oopao import papytwin
-pt = papytwin.Papytwin()  # Load the papytwin bench
-print(pt)
-```"""))
-            elif i == 1:
-                display(Markdown("""```python
-# Calibration with wfs.modulation = 0
-pt.wfs.modulation = 0
-pt.calibrate_system()
-pt.plot_interaction_matrix()
-```"""))
-            elif i == 2:
-                display(Markdown("""```python
-# Test quality of interaction matrix (e.g., via SVD condition number)
-import numpy as np
-U, s, Vt = np.linalg.svd(pt.M2C, full_matrices=False)
-print('Condition number:', s.max()/s.min())
-```"""))
-            elif i == 3:
-                display(Markdown("""```python
-# Linearity test — increase input amplitude and reconstruct
-amplitudes = np.linspace(0, 1e-6, 10)
-errors = []
-for amp in amplitudes:
-    pt.dm.set_phase(amp * pt.modes[:,0])
-    recon = pt.wfs.reconstruct()
-    errors.append(np.std(recon - amp*pt.modes[:,0]))
-plt.plot(amplitudes, errors)
-plt.xlabel('Amplitude [rad]')
-plt.ylabel('Reconstruction error')
-```"""))
-            elif i == 4:
-                display(Markdown("""```python
-# Change modulation and recalibrate
-pt.wfs.modulation = 3
-pt.calibrate_system()
-# The modulation increases dynamic range but reduces sensitivity.
-```"""))
-            elif i == 5:
-                display(Markdown("""```python
-# Closed loop simulation under 2.5'' seeing
-pt.atmosphere.set_seeing(2.5)
-pt.loop_gain = 0.5
-pt.run_closed_loop(n_iter=200)
-pt.display_psf()
-```"""))
-            elif i == 6:
-                display(Markdown("""```python
-# Discuss differences between simulated and on-sky PSF
-# Possible factors: unmodeled turbulence layers, calibration error, telescope vibrations.
-```"""))
-            elif i == 7:
-                display(Markdown("""```python
-# Load and apply NCPA
-pt.load_ncpa('path/to/ncpa/file')
-pt.apply_ncpa(mode_index=5, amplitude=0.1)
-pt.display_psf()
-```"""))
-            elif i == 8:
-                display(Markdown("""```python
-# Tune NCPA to reach target Strehl
-from oopao.metrics import compute_strehl
-for amp in np.linspace(0, 0.2, 10):
-    pt.apply_ncpa(mode_index=5, amplitude=amp)
-    sr = compute_strehl(pt.get_psf())
-    print(f'Amplitude={amp:.2f}, SR={sr:.3f}')
-```"""))
-            elif i == 9:
-                display(Markdown("""```python
-# Explore parameter sensitivity
-# Example: number of modes, loop gain, frame rate
-```"""))
-            elif i == 10:
-                display(Markdown("""```python
-# Discuss improvements: faster loop, predictive control, better calibration
-```"""))
-            elif i == 11:
-                display(Markdown("""```python
-# Anisoplanatism test: vary source position
-angles = np.linspace(0, 30, 10)  # arcseconds
-strehl = []
-for ang in angles:
-    pt.src.set_offset(ang)
-    pt.run_closed_loop(100)
-    strehl.append(pt.compute_strehl())
-plt.plot(angles, strehl)
-plt.xlabel('Off-axis angle [arcsec]')
-plt.ylabel('Strehl ratio')
-```"""))
-            i += 1
-        else:
-            display(Markdown("✅ **All questions revealed!**"))
+if "q_index" not in st.session_state:
+    st.session_state.q_index = 0
 
-btn = widgets.Button(description="Show next question", button_style="info", icon="arrow-down-circle")
-btn.on_click(next_question)
+# Title
+st.title("OOPAO / PAPYRUS Adaptive Optics Exercise")
+st.subheader(f"Question {st.session_state.q_index} of {len(questions)-1}")
 
-display(btn, out)
+# Two-column layout
+col1, col2 = st.columns([3, 2])
 
-print("Interactive question reveal setup ready. Run the top cell and click the button to begin.")
+# Question text
+# col1.markdown(f"### 📘 Question\n\n{questions[st.session_state.q_index]}")
+col1.markdown(format_question_text(questions[st.session_state.q_index]), unsafe_allow_html=True)
+# Image (if any)
+img_path = question_images[st.session_state.q_index]
+if img_path and os.path.exists(img_path):
+    image = Image.open(img_path)
+    col2.image(image, caption="Related illustration", use_column_width=True)
+# Code hint
+st.markdown("### Hints")
+st.code(code_templates[st.session_state.q_index], language="python")
+st.markdown("### OOPAO cheat-list")
+st.code(oopao_templates[st.session_state.q_index], language="python")
+
+# Navigation buttons
+col_prev, col_next = st.columns(2)
+with col_prev:
+    if st.button("⬅ Previous"):
+        if st.session_state.q_index > 0:
+            st.session_state.q_index -= 1
+            st.rerun()
+
+with col_next:
+    if st.button("Next ➡"):
+        if st.session_state.q_index < len(questions) - 1:
+            st.session_state.q_index += 1
+            st.rerun()

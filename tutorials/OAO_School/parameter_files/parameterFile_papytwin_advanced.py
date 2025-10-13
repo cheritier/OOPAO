@@ -57,7 +57,7 @@ def initializeParameterFile():
     
     # mis-registrations                                                             
     # latest value 16062025
-    param['rotationAngle'        ] = -89.536                                           # rotation angle of the DM in [degrees]    
+    param['rotationAngle'        ] = 0.5                                           # rotation angle of the DM in [degrees]    
     param['shiftX'               ] = -0.004                                              # shift X of the DM in pixel size units ( tel.D/tel.resolution ) 
     param['shiftY'               ] = 0.005                                              # shift Y of the DM in pixel size units ( tel.D/tel.resolution )
     param['anamorphosisAngle'    ] = 0                                              # anamorphosis angle of the DM in [degrees]
@@ -73,8 +73,8 @@ def initializeParameterFile():
     param['psfCentering'          ] = False                                         # centering of the FFT and of the PWFS mask on the 4 central pixels
     param['lightThreshold'        ] = 0.3                                           # light threshold to select the valid pixels
     param['postProcessing'        ] = 'fullFrame'                                   # post-processing of the PWFS signals 'slopesMaps' ou 'fullFrame'
-    param['pwfs_pupils_shift_x'   ] = [ 9.45287721, -7.76605308, -7.9417502 ,  7.22082509]
-    param['pwfs_pupils_shift_y'   ] = [-8.61289867, -9.49168905,  8.5352799 ,  9.4927028 ]
+    param['pwfs_pupils_shift_x'   ] = [0]*4
+    param['pwfs_pupils_shift_y'   ] = [0]*4
     param['rooftop']                = 0 
     param['n_pix_separation'      ] = 40                                            # separation ratio between the PWFS pupils
     param['n_pix_edge'            ] = 20                                            # separation ratio between the PWFS pupils
