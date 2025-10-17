@@ -246,7 +246,7 @@ class Atmosphere:
         layer.resolution_fov = int(
             xp.ceil((self.telescope.resolution/self.telescope.D)*layer.D_fov))
         # 4 pixels are added as a margin for the edges
-        layer.resolution = layer.resolution_fov
+        layer.resolution = layer.resolution_fov + 4
         layer.D = layer.resolution * self.telescope.D / self.telescope.resolution
         layer.center = layer.resolution//2
         if self.asterism is None:
