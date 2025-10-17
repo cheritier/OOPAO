@@ -524,8 +524,8 @@ class Atmosphere:
                         magnification_cone_effect = 1
                         interpolate_im = False
                     else:
-                        # magnification due to cone effect not considered
-                        magnification_cone_effect = (h)/self.telescope.src.altitude
+                        # magnification due to cone effect is considered
+                        magnification_cone_effect = (h)/self.asterism.altitude[i]
                         interpolate_im = True
                     cube_in = xp.atleast_3d(sub_im).T
 
@@ -533,10 +533,14 @@ class Atmosphere:
                     pixel_size_out = pixel_size_in*magnification_cone_effect
                     resolution_out = self.telescope.resolution
 
-                    phase_support[i] += xp.squeeze(interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out)).T * xp.sqrt(self.fractionalR0[i_layer])
+                    if interpolate_im:
+                        phase_support[i] += xp.squeeze(interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out)).T * xp.sqrt(self.fractionalR0[i_layer])
+                    else:
+                        phase_support[i] += xp.reshape(_im[xp.where(tmpLayer.pupil_footprint[i] == 1)], [
+                                                   self.telescope.resolution, self.telescope.resolution]) * xp.sqrt(self.fractionalR0[i_layer])
                 else:
                     phase_support[i] += xp.reshape(_im[xp.where(tmpLayer.pupil_footprint[i] == 1)], [
-                                                   self.telescope.resolution, self.telescope.resolution]) * xp.sqrt(self.fractionalR0[i_layer])
+                        self.telescope.resolution, self.telescope.resolution]) * xp.sqrt(self.fractionalR0[i_layer])
         return phase_support
 
     def set_OPD(self, phase_support):
@@ -788,7 +792,7 @@ class Atmosphere:
                 if xp.isinf(h):
                     r = self.telescope.D/2
                 else:
-                    r = (h/self.telescope.src.altitude)*self.telescope.D/2
+                    r = (h/list_src[i_source].altitude)*self.telescope.D/2
                 [x_cone, y_cone] = pol2cart(r, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
                 if list_src[i_source].chromatic_shift is not None:
                     if len(list_src[i_source].chromatic_shift) == self.nLayer:

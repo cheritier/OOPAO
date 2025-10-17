@@ -41,6 +41,10 @@ tel = Telescope(resolution           = 8*n_subaperture,                         
 ngs=Source(optBand   = 'I',\
            magnitude = 5,)
     
+# create the Source object (artificial for the calibration of the SH)
+ngs_HO =Source(optBand   = 'Na',\
+               magnitude = 5,)
+    
     
 #%% -----------------------     LGS   ----------------------------------
 n_lgs = 4
@@ -84,6 +88,7 @@ ast.display_asterism()
 
 #%% -----------------------     ATMOSPHERE   ----------------------------------
 
+ast*tel
 # create the Atmosphere object
 atm=Atmosphere(telescope     = tel,
                r0            = 0.15,
@@ -196,8 +201,9 @@ M2C_zonal = np.eye(dm.nValidAct)
 # modal Interaction Matrix for 300 modes
 M2C_modal = M2C_KL[:,:300]
 
+
 # zonal interaction matrix
-calib_HO = InteractionMatrix(ngs            = ngs,
+calib_HO = InteractionMatrix(ngs            = ngs_HO,
                                 atm            = atm,
                                 tel            = tel,
                                 dm             = dm,
@@ -232,7 +238,7 @@ tel+atm
 # typical spot size from atmosphere: 
 r0_ngs_wvl, seeing_ngs_wvl = atm.print_atm_at_wavelength(ast.src[0].wavelength)
 
-list_wfs[0].set_weighted_centroiding_map(is_lgs=False,is_gaussian=True,fwhm_factor=5)
+list_wfs[0].set_weighted_centroiding_map(is_lgs=False,is_gaussian=True,fwhm_factor=10)
 
 atm*ast*tel*list_wfs
 plt.figure()
@@ -243,15 +249,15 @@ plt.imshow(list_wfs[0].cam.frame)
 
 
 #%% setup of the Weighted cOg for the LGS WFS based on the LGS elongation profile
-for i_wfs in list_wfs[1:]:
-    i_wfs.set_weighted_centroiding_map(is_lgs=True,
-                                       is_gaussian=True,
-                                       fwhm_factor=1.2) # use assymetric gaussian maps with a FWHM twice larger than the FWHM of the LGS spots in each direction
-    plt.figure()
-    plt.subplot(1,2,1)
-    plt.imshow(i_wfs.merge_data_cube(i_wfs.weighting_map))
-    plt.subplot(1,2,2)
-    plt.imshow(i_wfs.cam.frame)
+# for i_wfs in list_wfs[1:]:
+#     i_wfs.set_weighted_centroiding_map(is_lgs=True,
+#                                        is_gaussian=True,
+#                                        fwhm_factor=1.2) # use assymetric gaussian maps with a FWHM twice larger than the FWHM of the LGS spots in each direction
+#     plt.figure()
+#     plt.subplot(1,2,1)
+#     plt.imshow(i_wfs.merge_data_cube(i_wfs.weighting_map))
+#     plt.subplot(1,2,2)
+#     plt.imshow(i_wfs.cam.frame)
 
 
 
@@ -288,7 +294,9 @@ src*tel
 # instrument path
 src_cam = Detector(tel.resolution)
 src_cam.psf_sampling = 4
-src_cam.integrationTime = tel.samplingTime*10
+src_cam.integrationTime = tel.samplingTime
+
+tel*src_cam
 
 # initialize Telescope DM commands
 tel.resetOPD()

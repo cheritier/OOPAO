@@ -494,7 +494,6 @@ class DeformableMirror:
             OPD_in = telescope.OPD_no_pupil
             # warning('Multiple wave-front were already propagated at the telescope level. The telescope OPD is reset to a single flat wave-front.')
         if self.altitude is not None:
-            print("here")
             dm_OPD = self.get_OPD_altitude(src)
         else:
             dm_OPD = self.OPD
