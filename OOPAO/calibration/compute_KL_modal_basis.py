@@ -11,10 +11,9 @@ from astropy.io import fits as pfits
 import OOPAO.calibration.ao_cockpit_psim as aou
 from ..tools.tools import createFolder
 
-def compute_KL_basis(src,tel,atm,dm,lim = 1e-3,remove_piston = True, n_batch = 1):
+def compute_KL_basis(tel,atm,dm,lim = 1e-3,remove_piston = True, n_batch = 1):
     
-    M2C_KL = compute_M2C(src = src,
-                        telescope            = tel,\
+    M2C_KL = compute_M2C(telescope            = tel,\
                         atmosphere         = atm,\
                         deformableMirror   = dm,\
                         param              = None,\
@@ -27,7 +26,7 @@ def compute_KL_basis(src,tel,atm,dm,lim = 1e-3,remove_piston = True, n_batch = 1
                         minimF             = False,\
                         nmo                = None,\
                         ortho_spm          = True,\
-                        SZ                 = int(2*src.OPD.shape[0]),\
+                        SZ                 = int(2*tel.resolution),\
                         nZer               = 3,\
                         NDIVL              = n_batch,\
                         recompute_cov=True,\
@@ -35,7 +34,7 @@ def compute_KL_basis(src,tel,atm,dm,lim = 1e-3,remove_piston = True, n_batch = 1
         
     return M2C_KL
 
-def compute_M2C(src, telescope, atmosphere, deformableMirror, param = None, nameFolder = None, nameFile = None,remove_piston = False,HHtName = None, baseName = None, SpM_2D = None, nZer = 3, SZ=None, mem_available = None, NDIVL = None, computeSpM = True, ortho_spm = True, computeSB = True, computeKL = True, minimF = False, P2F = None, alpha = None, beta = None, lim_SpM = None, lim_SB = None, nmo = None, IF_2D = None, IFma = None, returnSB = False, returnHHt_PSD_df = False, recompute_cov = False,extra_name = '', save_output = True,lim_inversion=1e-3,display=True):
+def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolder = None, nameFile = None,remove_piston = False,HHtName = None, baseName = None, SpM_2D = None, nZer = 3, SZ=None, mem_available = None, NDIVL = None, computeSpM = True, ortho_spm = True, computeSB = True, computeKL = True, minimF = False, P2F = None, alpha = None, beta = None, lim_SpM = None, lim_SB = None, nmo = None, IF_2D = None, IFma = None, returnSB = False, returnHHt_PSD_df = False, recompute_cov = False,extra_name = '', save_output = True,lim_inversion=1e-3,display=True):
 
     """
     - HHtName       = None      extension for the HHt Covariance file
@@ -93,15 +92,9 @@ def compute_M2C(src, telescope, atmosphere, deformableMirror, param = None, name
     telescope.isPaired = False # separate from eventual atmosphere
     
     if IF_2D is None:
-        deformableMirror.coefs = np.eye(deformableMirror.nValidAct) # assign dm coefs to get the cube of IF in OPD
-        if display:
-            print('COMPUTING TEL*DM...')
-            print(' ')
-        src**telescope*deformableMirror    # propagate to get the OPD of the IFS after reflection
-        if display:
-            print('PREPARING IF_2D...')
-            print(' ')
-        IF_2D = np.moveaxis(src.OPD,-1,0)
+        
+        IF_2D = deformableMirror.modes.reshape(telescope.resolution,telescope.resolution,deformableMirror.nValidAct)*np.tile(telescope.pupil[:,:,None],deformableMirror.nValidAct)
+        IF_2D = np.moveaxis(IF_2D,-1,0)
 
 
 
