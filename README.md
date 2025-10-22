@@ -116,6 +116,7 @@ Main contributors:
  - Arnaud Striffling
  - Christophe Vérinaud
  - Jonathan Dray
+ - João Monteiro
 
 ## CITING OOPAO
 If you use OOPAO for your own research, we kindly ask you to cite the OOPAO AO4ELT7 proceeding (Heritier et al. 2023).
