@@ -144,10 +144,10 @@ class Telescope:
         """
 
         OOPAO_path = [s for s in sys.path if "OOPAO" in s]
-        l = []
+        l_ = []
         for i in OOPAO_path:
-            l.append(len(i))
-        path = OOPAO_path[np.argmin(l)]
+            l_.append(len(i))
+        path = OOPAO_path[np.argmin(l_)]
         precision = np.load(path+'/precision_oopao.npy')
         if precision == 64:
             self.precision = np.float64
@@ -180,8 +180,6 @@ class Telescope:
         self.set_pupil()                            # set the pupil
         # temporary source object associated to the telescope object
         self.src = None
-
-
         self.tag = 'telescope'                  # tag of the object
         # indicate if telescope object is paired with an atmosphere object
         self.isPaired = False
@@ -195,30 +193,21 @@ class Telescope:
         self.isInitialized = True
         self.apply_off_axis_tip_tilt = True
 
-
     def relay(self, src):
         self.src = src
-
         if src.tag == 'source':
             self.src_list = [src]
         elif src.tag == 'asterism':
             self.src_list = src.src
-
         for src in self.src_list:
             src.optical_path.append([self.tag, self])
             src.tel = self
             src.mask = self.pupil.copy()
-
             if src.OPD is None:
                 src.OPD_no_pupil = np.zeros(self.pupil.shape)
-
-            #TODO: Create a tel.OPD to add to the source OPD
             src.OPD = src.OPD_no_pupil*src.mask
             src.var = np.var(src.phase[np.where(self.pupil == 1)])
-            src.fluxMap = self.pupilReflectivity * src.nPhoton * \
-                          self.samplingTime * (self.D / self.resolution) ** 2
-
-
+            src.fluxMap = self.pupilReflectivity * src.nPhoton * self.samplingTime * (self.D / self.resolution) ** 2
 
     def set_pupil(self):
         # Case where the pupil is not input: circular pupil with central obstruction
@@ -276,8 +265,6 @@ class Telescope:
                 theta = xp.squeeze(xp.asarray(self.src.coordinates))[1]
                 x_max = (xp.abs(r * xp.cos(np.deg2rad(theta))))
                 y_max = (xp.abs(r * xp.sin(np.deg2rad(theta))))
-            
-
         else:
             input_source = [self.src]
             r = xp.squeeze(xp.asarray(self.src.coordinates))[0]
@@ -285,7 +272,7 @@ class Telescope:
             x_max = (xp.abs(r * xp.cos(np.deg2rad(theta))))
             y_max = (xp.abs(r * xp.sin(np.deg2rad(theta))))
 
-        pixel_scale = self.rad2arcsec*(input_source[0].wavelength/self.D)/zeroPaddingFactor # in arcsec
+        pixel_scale = self.rad2arcsec*(input_source[0].wavelength/self.D)/zeroPaddingFactor  # in arcsec
         maximum_fov = pixel_scale*img_resolution/2
         n_extra = np.abs(np.floor((maximum_fov - max(x_max, y_max))/pixel_scale) - img_resolution//2)
         n_pix = np.ceil(max(int(img_resolution/2 + n_extra)*2, img_resolution)).astype('int')
@@ -295,7 +282,6 @@ class Telescope:
             n_pix = img_resolution
             self.support_PSF = np.zeros([img_resolution, img_resolution])
         center = self.support_PSF.shape[0]//2
-
         input_wavelenght = input_source[0].wavelength
         output_PSF = []
         output_PSF_norma = []
@@ -439,13 +425,9 @@ class Telescope:
 
         if oversampling != 1:
             self.PSF = set_binning(xp.abs(EMF) ** 2, oversampling)
-
         else:
             self.PSF = xp.abs(EMF) ** 2
-
         return oversampling
-
-
 
     def apply_spiders(self, angle, thickness_spider, offset_X=None, offset_Y=None):
         self.isInitialized = False
@@ -521,12 +503,8 @@ class Telescope:
     def resetOPD(self):
         self.src.resetOPD()
 
-    # <\JM @ SpaceODT>
-
-
-    # <JM @ SpaceODT> 
     # This function was replaced by relay functions in different objects
-    # Remains here for now for reference 
+    # Remains here for now for backward compatibility
     def mul(self, obj):
         print(f"Multiplying Telescope with {obj.tag}")
         # case where multiple objects are considered
@@ -671,10 +649,8 @@ class Telescope:
                     else:
                         raise OopaoError('The wrong object was attached to the telescope')
         return self
-
-
     # <JM @ SpaceODT> This is no longer needed as the atmosphere behaves as its own entity now.
-    # Remains here for now for reference 
+    # Remains here for now for reference
     # Combining with an atmosphere object
     def __add__(self, obj):
         if obj.tag == 'atmosphere':
@@ -701,9 +677,7 @@ class Telescope:
         if obj.tag == 'spatialFilter':
             self.spatialFilter = None
             print('Telescope and Spatial Filter separated!')
-    
     # <\JM @ SpaceODT>
-    
 
     def print_optical_path(self):
         if self.optical_path is not None:
