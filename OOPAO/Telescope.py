@@ -491,6 +491,8 @@ class Telescope:
     @OPD.setter
     def OPD(self, val):
         self.src.OPD = val
+        if xp.ndim(self.OPD) == 2:
+            self.mean_removed_OPD = (self.OPD - xp.mean(self.OPD[xp.where(self.pupil == 1)]))*self.pupil
 
     @property
     def OPD_no_pupil(self):
@@ -501,12 +503,12 @@ class Telescope:
         self.src.OPD_no_pupil = val
 
     def resetOPD(self):
-        self.src.resetOPD()
+        self.src**self
+        # self.src.resetOPD()
 
     # This function was replaced by relay functions in different objects
     # Remains here for now for backward compatibility
-    def mul(self, obj):
-        print(f"Multiplying Telescope with {obj.tag}")
+    def __mul__(self, obj):
         # case where multiple objects are considered
         if type(obj) is list:
             wfs_signal = []
@@ -529,10 +531,10 @@ class Telescope:
         else:
             # interaction with WFS object: Propagation of the phase screen
             if obj.tag == 'pyramid' or obj.tag == 'double_wfs' or obj.tag == 'shackHartmann' or obj.tag == 'bioEdge':
-                self.optical_path.append([obj.tag, id(obj)])
-                if self.display_optical_path is True:
-                    self.print_optical_path()
-                self.optical_path = self.optical_path[:-1]
+                # self.optical_path.append([obj.tag, id(obj)])
+                # if self.display_optical_path is True:
+                #     self.print_optical_path()
+                # self.optical_path = self.optical_path[:-1]
 
                 if self.src.tag == 'asterism':
                     input_source = copy.deepcopy(self.src.src)
@@ -565,8 +567,8 @@ class Telescope:
                     obj.wfs_measure(phase_in=self.src.phase)
 
             if obj.tag == 'detector':
-                if self.optical_path[-1] != obj.tag:
-                    self.optical_path.append([obj.tag, id(obj)])
+                # if self.optical_path[-1] != obj.tag:
+                    # self.optical_path.append([obj.tag, id(obj)])
 
                 self.computePSF(detector=obj)
                 obj.fov_arcsec = self.xPSF_arcsec[1] - self.xPSF_arcsec[0]
@@ -583,19 +585,19 @@ class Telescope:
                 self.PSF = obj.frame
 
             if obj.tag == 'OPD_map':
-                self.optical_path.append([obj.tag, id(obj)])
+                # self.optical_path.append([obj.tag, id(obj)])
 
                 self.OPD += obj.OPD
                 self.OPD_no_pupil += obj.OPD
 
             if obj.tag == 'NCPA':
-                self.optical_path.append([obj.tag, id(obj)])
+                # self.optical_path.append([obj.tag, id(obj)])
 
                 self.OPD += obj.OPD
                 self.OPD_no_pupil += obj.OPD
 
             if obj.tag == 'spatialFilter':
-                self.optical_path.append([obj.tag, id(obj)])
+                # self.optical_path.append([obj.tag, id(obj)])
 
                 self.spatialFilter = obj
                 N = obj.resolution
@@ -615,13 +617,13 @@ class Telescope:
                 return self
 
             if obj.tag == 'deformableMirror':
-                if self.optical_path[-1][1] != id(obj):
-                    self.optical_path.append([obj.tag, id(obj)])
+                # if self.optical_path[-1][1] != id(obj):
+                #     self.optical_path.append([obj.tag, id(obj)])
 
                 pupil = xp.atleast_3d(self.pupil)
 
                 if self.src.tag == 'source':
-                    self.OPD_no_pupil = obj.dm_propagation(self)
+                    self.OPD_no_pupil = obj.dm_propagation(self.src)
                     if xp.ndim(self.OPD_no_pupil) == 2:
                         self.OPD = self.OPD_no_pupil*self.pupil
                     else:

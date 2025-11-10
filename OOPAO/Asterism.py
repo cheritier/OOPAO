@@ -4,10 +4,11 @@ Created on Tue Aug 23 14:35:32 2022
 
 @author: cheritie
 """
-
 import numpy as np
 import matplotlib.pyplot as plt
 from OOPAO.tools.displayTools import makeSquareAxes
+
+
 class Asterism:
     def __init__(self,
                  list_src: list):
@@ -52,14 +53,10 @@ class Asterism:
         for i, src in enumerate(self.src):
             src.inAsterism = True
             src.ast_idx = i
-
-
         self.chromatic_shift = None
         print(self)
         self.tag = 'asterism'
         self.type = 'asterism'
- 
-
         self.wavelength = self.src[0].wavelength
 
     @property
@@ -80,7 +77,6 @@ class Asterism:
     def phase(self, val):
         for src in self.src:
             src.phase = val[src.ast_idx]
-
 
     @property
     def phase_no_pupil(self):
@@ -124,10 +120,6 @@ class Asterism:
             _OPD_no_pupil.append(src.OPD_no_pupil)
         return np.array(_OPD_no_pupil)
 
-
-
-
-
     def __pow__(self, obj):
         # Re-propagation function. Same as .* in OOMAO
 
@@ -136,66 +128,57 @@ class Asterism:
             src.optical_path = [[src.type + '('+src.optBand+')', src]]
         self.resetOPD()
         self*obj
-
-
         return self
-
-
 
     def __mul__(self, obj):
         # Propagation function.
-
         obj.relay(self)
         return self
-
-
 
     def resetOPD(self):
         for src in self.src:
             src.resetOPD()
 
-
     def print_optical_path(self):
         for src in self.src:
             src.print_optical_path()
-
 
     # for backward compatibility
     def print_properties(self):
         print(self)
 
     def display_asterism(self):
-        
         plt.figure()
-        x = np.linspace(0,2*np.pi,100,endpoint=True)
-        r = np.linspace(0,max(self.coordinates)[0],6,endpoint=True)
-        for i_circle in range(1,6):
-            plt.plot(r[i_circle]*np.cos(x),
-                     r[i_circle]*np.sin(x),'--k')    
-        cm = plt.get_cmap('gist_rainbow')
+        x = np.linspace(0, 2*np.pi, 100, endpoint=True)
+        r = np.linspace(0, max(self.coordinates)[0], 6, endpoint=True)
+        for i_circle in range(1, 6):
+            plt.plot(r[i_circle]*np.cos(x), r[i_circle]*np.sin(x), '--k')
+            cm = plt.get_cmap('gist_rainbow')
         for i_src in range(self.n_source):
             if self.src[i_src].type == "NGS":
                 marker = '*'
-                size_marker=20
+                size_marker = 20
             else:
                 marker = '*'
-                size_marker=10
-                
+                size_marker = 10
             plt.plot(self.src[i_src].coordinates[0]*np.cos(np.deg2rad(self.src[i_src].coordinates[1])),
                      self.src[i_src].coordinates[0]*np.sin(np.deg2rad(self.src[i_src].coordinates[1])),
-                     marker, markersize=size_marker, color = cm(1.*i_src/self.n_source),markeredgecolor = 'k',
-                     label = self.src[i_src].type+'_'+str(i_src))
+                     marker,
+                     markersize=size_marker,
+                     color=cm(1.*i_src/self.n_source),
+                     markeredgecolor='k',
+                     label=self.src[i_src].type+'_'+str(i_src))
         makeSquareAxes()
         plt.xlabel('[Arcsec]')
         plt.ylabel('[Arcsec]')
         plt.legend()
-        
+
     def properties(self) -> dict:
         self.prop = dict()
         self.prop['parameters'] = f"{'Source':^8s}|{'Wavelength':^12s}|{'Zenith':^8s}|{'Azimuth':^9s}|{'Altitude':^10s}|{'Magnitude':^11s}|{'Flux':^11s}|"
         self.prop['units'] = f"{'':^8s}|{'[m]':^12s}|{'[arcsec]':^8s}|{'[°]':^9s}|{'[m]':^10s}|{'':^11s}|{'[ph/m²/s]':^11s}|"
         for i in range(self.n_source):
-            if i%2==0:
+            if i%2 == 0:
                 self.prop['layer_%02d'%i] = f"\033[00m{'%3d-%s'%(i+1,self.src[i].type):^8s}|{self.src[i].wavelength:^12.1e}|{self.src[i].coordinates[0]:^8.2f}|{self.src[i].coordinates[1]:^9.2f}|{self.src[i].altitude:^10.2f}|{self.src[i]._magnitude:^11.2f}|{self.src[i]._nPhoton:^11.1e}|"
             else:
                 self.prop['layer_%02d'%i] = f"\033[47m{'%3d-%s'%(i+1,self.src[i].type):^8s}|{self.src[i].wavelength:^12.1e}|{self.src[i].coordinates[0]:^8.2f}|{self.src[i].coordinates[1]:^9.2f}|{self.src[i].altitude:^10.2f}|{self.src[i]._magnitude:^11.2f}|{self.src[i]._nPhoton:^11.1e}|"

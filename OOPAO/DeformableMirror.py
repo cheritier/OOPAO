@@ -18,7 +18,9 @@ from joblib import Parallel, delayed
 from .MisRegistration import MisRegistration
 from .tools.interpolateGeometricalTransformation import interpolate_cube
 from .tools.tools import emptyClass, pol2cart, print_, OopaoError, warning
-
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+from .tools.displayTools import makeSquareAxes
 
 class DeformableMirror:
     def __init__(self,
@@ -412,7 +414,7 @@ class DeformableMirror:
             self.src = src
 
             src.optical_path.append([self.tag, self])
-            src.OPD_no_pupil = self.dm_propagation(src)
+            src.OPD_no_pupil = self.dm_propagation()
 
             if len(src.OPD_no_pupil.shape) > 2:
                 src.OPD = src.OPD_no_pupil.copy()
@@ -509,71 +511,84 @@ class DeformableMirror:
                 layer.center_y.append(center_y)
 
         return layer
+    # def get_OPD_altitude(self, src):
+    #     self.set_pupil_footprint(src)
+    #     if np.ndim(self.OPD) == 2:
+    #         OPD = np.reshape(self.OPD[np.where(self.altitude_layer.pupil_footprint == 1)], [
+    #                          self.telescope.resolution, self.telescope.resolution])
+    #     else:
+    #         OPD = np.reshape(self.OPD[self.altitude_layer.center_x-self.telescope.resolution//2:self.altitude_layer.center_x+self.telescope.resolution//2, self.altitude_layer.center_y -
+    #                          self.telescope.resolution//2:self.altitude_layer.center_y+self.telescope.resolution//2, :], [self.telescope.resolution, self.telescope.resolution, self.OPD.shape[2]])
+    #     if np.isinf(src.altitude) is not True:
+    #         if np.ndim(self.OPD) == 2:
+    #             sub_im = np.atleast_3d(OPD)
+    #         else:
+    #             sub_im = np.moveaxis(OPD, 2, 0)
+    #         h = src.altitude - self.altitude_layer.altitude
+    #         if np.isinf(h):
+    #             magnification_cone_effect = 1
+    #         else:
+    #             magnification_cone_effect = h/src.altitude
+    #         cube_in = sub_im.T
+    #         pixel_size_in = 1
+    #         pixel_size_out = pixel_size_in*magnification_cone_effect
+    #         resolution_out = self.telescope.resolution
 
-    def get_OPD_altitude(self):
+    #         OPD = np.asarray(np.squeeze(interpolate_cube(
+    #             cube_in, pixel_size_in, pixel_size_out, resolution_out)).T)
 
+    #     return OPD
+    def get_OPD_altitude(self, src):
+        self.set_pupil_footprint()
         if np.ndim(self.OPD) == 2:
             if self.src.inAsterism:
-                OPD = np.reshape(self.OPD[np.where(self.altitude_layer.pupil_footprint[self.src.ast_idx] == 1)], [
-                                 self.telescope.resolution, self.telescope.resolution])
+                OPD = np.reshape(self.OPD[np.where(self.altitude_layer.pupil_footprint[self.src.ast_idx] == 1)], [self.telescope.resolution, self.telescope.resolution])
             else:
-                OPD = np.reshape(self.OPD[np.where(self.altitude_layer.pupil_footprint == 1)], [
-                                 self.telescope.resolution, self.telescope.resolution])
+                OPD = np.reshape(self.OPD[np.where(self.altitude_layer.pupil_footprint == 1)], [self.telescope.resolution, self.telescope.resolution])
         else:
-            OPD = np.reshape(self.OPD[self.altitude_layer.center_x[i_source]-self.telescope.resolution//2:self.altitude_layer.center_x[i_source]+self.telescope.resolution//2, self.altitude_layer.center_y[i_source] -
-                             self.telescope.resolution//2:self.altitude_layer.center_y[i_source]+self.telescope.resolution//2, :], [self.telescope.resolution, self.telescope.resolution, self.OPD.shape[2]])
+            OPD = np.reshape(self.OPD[self.altitude_layer.center_x[self.src.ast_idx]-self.telescope.resolution//2:self.altitude_layer.center_x[self.src.ast_idx]+self.telescope.resolution//2,
+                                      self.altitude_layer.center_y[self.src.ast_idx] - self.telescope.resolution//2:self.altitude_layer.center_y[self.src.ast_idx]+self.telescope.resolution//2, :],
+                             [self.telescope.resolution, self.telescope.resolution, self.OPD.shape[2]])
 
-        if self.src.inAsterism and self.src.type == 'LGS':
+        if ~np.isinf(src.altitude):
             if np.ndim(self.OPD) == 2:
                 sub_im = np.atleast_3d(OPD)
             else:
                 sub_im = np.moveaxis(OPD, 2, 0)
-            h = self.telescope.src.altitude[i_source] - self.altitude_layer.altitude
+            h = src.altitude - self.altitude_layer.altitude
             if np.isinf(h):
                 magnification_cone_effect = 1
             else:
-                r = h*np.tan(alpha_cone)
-            ratio = self.telescope.D/r/2
+                magnification_cone_effect = h/src.altitude
             cube_in = sub_im.T
             pixel_size_in = 1
             pixel_size_out = pixel_size_in*magnification_cone_effect
             resolution_out = self.telescope.resolution
 
-            OPD = np.asarray(np.squeeze(interpolate_cube(
-                cube_in, pixel_size_in, pixel_size_out, resolution_out)).T)
+            OPD = np.asarray(np.squeeze(interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out)).T)
 
         return OPD
 
-    def dm_propagation(self, src, OPD_in=None, i_source=None):
+    def dm_propagation(self, OPD_in=None):
+        # print(self.src)
         if self.coefs.all() == self.current_coefs.all():
             self.coefs = self.coefs
-
-        # <JM @ SpaceODT>
-
         if OPD_in is None:
-            OPD_in = src.OPD_no_pupil
+            OPD_in = self.src.OPD_no_pupil.copy()
 
         if self.altitude is not None:
-            dm_OPD = self.get_OPD_altitude()
+            dm_OPD = self.get_OPD_altitude(self.src)
         else:
             dm_OPD = self.OPD
-
-
-        # <\JM @ SpaceODT>
-        # breakpoint()
-        if src.through_atm:
-            if self.telescope.isPetalFree:
-                self.telescope.removePetalling()
-
-            # case with single OPD
-            if np.ndim(self.OPD) == 2:
-                OPD_out_no_pupil = OPD_in + dm_OPD #* 2 #Factor of 2 because DM is reflective
-            # case with multiple OPD
-            else:
-                OPD_out_no_pupil = np.tile(
-                    OPD_in[..., None], (1, 1, self.OPD.shape[2]))+dm_OPD
+        # if src.through_atm:
+        # case with single OPD
+        if np.ndim(self.OPD) == 2:
+            OPD_out_no_pupil = OPD_in + dm_OPD
+        # case with multiple OPD
         else:
-            OPD_out_no_pupil = dm_OPD
+            OPD_out_no_pupil = np.tile(OPD_in[..., None], (1, 1, self.OPD.shape[2])) + dm_OPD
+        # else:
+            # OPD_out_no_pupil = dm_OPD
 
         return OPD_out_no_pupil
 
@@ -628,6 +643,58 @@ class DeformableMirror:
             output = np.float32(output)
 
         return output
+    
+    def display_dm(self, fig_index=None, list_src=None, input_opd=None):
+        if list_src is None:
+            if self.telescope.src.tag == 'asterism':
+                list_src = self.telescope.src.src
+            else:
+                list_src = [self.telescope.src]
+        plt.figure(fig_index, figsize=[6, 6], edgecolor=None)
+        gs = gridspec.GridSpec(1, 1,
+                               height_ratios=[1],
+                               width_ratios=[1],
+                               hspace=0.5,
+                               wspace=0.5)
+        ax = plt.subplot(gs[0, 0])
+        if input_opd is None:
+            input_opd = np.reshape(np.sum(self.modes**5, axis=1), [self.resolution, self.resolution])
+        ax.imshow(input_opd, extent=[-self.D/2, self.D/2, -self.D/2, self.D/2])
+        center = self.D/2
+        [x_tel, y_tel] = pol2cart(self.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+        cm = plt.get_cmap('gist_rainbow')
+        col = []
+        for i_source in range(len(list_src)):
+            col.append(cm(1.*i_source/len(list_src)))
+            [x_c, y_c] = pol2cart(self.telescope.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+            if self.altitude is None:
+                h = list_src[i_source].altitude
+            else:
+                h = list_src[i_source].altitude-self.altitude
+            if xp.isinf(h):
+                r = self.telescope.D/2
+            else:
+                r = (h/self.telescope.src.altitude)*self.telescope.D/2
+            [x_cone, y_cone] = pol2cart(r, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+            if self.altitude is None:
+                [x_z, y_z] = [0, 0]
+            else:
+                [x_z, y_z] = pol2cart(self.altitude*xp.tan((list_src[i_source].coordinates[0])/self.rad2arcsec), xp.deg2rad(list_src[i_source].coordinates[1]))
+            center = 0
+            [x_c, y_c] = pol2cart(self.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+            nm = (list_src[i_source].type) + '@' + \
+                str(list_src[i_source].coordinates[0])+'"'
+            ax.plot(x_cone+x_z+center, y_cone+y_z+center,
+                    '-', color=col[i_source], label=nm)
+            ax.fill(x_cone+x_z+center, y_cone+y_z+center,
+                    y_z+center, alpha=0.1, color=col[i_source])
+        ax.set_xlabel('[m]')
+        ax.set_ylabel('[m]')
+        ax.set_title('Altitude '+str(self.altitude)+' m')
+        ax.plot(x_tel+center, y_tel+center, '--', color='k')
+        ax.legend(loc='upper left')
+        makeSquareAxes(plt.gca())
+        return
 
     @property
     def coefs(self):

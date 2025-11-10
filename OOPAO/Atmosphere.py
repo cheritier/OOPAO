@@ -225,6 +225,8 @@ class Atmosphere:
         # reset the r0 and generate a new phase screen to override the ro_def computation
         self.r0 = self.r0
         self.generateNewPhaseScreen(0)
+        # relay to the src to initialize the variables
+        self.relay(self.src)
         print(self)
 
     def buildLayer(self, telescope, r0, L0, i_layer, compute_covariance=True):
@@ -455,7 +457,6 @@ class Atmosphere:
         for i_layer in range(self.nLayer):
             tmp_layer = getattr(self, 'layer_' + str(i_layer + 1))
             OPD_support = self.fill_OPD_support(tmp_layer, OPD_support, i_layer)
-
         self.set_OPD(OPD_support)
 
     def initialize_OPD_support(self):
@@ -658,33 +659,35 @@ class Atmosphere:
 
             elif obj.tag == 'source':
                 if obj.coordinates[0] <= self.fov/2:
-                    self.telescope.src = obj
-                    obj = self.telescope
-                    self.asterism = None
+                    # self.telescope.src = obj
+                    # obj = self.telescope
+                    # self.asterism = None
+                    self.relay(obj)
                 else:
                     raise OopaoError('The source object zenith ('+str(obj.coordinates[0])+'") is outside of the telescope fov ('+str(
                         self.fov//2)+'")! You can:\n - Reduce the zenith of the source \n - Re-initialize the atmosphere object using a telescope with a larger fov')
             elif obj.tag == 'asterism':
                 c_ = xp.asarray(obj.coordinates)
                 if xp.max(c_[:, 0]) <= self.fov/2:
-                    self.telescope.src = obj
-                    self.asterism = obj
-                    obj = self.telescope
+                    # self.telescope.src = obj
+                    # self.asterism = obj
+                    # obj = self.telescope
+                    self.relay(obj)
                 else:
                     raise OopaoError('One of the source is outside of the telescope fov ('+str(self.fov//2) +
                                      '")! You can:\n - Reduce the zenith of the source \n - Re-initialize the atmosphere object using a telescope with a larger fov')
             if self.user_defined_opd is False:
                 self.set_pupil_footprint()
                 self.relay(self.src)
-            if obj.src.tag == 'source':
-                obj.src.optical_path = [[obj.src.type + '(' + obj.src.optBand + ')', obj.src]]
-                obj.src.optical_path.append([self.tag, self])
-                obj.src.optical_path.append([obj.tag, obj])
-            elif obj.src.tag == 'asterism':
-                for i, src in enumerate(obj.src.src):
-                    src.optical_path = [[src.type + '(' + src.optBand + ')', src]]
-                    src.optical_path.append([self.tag, self])
-                    src.optical_path.append([obj.tag, obj])
+            # if obj.src.tag == 'source':
+            #     obj.src.optical_path = [[obj.src.type + '(' + obj.src.optBand + ')', obj.src]]
+            #     obj.src.optical_path.append([self.tag, self])
+            #     obj.src.optical_path.append([obj.tag, obj])
+            # elif obj.src.tag == 'asterism':
+            #     for i, src in enumerate(obj.src.src):
+            #         src.optical_path = [[src.type + '(' + src.optBand + ')', src]]
+            #         src.optical_path.append([self.tag, self])
+            #         src.optical_path.append([obj.tag, obj])
             obj.isPaired = True
             return obj
         else:
