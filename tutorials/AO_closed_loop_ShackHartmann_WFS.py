@@ -3,6 +3,30 @@
 Created on Mon May  6 14:01:52 2024
 
 @author: cheritier
+
+
+Tutorial Description — Shack-Hartmann Wave-Front Sensing in OOPAO
+
+This tutorial provides a focused walkthrough of Shack-Hartmann (SH) wave-front sensing in OOPAO, 
+illustrating how to configure, sample, visualize, and calibrate a SH sensor within a full optical chain.
+
+Starting from a telescope, guide star, and optional atmosphere, the script introduces the SH WFS as a modular optical element, showing how it receives the propagated NGS signal via the * operator.
+It compares several SH sampling regimes:
+    - Shannon/2
+    - Shannon
+    - custom pixel scales
+    
+Users can inspect raw camera frames, slope maps, valid-subaperture masks, and cubes of individual subaperture spots.
+
+The tutorial highlights practical SH utilities:
+    - enabling/disabling photon-noise
+    - switching between diffractive and geometric (gradient-only) sensing
+    - applying Gaussian centroid-weighting maps to optimize slope estimation. 
+
+A KL modal basis is generated and used to build a modal interaction matrix with the SH sensor.
+
+The calibrated interaction matrix is then used to set up a closed-loop environment, where the SH slopes drive the DM via a modal reconstructor.
+
 """
 
 import time

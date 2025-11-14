@@ -3,6 +3,32 @@
 Created on Mon Feb  6 13:40:49 2023
 
 @author: cheritier
+
+Tutorial Description — End-to-End AO Simulation in OOPAO (Telescope → Atmosphere → WFS → DM → Closed Loop)
+
+This tutorial walks through a full end-to-end adaptive optics (AO) simulation in OOPAO, starting from basic
+optical elements and progressing all the way to a closed-loop correction with performance metrics.
+It provides a compact but complete example of how to assemble and operate every subsystem of an AO instrument.
+
+The script first constructs the telescope, guide stars, and detectors, and demonstrates on-axis and off-axis PSF formation with and without anisoplanatism. 
+
+A multi-layer atmosphere is introduced and dynamically updated to generate evolving phase screens. 
+Light is propagated through the system using OOPAO’s symbolic operators (* for optical propagation, +/– for adding/removing turbulence).
+
+A deformable mirror (DM) is created with optional misregistration parameters, and its actuator geometry is visualized. 
+
+A Pyramid WFS is then instantiated, including examples of detector shifts, custom modulation patterns, user-defined valid pixels, and focal-plane visualization.
+
+The script builds a modal control basis using Karhunen–Loève modes and calibrates the system by computing a modal interaction matrix, used to form the reconstructor.
+
+ A closed-loop AO simulation is then executed: 
+     - the atmosphere is updated every frame, 
+     - signals are read from the Pyramid, 
+     - DM commands are applied with a configurable loop delay, 
+     - residual OPD, WFE, and Strehl ratio are stored.
+
+A live visualization panel monitors turbulence, residual phases, WFS signals, and focal-plane PSFs. 
+After the loop, performance curves (WFE and SR over time) are plotted for both the on-axis guide star and the off-axis science target, illustrating anisoplanatism and AO correction quality.
 """
 
 import time
