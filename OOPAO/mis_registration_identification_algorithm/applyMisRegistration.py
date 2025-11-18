@@ -95,9 +95,9 @@ def applyMisRegistration(tel,
                                                   pitch        = pitch,\
                                                   misReg       = misRegistration_tmp + extra_dm_mis_registration,\
                                                   print_dm_properties = print_dm_properties)
-                if print_dm_properties:
-                    print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-                    print('Mis-Registrations Applied on Synthetic DM!')
+                        if print_dm_properties:
+                            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                            print('Mis-Registrations Applied on Synthetic DM!')
         else:
             # case when no parameter file is provided => copy the properties of the input DM
               dm_tmp = DeformableMirror(telescope    = tel,
