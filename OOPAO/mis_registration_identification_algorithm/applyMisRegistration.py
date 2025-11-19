@@ -58,6 +58,8 @@ def applyMisRegistration(tel,
                         print('Mis-Registrations Applied on M4!')
             
                 elif param['isLBT'] is True:
+                    extra_dm_mis_registration = param['extra_dm_mis_registration']
+
                     # case with LBT asm model
                     if param['new_IF']:
                         from lbt_tools import get_influence_functions_new as get_influence_functions
