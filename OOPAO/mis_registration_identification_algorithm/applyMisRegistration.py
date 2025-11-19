@@ -71,7 +71,8 @@ def applyMisRegistration(tel,
                                                                             filename_IF          = param['filename_if'],\
                                                                             filename_mir_modes   = param['filename_mir_modes'],\
                                                                             filename_coordinates = param['filename_coord'],\
-                                                                            filename_M2C         = param['filename_m2c'])
+                                                                            filename_M2C         = param['filename_m2c'],
+                                                                            fliplr               = param['fliplr'])
                     param['isM4'] = False
                     # create a deformable mirror with input influence functions interpolated
                     dm_tmp = DeformableMirror(telescope    = tel,\
