@@ -314,13 +314,14 @@ class ShackHartmann:
                 src.spot_kernel_elongation = self.spot_kernel_elongation.copy()
                 src.spot_kernel_elongation_fft = self.spot_kernel_elongation_fft.copy()
             self.initialize_wfs()
-            src.reference_slopes_maps = self.reference_slopes_maps
+            # src.reference_slopes_maps = self.reference_slopes_maps
             signal_2D_list.append(self.signal_2D)
             signal_list.append(self.signal)
             reference_signal_2D_list.append(self.reference_slopes_maps)
 
         self.signal_2D = signal_2D_list.copy()
         self.signal = signal_list.copy()
+        self.reference_signal_2D = reference_signal_2D_list.copy()
         
         
         # self.src.signal_2D = signal_2D_list.copy()
@@ -336,7 +337,7 @@ class ShackHartmann:
         frames_list = []
 
         for src in self.src_list:
-            print(src)
+            # print(src)
 
             src.optical_path.append([self.tag, self])
             self.src = src
@@ -348,7 +349,7 @@ class ShackHartmann:
             if self.is_LGS:
                 self.spot_kernel_elongation_fft = self.src.spot_kernel_elongation_fft.copy()
                 self.spot_kernel_elongation = self.src.spot_kernel_elongation.copy()
-            self.reference_slopes_maps = self.src.reference_slopes_maps.copy()
+            self.reference_slopes_maps = np.squeeze(np.array(self.reference_signal_2D))
 
                 # self.shift_x_buffer, self.shift_y_buffer, self.spot_kernel_elongation_fft, self.spot_kernel_elongation = self.get_convolution_spot(compute_fft_kernel=True)
 
@@ -1061,31 +1062,31 @@ class ShackHartmann:
                 self.initialize_wfs()
                 print('Done!')
 
-    # @property
-    # def valid_subapertures(self):
-    #     return self._valid_subapertures
+    @property
+    def valid_subapertures(self):
+        return self._valid_subapertures
 
-    # @valid_subapertures.setter
-    # def valid_subapertures(self, val):
-    #     self._valid_subapertures = val.copy()
-    #     self.valid_subapertures_1D = np.reshape(self.valid_subapertures, [self.nSubap**2])
-    #     [self.validLenslets_x, self.validLenslets_y] = np.where(self.valid_subapertures)
-    #     self.valid_slopes_maps = np.concatenate((self.valid_subapertures, self.valid_subapertures))
-    #     self.nValidSubaperture = np.count_nonzero(self.valid_subapertures)
-    #     self.nSignal = 2*self.nValidSubaperture
+    @valid_subapertures.setter
+    def valid_subapertures(self, val):
+        self._valid_subapertures = val.copy()
+        self.valid_subapertures_1D = np.reshape(self.valid_subapertures, [self.nSubap**2])
+        [self.validLenslets_x, self.validLenslets_y] = np.where(self.valid_subapertures)
+        self.valid_slopes_maps = np.concatenate((self.valid_subapertures, self.valid_subapertures))
+        self.nValidSubaperture = np.count_nonzero(self.valid_subapertures)
+        self.nSignal = 2*self.nValidSubaperture
 
-    #     if self.src.tag == 'source':
-    #         self.src_list = [self.src]
-    #     elif self.src.tag == 'asterism':
-    #         self.src_list = self.src.src
+        if self.src.tag == 'source':
+            self.src_list = [self.src]
+        elif self.src.tag == 'asterism':
+            self.src_list = self.src.src
 
-    #     for src in self.src_list:
-    #         self.src = src
-    #         if self.src.type == "LGS":
-    #             self.is_LGS = True
-    #         if self.is_LGS:
-    #             self.shift_x_buffer, self.shift_y_buffer, self.spot_kernel_elongation_fft, self.spot_kernel_elongation = self.get_convolution_spot(compute_fft_kernel=True)
-    #         self.initialize_wfs()
+        for src in self.src_list:
+            self.src = src
+            if self.src.type == "LGS":
+                self.is_LGS = True
+            if self.is_LGS:
+                self.shift_x_buffer, self.shift_y_buffer, self.spot_kernel_elongation_fft, self.spot_kernel_elongation = self.get_convolution_spot(compute_fft_kernel=True)
+            self.initialize_wfs()
 
     def __mul__(self, obj):
         if obj.tag == 'detector':

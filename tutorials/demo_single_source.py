@@ -287,7 +287,7 @@ src*tel*wfs
 
 print(np.shape(wfs.signal))
 
-plt.plot(wfs.signal[0])
+plt.plot(wfs.signal)
 plt.title("WFS signal")
 plt.grid()
 plt.show()
@@ -326,17 +326,17 @@ src.OPD_no_pupil = src.OPD*tel.pupil  ## --> if I do not do this, I get an error
 
 src*tel*wfs
 
-plt.plot(wfs.signal[0])
+plt.plot(wfs.signal)
 plt.title("WFS signal")
 plt.grid()
 plt.show()
 
-plt.imshow(wfs.signal_2D[0])
+plt.imshow(wfs.signal_2D)
 plt.title("WFS signal 2D")
 plt.show()
 
 if not use_geo_sh:
-    plt.imshow(wfs.frames[0])
+    plt.imshow(wfs.cam.frame)
     plt.colorbar()
     plt.show()
 
@@ -373,7 +373,7 @@ plt.show()
 
 src*tel*wfs
 
-plt.plot(wfs.signal[0])
+plt.plot(wfs.signal)
 plt.title("WFS signal after poke")
 plt.grid()
 plt.show()
@@ -383,7 +383,7 @@ plt.show()
 from OOPAO.calibration.compute_KL_modal_basis import compute_KL_basis
 from OOPAO.tools.displayTools import cl_plot, displayMap
 # use the default definition of the KL modes with forced Tip and Tilt. For more complex KL modes, consider the use of the compute_KL_basis function.
-M2C_KL = compute_KL_basis(src, tel, atm, dm,lim = 1e-2) # matrix to apply modes on the DM
+M2C_KL = compute_KL_basis(tel, atm, dm,lim = 1e-2) # matrix to apply modes on the DM
 
 #%%
 
@@ -506,14 +506,14 @@ for i in range(nLoop):
     # plt.show()
 
     if frame_delay == 1:
-        wfsSignal = wfs.signal[0]
+        wfsSignal = wfs.signal
 
     # apply the commands on the DM
     dm.coefs = dm.coefs - gainCL * np.matmul(reconstructor, wfsSignal)
 
     # store the slopes after computing the commands => 2 frames delay
     if frame_delay == 2:
-        wfsSignal = wfs.signal[0]
+        wfsSignal = wfs.signal
 
     # print('Elapsed time: ' + str(time.time() - a) + ' s')
     print("Residuals: {} nm rms".format(residual_NGS[i]))
@@ -597,8 +597,8 @@ plt.title("tel.OPD_no_pupil")
 plt.colorbar()
 plt.show()
 
-src*tel*wfs
+src**tel*wfs
 
-plt.plot(wfs.signal[0])
+plt.plot(wfs.signal)
 plt.grid()
 plt.show()
