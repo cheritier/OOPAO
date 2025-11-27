@@ -356,11 +356,13 @@ class ShackHartmann:
             self.wfs_measure(phase_in=self.src.phase)
             signal_2D_list.append(self.signal_2D)
             signal_list.append(self.signal)
-            frames_list.append(self.cam.frame)
+            if self.is_geometric is False:
+                frames_list.append(self.cam.frame)
 
         self.signal_2D = np.squeeze(np.array(signal_2D_list))
         self.signal = np.squeeze(np.array(signal_list))
-        self.cam.frame = np.squeeze(np.array(frames_list))
+        if self.is_geometric is False:
+            self.cam.frame = np.squeeze(np.array(frames_list))
 
     def initialize_wfs(self):
         tmp_opd = self.src.OPD.copy()
