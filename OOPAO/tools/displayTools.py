@@ -129,8 +129,6 @@ def display_wfs_signals(wfs,signals,returnOutput=False, norma = False):
                         A/= np.max(np.abs(signals[:,i]))
                     B[:,:,i] = A
                 out = displayMap(B,axis=2,returnOutput=True)
-        if returnOutput:
-            return out
     if wfs.tag == 'shackHartmann':
         A= np.zeros(wfs.valid_slopes_maps.shape)
         A[:]=np.inf
@@ -155,8 +153,11 @@ def display_wfs_signals(wfs,signals,returnOutput=False, norma = False):
                         A/= np.max(np.abs(signals[:,i]))
                     B[:,:,i] = A
                 out = displayMap(B,returnOutput=True)
-        if returnOutput:
-            return out
+    if returnOutput:
+        return out
+    else:
+        plt.figure(),plt.imshow(out)
+        return
 
 def interactive_plot(x,y,im_array, im_array_ref, event_name ='button_press_event', n_fig = None, marker="o", line_style ="", color="k",x_log_scale=False, y_log_scale = False, zoom = 1,markersize=8, alpha = 1, title = ['','']):   
     # create figure and plot scatter
