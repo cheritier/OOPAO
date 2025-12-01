@@ -447,7 +447,7 @@ class Pyramid:
         # Stack and compute final mask
         stacked = np.stack([P1, P2, P3, P4])*norma  # shape: (4, N, N)
         F = np.max(stacked, axis=0)  # shape: (N, N)
-        return -F
+        return F
 
     def get_phase_mask_old(self, resolution, n_subap, n_pix_separation, n_pix_edge, psf_centering=False, sx=[0, 0, 0, 0], sy=[0, 0, 0, 0]):
         # 25/08/2025: old computation of the PWFS mask apply shift of the pupil using local Tip/Tilt in the quadrants
