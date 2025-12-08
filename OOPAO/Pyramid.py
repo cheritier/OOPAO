@@ -385,10 +385,16 @@ class Pyramid:
             sx = [mis_reg.dX_1, mis_reg.dX_2, mis_reg.dX_3, mis_reg.dX_4]
             sy = [mis_reg.dY_1, mis_reg.dY_2, mis_reg.dY_3, mis_reg.dY_4]
         # apply a TIP/TILT of the PWFS mask to shift the pupils
+        if self.old_mask:
+            f=2
+        else:
+            f=1
+        
         if units == 'pixels':
-            factor = 2
+            factor = f
         if units == 'm':
-            factor = 2/(self.telescope.D/self.nSubap)
+            factor = f/(self.telescope.D/self.nSubap)
+                    
         # sx and sy are the units of displacements in pixels
         if np.isscalar(sx) and np.isscalar(sy):
             shift_x = [factor*sx, factor*sx, factor*sx, factor*sx]
@@ -427,10 +433,9 @@ class Pyramid:
 
         # normalization factor for the Tip/Tilt
         n_pix_per_subap = self.telescope.resolution/self.nSubap
-        norma = n_pix_per_subap/2
+        norma = n_pix_per_subap
         # support for the mask
-
-        lim = np.pi*2
+        lim = np.pi
         # create a Tip/Tilt normalized to apply a 1 pixel shift
         x = np.linspace(-(1-self.psfCentering*1/n_tot)*lim, (1-self.psfCentering*1/n_tot)*lim, n_tot, endpoint=self.psfCentering)
         x_, y_ = np.meshgrid(x, x)
@@ -440,14 +445,14 @@ class Pyramid:
         # radius for the pupil separation
         r = (self.nSubap+self.n_pix_separation)/2
         # separation of the pupils, rotation and shift of the PWFS mask:
-        P1 = x*r + x_*self.sx[0] + y*r - y_*self.sy[0] + rooftop_pixels
-        P2 = -x*r + x_*self.sx[1] + y*r - y_*self.sy[1]
-        P3 = -x*r + x_*self.sx[2] - y*r - y_*self.sy[2] + rooftop_pixels
-        P4 = x*r + x_*self.sx[3] - y*r - y_*self.sy[3]
+        P1 = x*r + x_*sx[0] + y*r - y_*sy[0] + rooftop_pixels
+        P2 = -x*r + x_*sx[1] + y*r - y_*sy[1]
+        P3 = -x*r + x_*sx[2] - y*r - y_*sy[2] + rooftop_pixels
+        P4 = x*r + x_*sx[3] - y*r - y_*sy[3]
         # Stack and compute final mask
         stacked = np.stack([P1, P2, P3, P4])*norma  # shape: (4, N, N)
         F = np.max(stacked, axis=0)  # shape: (N, N)
-        return F
+        return -F
 
     def get_phase_mask_old(self, resolution, n_subap, n_pix_separation, n_pix_edge, psf_centering=False, sx=[0, 0, 0, 0], sy=[0, 0, 0, 0]):
         # 25/08/2025: old computation of the PWFS mask apply shift of the pupil using local Tip/Tilt in the quadrants
