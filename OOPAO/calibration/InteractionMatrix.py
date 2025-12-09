@@ -74,7 +74,7 @@ def InteractionMatrix(ngs,
     
     # separate tel from ATM
     tel.isPaired = False
-    ngs**tel
+    ngs*tel
 
     try: 
         nModes = M2C.shape[1]
@@ -117,11 +117,10 @@ def InteractionMatrix(ngs,
         # push
         tel.resetOPD()
         dm.coefs = intMatCommands*stroke
-        ngs**tel*dm*wfs
-        # ngs.phase += phaseBuffer
-        # ngs.phase_no_pupil = ngs.phase*tel.pupil # --> this should be automatically done when we set a phase
+        tel*dm
+        tel.src.phase+=phaseBuffer
         # tel.src.phase_no_pupil+=phaseBuffer # this was needed when using the old geometric SH
-        # ngs*tel*wfs
+        tel*wfs
         sp = wfs.signal
 
         # pull
@@ -131,11 +130,10 @@ def InteractionMatrix(ngs,
         else:
             tel.resetOPD()
             dm.coefs=-intMatCommands*stroke
-            ngs**tel*dm*wfs
-            ngs.phase += phaseBuffer
-            # ngs.phase_no_pupil = ngs.phase * tel.pupil
+            tel*dm
+            tel.src.phase += phaseBuffer
             # tel.src.phase_no_pupil += phaseBuffer  # this was needed when using the old geometric SH
-            # ngs*tel*wfs
+            tel*wfs
             sm = wfs.signal
             factor = 1
 
