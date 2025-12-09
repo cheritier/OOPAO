@@ -65,7 +65,7 @@ Na_profile[1,:] = 1/n # Na density profile, here considered to be uniform
 # list of sources to be considered
 list_source = []
 # first source is the NGS
-list_source.append(ngs)
+# list_source.append(ngs)
 # the rest are LGS sources
 for i_theta in theta:
     lgs = Source(optBand   ='Na',\
@@ -120,58 +120,63 @@ dm_altitude=DeformableMirror(telescope    = tel,\
 #%% -----------------------     SH WFS   ----------------------------------
 
 from OOPAO.ShackHartmann import ShackHartmann
+ngs**tel
+lo_wfs = ShackHartmann(2, tel, lightRatio=0.1,shannon_sampling=True) # 2x2 NGS WFS
 
 plt.close('all')
-list_wfs=[]
-count =0
-for i_src in list_source:
-    count+=1
-    i_src*tel
-    if i_src.type == 'NGS':
-        wfs = ShackHartmann(2, tel, lightRatio=0.1,shannon_sampling=True) # 2x2 NGS WFS
-    else:
-        wfs = ShackHartmann(n_subaperture, tel, lightRatio=0.1,pixel_scale=1.5) #  LGS WFS        
-    list_wfs.append(wfs)
+# list_wfs=[]
+# count =0
+# for i_src in list_source:
+#     count+=1
+#     i_src**tel
+#     wfs = ShackHartmann(n_subaperture, tel, lightRatio=0.1,pixel_scale=1.) #  LGS WFS        
+#     # list_wfs.append(wfs)
+ast**tel
+wfs = ShackHartmann(n_subaperture, tel, lightRatio=0.1,pixel_scale=1.) #  LGS WFS        
     
 # geometric SH for the calibration
-wfs_geo = ShackHartmann(n_subaperture, tel, lightRatio=0.1,pixel_scale=1.5,is_geometric=True) #  LGS WFS
+wfs = ShackHartmann(n_subaperture, tel, lightRatio=0.1,pixel_scale=1.,is_geometric=True) #  LGS WFS
 
 #%% Propagation and interaction with OOPAO objects
 plt.close('all')
 
 # poking on both DM to show the optical propagation 
 poke = np.zeros(dm_altitude.nValidAct)
-poke[140] = 3e-6
+poke[80] = 1e-8
 dm_altitude.coefs = poke
 
 poke = np.zeros(dm.nValidAct)
-poke[140] = 3e-6
+poke[140] = 1e-8
 dm.coefs = -poke
 # propagating through the whole system
-atm*ast*tel*dm*dm_altitude*list_wfs
+tel-atm
+ast**tel*dm_altitude*wfs
 
+# ngs**tel*dm*dm_altitude*lo_wfs
 
 count=0
-for i_wfs in list_wfs:
+for i_wfs in range(ast.n_source):
     count+=1
     plt.figure(10)
-    plt.subplot(4,len(list_wfs),count)
-    plt.imshow(tel.OPD[count-1])
+    plt.subplot(4,ast.n_source,count)
+    # plt.imshow(tel.OPD[i_wfs])
+    plt.imshow(ast.src[i_wfs].phase)
+
     plt.title('OPD seen by WFS#' +str(count))
-    plt.subplot(4,len(list_wfs),count+len(list_wfs))
-    plt.imshow(i_wfs.signal_2D)
+    plt.subplot(4,ast.n_source,count+ast.n_source)
+    plt.imshow(wfs.signal_2D[i_wfs,:,:])
     plt.title('Signal from WFS#' +str(count))
-    plt.subplot(4,len(list_wfs),count+len(list_wfs)*2)
-    plt.imshow(i_wfs.cam.frame)
+    plt.subplot(4,ast.n_source,count+ast.n_source*2)
+    plt.imshow(wfs.cam.frame[i_wfs,:,:])
     plt.title('Detector from WFS#' +str(count))
 
-plt.subplot(4,len(list_wfs),count+2+len(list_wfs)*2)
+plt.subplot(4,ast.n_source,count+2+ast.n_source*2)
 plt.imshow(dm.OPD,extent=[-dm.D/2,dm.D/2,-dm.D/2,dm.D/2])
 plt.title('OPD DM@0 m')    
 plt.xlabel('[m]')     
 plt.ylabel('[m]') 
 
-plt.subplot(4,len(list_wfs),count+3+len(list_wfs)*2)
+plt.subplot(4,ast.n_source,count+3+ast.n_source*2)
 plt.imshow(dm_altitude.OPD,extent=[-dm_altitude.D/2,dm_altitude.D/2,-dm_altitude.D/2,dm_altitude.D/2])
 plt.title('OPD Altitude DM@'+str(dm_altitude.altitude)+'m')   
 plt.xlabel('[m]')     
@@ -215,21 +220,21 @@ calib_HO = InteractionMatrix(ngs            = ngs_HO,
                                 display        = True,      # display the time using tqdm
                                 single_pass    = True)      # only push to compute the interaction matrix instead of push-pull
 
-list_wfs[0].is_geometric=True
+lo_wfs.is_geometric=True
 # zonal interaction matrix
 calib_LO = InteractionMatrix(ngs            = ngs,
                                 atm            = atm,
                                 tel            = tel,
                                 dm             = dm,
-                                wfs            = list_wfs[0],   
+                                wfs            = lo_wfs,   
                                 M2C            = M2C_modal[:,:2], # M2C matrix used 
                                 stroke         = stroke,    # stroke for the push/pull in M2C units
-                                nMeasurements  = 12,        # number of simultaneous measurements
+                                nMeasurements  = 1,        # number of simultaneous measurements
                                 noise          = 'off',     # disable wfs.cam noise 
                                 display        = True,      # display the time using tqdm
                                 single_pass    = True)      # only push to compute the interaction matrix instead of push-pull
 
-list_wfs[0].is_geometric=False
+lo_wfs.is_geometric=False
 
 
 #%% setup of the Weighted cOg for the NGS WFS based on the atmosphere properties
@@ -305,7 +310,9 @@ dm.coefs=0
 # Update the r0 parameter, generate a new phase screen for the atmosphere and combine it with the Telescope
 atm.generateNewPhaseScreen(seed = 10)
 tel+atm
-atm*ast*tel*list_wfs
+ast**atm*tel*wfs
+ngs**atm*tel*lo_wfs*src_cam
+
 
 plt.close('all')
 
@@ -317,20 +324,20 @@ total                       = np.zeros(nLoop)
 residual_SRC                = np.zeros(nLoop)
 residual_NGS                = np.zeros(nLoop)
 
-wfsSignal_LO               = np.arange(0,list_wfs[0].nSignal)*0
+wfsSignal_LO               = np.arange(0,lo_wfs.nSignal)*0
 wfsSignal_HO               = np.arange(0,wfs_geo.nSignal)*0
 
 atm*src*tel
 plot_obj = cl_plot(list_fig          = [atm.OPD,
-                                        tel.mean_removed_OPD,
+                                        tel.OPD,
                                         [[0,0],[0,0]],
                                         np.log10(tel.PSF),
                                         dm.OPD,
-                                        list_wfs[0].cam.frame,
-                                        list_wfs[1].cam.frame,
-                                        list_wfs[2].cam.frame,
-                                        list_wfs[3].cam.frame,
-                                        list_wfs[4].cam.frame],
+                                        lo_wfs.cam.frame,
+                                        wfs.cam.frame[0,:,:],
+                                        wfs.cam.frame[1,:,:],
+                                        wfs.cam.frame[2,:,:],
+                                        wfs.cam.frame[3,:,:]],
                     type_fig          = ['imshow',
                                         'imshow',
                                         'plot',
@@ -398,11 +405,13 @@ for i in range(nLoop):
     total[i]=np.std(tel.OPD[np.where(tel.pupil>0)])*1e9
 
     # propagate light from the SRC through the atmosphere, telescope, DM to the Instrument camera
-    atm*ast*tel*dm*list_wfs
-    signal_ngs_wfs = list_wfs[0].signal
-    signal_lgs_wfs = np.vstack([list_wfs[1].signal,list_wfs[2].signal,list_wfs[3].signal,list_wfs[4].signal])
+    ast**atm*tel*dm*wfs
+    ngs**atm*tel*dm*lo_wfs
     
-    atm*src*tel*dm*src_cam
+    signal_ngs_wfs = lo_wfs.signal
+    signal_lgs_wfs = wfs.signal
+    
+    src**atm*tel*dm*src_cam
     OPD_SRC = tel.OPD.copy()
     # save residuals corresponding to the NGS
     residual_SRC[i] = np.std(tel.OPD[np.where(tel.pupil>0)])*1e9
@@ -447,12 +456,12 @@ for i in range(nLoop):
                               [np.arange(i+1),residual_SRC[:i+1]],
                               SRC_PSF,                                       
                               dm.OPD,
-                              list_wfs[0].cam.frame,
-                              list_wfs[1].cam.frame,
-                              list_wfs[2].cam.frame,
-                              list_wfs[3].cam.frame,
-                              list_wfs[4].cam.frame],
-                                plt_obj = plot_obj)
+                              lo_wfs.cam.frame,
+                              wfs.cam.frame[0,:,:],
+                              wfs.cam.frame[1,:,:],
+                              wfs.cam.frame[2,:,:],
+                              wfs.cam.frame[3,:,:]],
+                    plt_obj = plot_obj)
         plt.draw()
         plt.pause(0.01)
         if plot_obj.keep_going is False:

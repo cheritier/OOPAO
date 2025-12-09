@@ -26,7 +26,7 @@ def compute_KL_basis(tel,atm,dm,lim = 1e-3,remove_piston = True, n_batch = 1):
                         minimF             = False,\
                         nmo                = None,\
                         ortho_spm          = True,\
-                        SZ                 = int(2*tel.OPD.shape[0]),\
+                        SZ                 = int(2*tel.resolution),\
                         nZer               = 3,\
                         NDIVL              = n_batch,\
                         recompute_cov=True,\
@@ -92,16 +92,12 @@ def compute_M2C(telescope, atmosphere, deformableMirror, param = None, nameFolde
     telescope.isPaired = False # separate from eventual atmosphere
     
     if IF_2D is None:
-        deformableMirror.coefs = np.eye(deformableMirror.nValidAct) # assign dm coefs to get the cube of IF in OPD
-        if display:
-            print('COMPUTING TEL*DM...')
-            print(' ')
-        telescope*deformableMirror    # propagate to get the OPD of the IFS after reflection
-        if display:
-            print('PREPARING IF_2D...')
-            print(' ')
-        IF_2D = np.moveaxis(telescope.OPD,-1,0)
-    
+        
+        IF_2D = deformableMirror.modes.reshape(telescope.resolution,telescope.resolution,deformableMirror.nValidAct)*np.tile(telescope.pupil[:,:,None],deformableMirror.nValidAct)
+        IF_2D = np.moveaxis(IF_2D,-1,0)
+
+
+
     nact = IF_2D.shape[0]
     if display:
         print('Computing Specific Modes ...')
