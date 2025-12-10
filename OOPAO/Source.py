@@ -112,17 +112,13 @@ class Source:
         self.display_properties = display_properties
         # get the photometry properties
         self.__updating_flux = False
-        tmp = self.photometry(optBand)
-        self.optBand = optBand                               # optical band
-        # wavelength in m
-        self.wavelength = tmp[0]
-        # optical bandwidth
-        self.bandwidth = tmp[1]
-        self.zeroPoint = tmp[2]/368                            # zero point
+        self.optBand = optBand  # optical band
+        # wavelength in m, optical bandwidth, zero-point
+        self.wavelength, self.bandwidth, self.zeroPoint = self.photometry(optBand)
         self._magnitude = magnitude                            # magnitude
-        self.phase = []                                    # phase of the source
+        # self.phase = []                                    # phase of the source
         # phase of the source (no pupil)
-        self.phase_no_pupil = []
+        # self.phase_no_pupil = []
         self.fluxMap = []                                    # 2D flux map of the source
         # number of photon per m2 per s
         self._nPhoton = self.zeroPoint*10**(-0.4*magnitude)
@@ -138,98 +134,145 @@ class Source:
         if Na_profile is not None and FWHM_spot_up is not None:
             self.Na_profile = Na_profile
             self.FWHM_spot_up = FWHM_spot_up
-
             # consider the altitude weigthed by Na profile
             self.altitude = np.sum(Na_profile[0, :]*Na_profile[1, :])
             self.type = 'LGS'
         else:
-
             self.type = 'NGS'
 
         if self.display_properties:
             print(self)
 
         self.is_initialized = True
-        
+        # initialize the OPD property
+        self._OPD = None
+        self._OPD_no_pupil = None
+        # mask to compute the OPD with pupil.
+        # Initally set to 1 so it doesnt do anything until the source is propagated through the telescope.
+        self.mask = 1
+        self.optical_path = [[self.type + '('+self.optBand+')', self]]
+        self.through_atm = False
+        # Variables that indicate if this source belongs to an asterism and its index if it does.
+        self.inAsterism = False
+        self.ast_idx = -1
+
+    def __pow__(self, obj):
+        # Re-propagation function. Same as .* in OOMAO
+        obj.src = self
+        self.optical_path = [[self.type + '(' + self.optBand + ')', self]]
+        self.resetOPD()
+        self.through_atm = False
+        self*obj
+        return self
+
     def __mul__(self, obj):
-        if obj.tag == 'telescope':
-            obj.src = self
-            if type(obj.OPD) is list:
-                obj.resetOPD()
+        # Propagation function.
+        obj.relay(self)
+        return self
 
-            if np.ndim(obj.OPD) == 3:
-                obj.resetOPD()
+    def resetOPD(self):
+        self.mask = 1
+        self.OPD = None
+        self.OPD_no_pupil = None
 
-            obj.OPD = obj.OPD*obj.pupil  # here to ensure that a new pupil is taken into account
+    def print_optical_path(self):
+        if self.optical_path is not None:
+            tmp_path = ''
+            for i in range(len(self.optical_path)):
+                tmp_path += self.optical_path[i][0]
+                if i < len(self.optical_path)-1:
+                    tmp_path += ' ~~> '
+            print(tmp_path)
 
-            # update the phase of the source
-            self.phase = obj.OPD*2*np.pi/self.wavelength
-            self.phase_no_pupil = obj.OPD_no_pupil*2*np.pi/self.wavelength
+    @property
+    def OPD(self):
+        return self._OPD
 
-            # compute the variance in the pupil
-            self.var = np.var(self.phase[np.where(obj.pupil == 1)])
-            # assign the source object to the obj object
-
-            self.fluxMap = obj.pupilReflectivity*self.nPhoton * \
-                obj.samplingTime*(obj.D/obj.resolution)**2
-            if obj.optical_path is None:
-                obj.optical_path = []
-                obj.optical_path.append(
-                    [self.type + '('+self.optBand+')', id(self)])
-                obj.optical_path.append([obj.tag, id(obj)])
-            else:
-                obj.optical_path[0] = [self.type +
-                                       '('+self.optBand+')', id(self)]
-            return obj
+    @OPD.setter
+    def OPD(self, val):
+        if val is not None:
+            self._OPD = np.array(val)
         else:
-            raise OopaoError('The Source can only be paired to a Telescope!')
+            self._OPD = None
+
+    @property
+    def OPD_no_pupil(self):
+        return self._OPD_no_pupil
+
+    @OPD_no_pupil.setter
+    def OPD_no_pupil(self, val):
+        if val is not None:
+            self._OPD_no_pupil = np.array(val)
+
+            if len(val.shape) > 2:
+                self.OPD = self._OPD_no_pupil*self.mask[:, :, np.newaxis]
+            else:
+                self.OPD = self._OPD_no_pupil*self.mask
+        else:
+            self._OPD_no_pupil = None
+
+    @property
+    def phase(self):
+        return self.OPD*2*np.pi/self.wavelength
+
+    @phase.setter
+    def phase(self, val):
+        self._OPD = (val * self.wavelength) / (2 * np.pi)
+
+    @property
+    def phase_no_pupil(self):
+        return self.OPD_no_pupil*2*np.pi/self.wavelength
+
+    @phase_no_pupil.setter
+    def phase_no_pupil(self, val):
+        self.OPD_no_pupil = (val * self.wavelength) / (2 * np.pi)
 
     def photometry(self, arg):
         # photometry object [wavelength, bandwidth, zeroPoint]
         class phot:
             pass
-
+        cst = 368
         # New entries with corrected zero point flux values
-        phot.U = [0.360e-6, 0.070e-6, 1.96e12]
-        phot.B = [0.440e-6, 0.100e-6, 5.38e12]
-        phot.V0 = [0.500e-6, 0.090e-6, 3.64e12]
-        phot.V = [0.550e-6, 0.090e-6, 3.31e12]
-        phot.R = [0.640e-6, 0.150e-6, 4.01e12]
-        phot.R2 = [0.650e-6, 0.300e-6, 7.9e12]
+        phot.U = [0.360e-6, 0.070e-6, 1.96e12/cst]
+        phot.B = [0.440e-6, 0.100e-6, 5.38e12/cst]
+        phot.V0 = [0.500e-6, 0.090e-6, 3.64e12/cst]
+        phot.V = [0.550e-6, 0.090e-6, 3.31e12/cst]
+        phot.R = [0.640e-6, 0.150e-6, 4.01e12/cst]
+        phot.R2 = [0.650e-6, 0.300e-6, 7.9e12/cst]
         # Fixed (entries with big difference)
-        phot.R3 = [0.600e-6, 0.300e-6, 8.56e12]
+        phot.R3 = [0.600e-6, 0.300e-6, 8.56e12/cst]
         # Fixed (entries with big difference)
-        phot.R4 = [0.670e-6, 0.300e-6, 7.66e12]
-        phot.I = [0.790e-6, 0.150e-6, 2.69e12]
+        phot.R4 = [0.670e-6, 0.300e-6, 7.66e12/cst]
+        phot.I = [0.790e-6, 0.150e-6, 2.69e12/cst]
         # Fixed (entries with big difference)
-        phot.I1 = [0.700e-6, 0.033e-6, 0.67e12]
+        phot.I1 = [0.700e-6, 0.033e-6, 0.67e12/cst]
         # Fixed (entries with big difference)
-        phot.I2 = [0.750e-6, 0.033e-6, 0.62e12]
+        phot.I2 = [0.750e-6, 0.033e-6, 0.62e12/cst]
         # Fixed (entries with big difference)
-        phot.I3 = [0.800e-6, 0.033e-6, 0.58e12]
+        phot.I3 = [0.800e-6, 0.033e-6, 0.58e12/cst]
         # Fixed (entries with big difference)
-        phot.I4 = [0.700e-6, 0.100e-6, 2.02e12]
+        phot.I4 = [0.700e-6, 0.100e-6, 2.02e12/cst]
         # Fixed (entries with big difference)
-        phot.I5 = [0.850e-6, 0.100e-6, 1.67e12]
+        phot.I5 = [0.850e-6, 0.100e-6, 1.67e12/cst]
         # Fixed (entries with big difference)
-        phot.I6 = [1.000e-6, 0.100e-6, 1.42e12]
+        phot.I6 = [1.000e-6, 0.100e-6, 1.42e12/cst]
         # Fixed (entries with big difference)
-        phot.I7 = [0.850e-6, 0.300e-6, 5.00e12]
+        phot.I7 = [0.850e-6, 0.300e-6, 5.00e12/cst]
         # Fixed (entries with big difference)
-        phot.I8 = [0.750e-6, 0.100e-6, 1.89e12]
+        phot.I8 = [0.750e-6, 0.100e-6, 1.89e12/cst]
         # Fixed (entries with big difference)
-        phot.I9 = [0.850e-6, 0.300e-6, 5.00e12]
+        phot.I9 = [0.850e-6, 0.300e-6, 5.00e12/cst]
         # Fixed (entries with big difference)
-        phot.I10 = [0.900e-6, 0.300e-6, 4.72e12]
-        phot.J = [1.215e-6, 0.260e-6, 1.90e12]
+        phot.I10 = [0.900e-6, 0.300e-6, 4.72e12/cst]
+        phot.J = [1.215e-6, 0.260e-6, 1.90e12/cst]
         # Fixed (entries with big difference)
-        phot.J2 = [1.550e-6, 0.260e-6, 1.49e12]
-        phot.H = [1.654e-6, 0.290e-6, 1.05e12]
-        phot.Kp = [2.1245e-6, 0.351e-6, 0.62e12]
-        phot.Ks = [2.157e-6, 0.320e-6, 0.55e12]
-        phot.K = [2.179e-6, 0.410e-6, 0.70e12]
-        phot.K0 = [2.000e-6, 0.410e-6, 0.76e12]
-        phot.K1 = [2.400e-6, 0.410e-6, 0.64e12]
+        phot.J2 = [1.550e-6, 0.260e-6, 1.49e12/cst]
+        phot.H = [1.654e-6, 0.290e-6, 1.05e12/cst]
+        phot.Kp = [2.1245e-6, 0.351e-6, 0.62e12/cst]
+        phot.Ks = [2.157e-6, 0.320e-6, 0.55e12/cst]
+        phot.K = [2.179e-6, 0.410e-6, 0.70e12/cst]
+        phot.K0 = [2.000e-6, 0.410e-6, 0.76e12/cst]
+        phot.K1 = [2.400e-6, 0.410e-6, 0.64e12/cst]
         '''
         #  Old entries
         phot.U      = [ 0.360e-6 , 0.070e-6 , 2.0e12 ]
@@ -261,19 +304,20 @@ class Source:
         phot.K1     = [ 2.400e-6 , 0.410e-6 , 7.0e11 ]
         phot.IR1310 = [ 1.310e-6 , 0        , 2e12 ]   # bandwidth is zero?
         '''
-        phot.L = [3.547e-6, 0.570e-6, 2.5e11]
-        phot.M = [4.769e-6, 0.450e-6, 8.4e10]
-        phot.Na = [0.589e-6, 0, 3.3e12]  # bandwidth is zero?
-        phot.EOS = [1.064e-6, 0, 3.3e12]  # bandwidth is zero?
-        phot.IR1310 = [1.310e-6, 0, 2e12]   # bandwidth is zero?
+        phot.L = [3.547e-6, 0.570e-6, 2.5e11/cst]
+        phot.M = [4.769e-6, 0.450e-6, 8.4e10/cst]
+        phot.Na = [0.589e-6, 0, 3.3e12/cst]  # bandwidth is zero?
+        phot.EOS = [1.064e-6, 0, 3.3e12/cst]  # bandwidth is zero?
+        phot.IR1310 = [1.310e-6, 0, 2e12/cst]   # bandwidth is zero?
 
         if isinstance(arg, str):
             if hasattr(phot, arg):
-                return getattr(phot, arg)
+                tmp = getattr(phot, arg)
+                return tmp[0], tmp[1], tmp[2]
             else:
                 raise OopaoError('Wrong name for the photometry object')
         else:
-            raise OopaoError('The photometry object takes a scalar as an input')
+            raise OopaoError('The photometry object takes a string as an input')
 
     @property
     def nPhoton(self):
@@ -286,7 +330,7 @@ class Source:
         self.__updating_flux = True
         self._nPhoton = val
         self._magnitude = -2.5*np.log10(val/self.zeroPoint)
-        print('Flux updated, magnitude is %2i and flux is %.2e'%(self._magnitude, self._nPhoton))
+        print('Flux updated, magnitude is %2i and flux is %.2e' % (self._magnitude, self._nPhoton))
         self.__updating_flux = False
 
     @property
@@ -300,7 +344,7 @@ class Source:
         self.__updating_flux = True
         self._magnitude = val
         self._nPhoton = self.zeroPoint*10**(-0.4*self._magnitude)
-        print('Flux updated, magnitude is %2i and flux is %.2e'%(self._magnitude, self._nPhoton))
+        print('Flux updated, magnitude is %2i and flux is %.2e' % (self._magnitude, self._nPhoton))
         self.__updating_flux = False
 
     # for backward compatibility

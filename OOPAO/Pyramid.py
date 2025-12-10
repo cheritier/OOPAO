@@ -358,7 +358,7 @@ class Pyramid:
         # set the modulation radius and propagate light
         self.modulation = modulation
         self.wfs_calibration(self.telescope)
-        self.telescope.resetOPD()
+        self.telescope.src**self.telescope
         self.wfs_measure(phase_in=self.telescope.src.phase)
         print(self)
 
@@ -514,7 +514,7 @@ class Pyramid:
         return -m  # sign convention for backward compatibility
 
     def initialization(self, telescope):
-        telescope.resetOPD()
+        self.telescope.src**self.telescope
         if self.userValidSignal is None:
             if self.lightRatio == 0:
                 self.cam.frame = np.ones(
@@ -1173,7 +1173,26 @@ class Pyramid:
                 self.referenceSignal_2D = 0
                 self.wfs_calibration(self.telescope)
                 print('Done!')
+    def relay(self, src):
+        if src.tag == 'source':
+            src_list = [src]
+        elif src.tag == 'asterism':
+            src_list = src.src
+        signal_2D_list = []
+        signal_list = []
+        frames_list = []
 
+        for src in src_list:
+            src.optical_path.append([self.tag, self])
+            self.src = src
+            self.wfs_measure(phase_in=self.src.phase)
+            signal_2D_list.append(self.signal_2D)
+            signal_list.append(self.signal)
+            frames_list.append(self.cam.frame)
+
+        self.signal_2D = np.squeeze(np.array(signal_2D_list))
+        self.signal = np.squeeze(np.array(signal_list))
+        self.frames = np.squeeze(np.array(frames_list))
     def __mul__(self, obj):
         if obj.tag == 'detector':
             obj._integrated_time += self.telescope.samplingTime

@@ -15,11 +15,11 @@ import matplotlib.gridspec as gridspec
 from .phaseStats import ft_phase_screen, ft_sh_phase_screen, makeCovarianceMatrix
 from .tools.displayTools import makeSquareAxes
 from .tools.interpolateGeometricalTransformation import interpolate_cube, interpolate_image
-from .tools.tools import createFolder, emptyClass, globalTransformation, pol2cart, translationImageMatrix, OopaoError,warning
+from .tools.tools import createFolder, emptyClass, globalTransformation, pol2cart, translationImageMatrix, OopaoError
 try:
     import cupy as xp
     global_gpu_flag = True
-    xp = np #for now
+    xp = np  # for now
 except ImportError or ModuleNotFoundError:
     xp = np
 
@@ -33,8 +33,9 @@ class Atmosphere:
                  fractionalR0: list,
                  windDirection: list,
                  altitude: list,
-                 mode: float = 2,
-                 param=None):
+                 src=None,
+                 param=None,
+                 mode: float = 2):
         """ ATMOSPHERE.
         An Atmosphere is made of one or several layer of turbulence that follow the Van Karmann statistics.
         Each layer is considered to be independant to the other ones and has its own properties (direction, speed, etc.)
@@ -121,11 +122,13 @@ class Atmosphere:
         _ display_atm_layers(layer_index)           : imshow the OPD of each layer with the intersection beam for each source
 
         """
+        self.tag = 'atmosphere'      # Tag of the object
+        # detect the simulation precision requested
         OOPAO_path = [s for s in sys.path if "OOPAO" in s]
-        l = []
+        l_ = []
         for i in OOPAO_path:
-            l.append(len(i))
-        path = OOPAO_path[np.argmin(l)]
+            l_.append(len(i))
+        path = OOPAO_path[np.argmin(l_)]
         precision = np.load(path+'/precision_oopao.npy')
         if precision == 64:
             self.precision = np.float64
@@ -138,92 +141,94 @@ class Atmosphere:
         self.hasNotBeenInitialized = True
         # Wavelengt used to define the properties of the atmosphere
         self.wavelength = 500*1e-9
-        self.r0_def = 0.15              # DefaultFried Parameter in m at 500 nm to build covariance matrices
-        self.r0 = r0                # User input Fried Parameter in m at 500 nm
-        self.rad2arcsec = (180./np.pi)*3600
+        self.r0_def = 0.15  # Default Fried Parameter in m at 500 nm to build covariance matrices once and scale them later
+        self.r0 = r0  # User input Fried Parameter in m at 500 nm
+        self.rad2arcsec = (180. / np.pi) * 3600
         self.fractionalR0 = fractionalR0      # Fractional Cn2 profile in percentage
-        self.altitude = altitude          # altitude of the layers
-        self.cn2 = (self.r0**(-5. / 3) / (0.423 * (2*np.pi/self.wavelength)**2))/np.max([1, np.max(self.altitude)])      # Cn2 m^(-2/3)
+        self.altitude = altitude  # altitude of the atmospheric layers
+        self.cn2 = (self.r0**(-5. / 3) / (0.423 * (2*np.pi/self.wavelength)**2))/np.max([1, np.max(self.altitude)])  # Cn2 m^(-2/3)
         self.L0 = L0                # Outer Scale in m
         self.nLayer = len(fractionalR0)     # number of layer
         self.windSpeed = windSpeed         # wind speed of the layers in m/s
         self.windDirection = windDirection     # wind direction in degrees
-        self.tag = 'atmosphere'      # Tag of the object
-        self.nExtra = 2                 # number of extra pixel to generate the phase screens
+        self.n_extra_pixel = 2                 # number of extra pixel to generate the phase screens
         self.telescope = telescope         # associated telescope object
         self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5)  # computation of equivalent wind speed, Roddier 1982
         self.tau0 = 0.31 * self.r0 / self.V0  # Coherence time of atmosphere, Roddier 1981
         # default value to update phase screens at each iteration
         self.user_defined_opd = False
-        if self.telescope.src is None:
-            raise OopaoError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
         self.mode = mode              # DEBUG -> first phase screen generation mode
         self.seeingArcsec = self.rad2arcsec*(self.wavelength/self.r0)
-        # case when multiple sources are considered (LGS and NGS)
-        if telescope.src.type == 'asterism':
-            self.asterism = telescope.src
+        if src is None and self.telescope.src is None:
+            raise OopaoError(
+                "The Atmosphere object requires a Source. "
+                "Either provide a Source directly as an attribute, or propagate the Source through the Telescope before creating the Atmosphere.")
+        if src:
+            self.src = src
         else:
+            self.src = self.telescope.src
+        if self.src.tag == 'source':
+            self.src_list = [self.src]
             self.asterism = None
+        elif self.src.tag == 'asterism':
+            self.src_list = self.src.src
+            self.asterism = self.src
         self.param = param
 
     def initializeAtmosphere(self, telescope=None, compute_covariance=True):
         if telescope is not None:
             self.telescope = telescope
-        if self.telescope.src.tag == 'source':
-            if self.telescope.src.coordinates[0] > self.telescope.fov/2:
-                raise OopaoError('The source object zenith ('+str(self.telescope.src.coordinates[0])+'") is outside of the telescope fov ('+str(
-                    self.telescope.fov//2)+'")! You can:\n - Reduce the zenith of the source \n - Re-initialize the atmosphere object using a telescope with a larger fov')
-        elif self.telescope.src.tag == 'asterism':
-            c_ = xp.asarray(self.telescope.src.coordinates)
-            if xp.max(c_[:, 0]) > self.telescope.fov/2:
-                raise OopaoError('One of the source is outside of the telescope fov ('+str(self.telescope.fov//2) +
-                                 '")! You can:\n - Reduce the zenith of the source \n - Re-initialize the atmosphere object using a telescope with a larger fov')
-        self.compute_covariance = compute_covariance
-        phase_support = self.initialize_phase_support()
+        self.compute_covariance = compute_covariance  # flag to compute the covariance matrices
+        # initialization of the support on which the turbulent wave-front is computed.
+        OPD_support = self.initialize_OPD_support()
+        # save the field of view requested from the telescope class
         self.fov = telescope.fov
         self.fov_rad = telescope.fov_rad
         if self.hasNotBeenInitialized:
             self.initial_r0 = self.r0
             for i_layer in range(self.nLayer):
                 print('Creation of layer' + str(i_layer+1) + '/' + str(self.nLayer) + ' ...')
-                tmpLayer = self.buildLayer(telescope, self.r0_def, self.L0, i_layer=i_layer, compute_covariance=self.compute_covariance)
-                setattr(self, 'layer_'+str(i_layer+1), tmpLayer)
-                phase_support = self.fill_phase_support(tmpLayer, phase_support, i_layer)
-                tmpLayer.phase_support = phase_support
-                tmpLayer.phase *= self.wavelength/2/xp.pi
+                # atmsopheric layer computation
+                tmp_layer = self.buildLayer(telescope, self.r0_def, self.L0, i_layer=i_layer, compute_covariance=self.compute_covariance)
+                setattr(self, 'layer_'+str(i_layer+1), tmp_layer)
+                # grab the volume of atmosphere requested and fill OPD_support accordingly
+                OPD_support = self.fill_OPD_support(tmp_layer, OPD_support, i_layer)
+                tmp_layer.OPD_support = OPD_support
+                # wavelength scaling to compute the wavefront in [m]
+                tmp_layer.OPD *= self.wavelength/2/xp.pi
         else:
             print('Re-setting the atmosphere to its initial state...')
             self.r0 = self.initial_r0
             for i_layer in range(self.nLayer):
                 print('Updating layer' + str(i_layer+1) + '/' + str(self.nLayer) + ' ...')
-                tmpLayer = getattr(self, 'layer_'+str(i_layer+1))
-                tmpLayer.phase = tmpLayer.initialPhase/self.wavelength*2*xp.pi
-                tmpLayer.randomState = RandomState(42+i_layer*1000)
-                Z = tmpLayer.phase[tmpLayer.innerMask[1:-1, 1:-1] != 0]
-                X = xp.matmul(tmpLayer.A, Z) + xp.matmul(tmpLayer.B, tmpLayer.randomState.normal(size=tmpLayer.B.shape[1]))
-                tmpLayer.mapShift[tmpLayer.outerMask != 0] = X
-                tmpLayer.mapShift[tmpLayer.outerMask == 0] = xp.reshape(tmpLayer.phase, tmpLayer.resolution*tmpLayer.resolution)
-                tmpLayer.notDoneOnce = True
-
-                setattr(self, 'layer_'+str(i_layer+1), tmpLayer)
-                phase_support = self.fill_phase_support(
-                    tmpLayer, phase_support, i_layer)
-
-                # wavelenfth scaling
-                tmpLayer.phase *= self.wavelength/2/xp.pi
-        self.generateNewPhaseScreen(seed=0)
+                # access each layer to modify its properties
+                tmp_layer = getattr(self, 'layer_'+str(i_layer+1))
+                # re-load the saved initial OPD
+                tmp_layer.OPD = tmp_layer.initial_OPD/self.wavelength*2*xp.pi
+                # reset the random state to its initial value
+                tmp_layer.randomState = RandomState(42+i_layer*1000)
+                # reset the covariance matrices value
+                Z = tmp_layer.OPD[tmp_layer.innerMask[1:-1, 1:-1] != 0]
+                X = xp.matmul(tmp_layer.A, Z) + xp.matmul(tmp_layer.B, tmp_layer.randomState.normal(size=tmp_layer.B.shape[1]))
+                tmp_layer.mapShift[tmp_layer.outerMask != 0] = X
+                tmp_layer.mapShift[tmp_layer.outerMask == 0] = xp.reshape(tmp_layer.OPD, tmp_layer.resolution*tmp_layer.resolution)
+                # set back the flag to its default value
+                tmp_layer.notDoneOnce = True
+                # attribute to each layer the modified layer
+                setattr(self, 'layer_'+str(i_layer+1), tmp_layer)
+                # re-intialise the atmosphere phase-support
+                OPD_support = self.fill_OPD_support(tmp_layer, OPD_support, i_layer)
+                # wavelength scaling
+                tmp_layer.OPD *= self.wavelength/2/xp.pi
         self.hasNotBeenInitialized = False
-        if self.compute_covariance:
-            # move of one time step to create the atm variables
-            self.update()
-        # save the resulting phase screen in OPD
-        self.set_OPD(phase_support)
+        self.src_list = []
         # reset the r0 and generate a new phase screen to override the ro_def computation
         self.r0 = self.r0
         self.generateNewPhaseScreen(0)
-        # self.print_properties()
+        # relay to the src to initialize the variables
+        self.relay(self.src)
         print(self)
-        
+
     def buildLayer(self, telescope, r0, L0, i_layer, compute_covariance=True):
         """
             Generation of phase screens using the method introduced in Assemat et al (2006)
@@ -239,68 +244,51 @@ class Atmosphere:
         # compute the X and Y wind speed
         layer.vY = layer.windSpeed*xp.cos(xp.deg2rad(layer.direction))
         layer.vX = layer.windSpeed*xp.sin(xp.deg2rad(layer.direction))
-        layer.extra_sx = 0
-        layer.extra_sy = 0
         # Diameter and resolution of the layer including the Field Of View and the number of extra pixels
         layer.D_fov = self.telescope.D+2*xp.tan(self.fov_rad/2)*layer.altitude
-        layer.resolution_fov = int(
-            xp.ceil((self.telescope.resolution/self.telescope.D)*layer.D_fov))
+        layer.resolution_fov = int(xp.ceil((self.telescope.resolution/self.telescope.D)*layer.D_fov))
         # 4 pixels are added as a margin for the edges
         layer.resolution = layer.resolution_fov + 4
-        layer.D = layer.resolution * self.telescope.D / self.telescope.resolution
         layer.center = layer.resolution//2
-        if self.asterism is None:
-            [x_z, y_z] = pol2cart(layer.altitude*xp.tan(self.telescope.src.coordinates[0]/self.rad2arcsec)
-                                  * layer.resolution / layer.D, xp.deg2rad(self.telescope.src.coordinates[1]))
+        # diameter of the layer in [m]
+        layer.D = layer.resolution * self.telescope.D / self.telescope.resolution
+        layer.pupil_footprint = []
+        layer.extra_sx = []
+        layer.extra_sy = []
+        for i_src in range(len(self.src_list)):
+            [x_z, y_z] = pol2cart(layer.altitude*xp.tan(self.src_list[i_src].coordinates[0]/self.rad2arcsec) * layer.resolution / layer.D, xp.deg2rad(self.src_list[i_src].coordinates[1]))
+            layer.extra_sx.append(int(x_z)-x_z)
+            layer.extra_sy.append(int(y_z)-y_z)
             center_x = int(y_z)+layer.resolution//2
             center_y = int(x_z)+layer.resolution//2
-            layer.pupil_footprint = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
-            layer.pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution //
-                                  2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
-        else:
-            layer.pupil_footprint = []
-            layer.extra_sx = []
-            layer.extra_sy = []
-            for i in range(self.asterism.n_source):
-                [x_z, y_z] = pol2cart(layer.altitude*xp.tan(self.telescope.src.coordinates[i][0]/self.rad2arcsec)
-                                      * layer.resolution / layer.D, xp.deg2rad(self.asterism.coordinates[i][1]))
-                layer.extra_sx.append(int(x_z)-x_z)
-                layer.extra_sy.append(int(y_z)-y_z)
-                center_x = int(y_z)+layer.resolution//2
-                center_y = int(x_z)+layer.resolution//2
-
-                pupil_footprint = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
-                pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution //
-                                2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
-                layer.pupil_footprint.append(pupil_footprint)
-        # layer pixel size
-        layer.d0 = layer.D/layer.resolution
-
-        # number of pixel for the phase screens computation
-        layer.nExtra = self.nExtra
-        layer.nPixel = int(1+xp.round(layer.D/layer.d0))
+            pupil_footprint_support = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
+            pupil_footprint_support[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution//2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
+            layer.pupil_footprint.append(pupil_footprint_support)
+        # layer pixel size in [m]
+        layer.pixel_size = layer.D/layer.resolution
+        # number of extra pixel for the phase screens computation
+        layer.n_extra_pixel = self.n_extra_pixel
+        layer.nPixel = int(1+xp.round(layer.D/layer.pixel_size))
         print('-> Computing the initial phase screen...')
         a = time.time()
-        if self.mode == 2:
-            layer.phase = ft_sh_phase_screen(
-                self, layer.resolution, layer.D/layer.resolution, seed=i_layer)
-        else:
-            layer.phase = ft_phase_screen(
-                self, layer.resolution, layer.D/layer.resolution, seed=i_layer)
-        layer.initialPhase = layer.phase.copy()
+        layer.OPD = ft_sh_phase_screen(atm=self,
+                                       resolution=layer.resolution,
+                                       pixel_size=layer.D/layer.resolution,
+                                       seed=i_layer)
+        layer.initial_OPD = layer.OPD.copy()
         layer.seed = i_layer
         b = time.time()
         print('initial phase screen : ' + str(b-a) + ' s')
 
         # Outer ring of pixel for the phase screens update
-        layer.outerMask = xp.ones([layer.resolution+layer.nExtra, layer.resolution+layer.nExtra], dtype=self.precision())
+        layer.outerMask = xp.ones([layer.resolution+layer.n_extra_pixel, layer.resolution+layer.n_extra_pixel], dtype=self.precision())
         layer.outerMask[1:-1, 1:-1] = 0
 
         # inner pixels that contains the phase screens
-        layer.innerMask = xp.ones([layer.resolution+layer.nExtra, layer.resolution+layer.nExtra], dtype=self.precision())
+        layer.innerMask = xp.ones([layer.resolution+layer.n_extra_pixel, layer.resolution+layer.n_extra_pixel], dtype=self.precision())
         layer.innerMask -= layer.outerMask
-        layer.innerMask[1+layer.nExtra:-1-layer.nExtra,
-                        1+layer.nExtra:-1-layer.nExtra] = 0
+        layer.innerMask[1+layer.n_extra_pixel:-1-layer.n_extra_pixel,
+                        1+layer.n_extra_pixel:-1-layer.n_extra_pixel] = 0
 
         x = xp.linspace(0, layer.resolution+1, layer.resolution + 2, dtype=self.precision()) * layer.D/(layer.resolution-1)
         u, v = xp.meshgrid(x, x)
@@ -319,12 +307,12 @@ class Atmosphere:
             layer.A = xp.matmul(layer.ZXt_r0.T, layer.ZZt_inv_r0)
             layer.BBt = layer.XXt_r0 - xp.matmul(layer.A, layer.ZXt_r0)
             layer.B = xp.linalg.cholesky(layer.BBt)
-            layer.mapShift = xp.zeros([layer.nPixel+1, layer.nPixel+1], dtype=self.precision())
-            Z = layer.phase[layer.innerMask[1:-1, 1:-1] != 0]
+            layer.mapShift = xp.zeros([layer.resolution+self.n_extra_pixel, layer.resolution+self.n_extra_pixel], dtype=self.precision())
+            Z = layer.OPD[layer.innerMask[1:-1, 1:-1] != 0]
             X = xp.matmul(layer.A, Z) + xp.matmul(layer.B, layer.randomState.normal(size=layer.B.shape[1]))
 
             layer.mapShift[layer.outerMask != 0] = X
-            layer.mapShift[layer.outerMask == 0] = xp.reshape(layer.phase, layer.resolution*layer.resolution)
+            layer.mapShift[layer.outerMask == 0] = xp.reshape(layer.OPD, layer.resolution*layer.resolution)
             layer.notDoneOnce = True
             layer.A = layer.A.astype(self.precision())
             layer.B = layer.A.astype(self.precision())
@@ -345,63 +333,45 @@ class Atmosphere:
         return onePixelShiftedPhaseScreen
 
     def set_pupil_footprint(self):
-
         for i_layer in range(self.nLayer):
             layer = getattr(self, 'layer_'+str(i_layer+1))
-            if self.asterism is None:
-                if self.telescope.src.chromatic_shift is not None:
-                    if len(self.telescope.src.chromatic_shift) == self.nLayer:
-                        chromatic_shift = self.telescope.src.chromatic_shift[i_layer]
+            layer.pupil_footprint = []
+            layer.extra_sx = []
+            layer.extra_sy = []
+            for i_src in range(len(self.src_list)):
+                src = self.src_list[i_src]
+                if src.chromatic_shift is not None:
+                    if len(src.chromatic_shift) == self.nLayer:
+                        chromatic_shift = src.chromatic_shift[i_layer]
                     else:
                         raise OopaoError('The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')
                 else:
                     chromatic_shift = 0
-                [x_z, y_z] = pol2cart(layer.altitude*xp.tan((self.telescope.src.coordinates[0]+chromatic_shift)/self.rad2arcsec)
-                                      * layer.resolution / layer.D, xp.deg2rad(self.telescope.src.coordinates[1]))
-                layer.extra_sx = int(x_z)-x_z
-                layer.extra_sy = int(y_z)-y_z
-
+                [x_z, y_z] = pol2cart(layer.altitude*xp.tan((src.coordinates[0]+chromatic_shift)/self.rad2arcsec) * layer.resolution / layer.D, xp.deg2rad(src.coordinates[1]))
+                layer.extra_sx.append(int(x_z)-x_z)
+                layer.extra_sy.append(int(y_z)-y_z)
                 center_x = int(y_z)+layer.resolution//2
                 center_y = int(x_z)+layer.resolution//2
-
-                layer.pupil_footprint = xp.zeros(
-                    [layer.resolution, layer.resolution], dtype=self.precision())
-                layer.pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution //
-                                      2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
-            else:
-                layer.pupil_footprint = []
-                layer.extra_sx = []
-                layer.extra_sy = []
-                for i in range(self.asterism.n_source):
-                    [x_z, y_z] = pol2cart(layer.altitude*xp.tan(self.asterism.coordinates[i][0]/self.rad2arcsec)
-                                          * layer.resolution / layer.D, xp.deg2rad(self.asterism.coordinates[i][1]))
-                    layer.extra_sx.append(int(x_z)-x_z)
-                    layer.extra_sy.append(int(y_z)-y_z)
-                    center_x = int(y_z)+layer.resolution//2
-                    center_y = int(x_z)+layer.resolution//2
-
-                    pupil_footprint = xp.zeros(
-                        [layer.resolution, layer.resolution], dtype=self.precision())
-                    pupil_footprint[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution //
-                                    2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
-                    layer.pupil_footprint.append(pupil_footprint)
+                pupil_footprint_support = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
+                pupil_footprint_support[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution//2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
+                layer.pupil_footprint.append(pupil_footprint_support)
 
     def updateLayer(self, layer, shift=None):
         if self.compute_covariance is False:
             raise OopaoError('The computation of the covariance matrices was set to False in the atmosphere initialisation. Set it to True to provide moving layers.')
-        self.ps_loop = layer.D / (layer.resolution)
+        layer.pixel_scale = layer.D / (layer.resolution)
         ps_turb_x = layer.vX*self.telescope.samplingTime
         ps_turb_y = layer.vY*self.telescope.samplingTime
 
         if layer.vX == 0 and layer.vY == 0 and shift is None:
-            layer.phase = layer.phase
+            layer.OPD = layer.OPD
 
         else:
             if layer.notDoneOnce:
                 layer.notDoneOnce = False
                 layer.ratio = xp.zeros(2)
-                layer.ratio[0] = ps_turb_x/self.ps_loop
-                layer.ratio[1] = ps_turb_y/self.ps_loop
+                layer.ratio[0] = ps_turb_x/layer.pixel_size
+                layer.ratio[1] = ps_turb_y/layer.pixel_size
                 layer.buff = xp.zeros(2)
 
             if shift is None:
@@ -420,14 +390,14 @@ class Atmosphere:
                 stepInPixel[0] = 1
                 stepInPixel[1] = 1
                 stepInPixel = stepInPixel*xp.sign(ratio)
-                layer.phase = self.add_row(layer, stepInPixel)
+                layer.OPD = self.add_row(layer, stepInPixel)
 
             for j in range(nScreens.max()-nScreens.min()):
                 stepInPixel[0] = 1
                 stepInPixel[1] = 1
                 stepInPixel = stepInPixel*xp.sign(ratio)
                 stepInPixel[xp.where(nScreens == nScreens.min())] = 0
-                layer.phase = self.add_row(layer, stepInPixel)
+                layer.OPD = self.add_row(layer, stepInPixel)
 
             stepInSubPixel[0] = (xp.abs(ratio[0]) % 1)*xp.sign(ratio[0])
             stepInSubPixel[1] = (xp.abs(ratio[1]) % 1)*xp.sign(ratio[1])
@@ -438,122 +408,104 @@ class Atmosphere:
                 stepInPixel[1] = 1*xp.sign(layer.buff[1])
                 stepInPixel[xp.where(xp.abs(layer.buff) < 1)] = 0
 
-                layer.phase = self.add_row(layer, stepInPixel)
+                layer.OPD = self.add_row(layer, stepInPixel)
 
             layer.buff[0] = (xp.abs(layer.buff[0]) % 1)*xp.sign(layer.buff[0])
             layer.buff[1] = (xp.abs(layer.buff[1]) % 1)*xp.sign(layer.buff[1])
 
             shiftMatrix = translationImageMatrix(
                 layer.mapShift, [layer.buff[0], layer.buff[1]])  # units are in pixel of the M1
-            layer.phase = globalTransformation(
+            layer.OPD = globalTransformation(
                 layer.mapShift, shiftMatrix)[1:-1, 1:-1]
 
     def update(self, OPD=None):
         if self.hasNotBeenInitialized:
             raise OopaoError('The Atmosphere object needs to be initialised using the initialiseAtmosphere()')
+
         if OPD is None:
             self.user_defined_opd = False
-            phase_support = self.initialize_phase_support()
             for i_layer in range(self.nLayer):
-                tmpLayer = getattr(self, 'layer_'+str(i_layer+1))
-                self.updateLayer(tmpLayer)
-                phase_support = self.fill_phase_support(
-                    tmpLayer, phase_support, i_layer)
-            self.set_OPD(phase_support)
+                tmp_layer = getattr(self, 'layer_'+str(i_layer+1))
+                self.updateLayer(tmp_layer)
         else:
             self.user_defined_opd = True
             # case where the OPD is input
-            self.OPD_no_pupil = OPD
-            if type(OPD) is not list:
-                self.OPD = OPD*self.telescope.pupil
-            else:
-                self.OPD = OPD
+            self.telescope.src.OPD_no_pupil = OPD
+            self.telescope.src.OPD = OPD*self.telescope.src.mask
 
         if self.telescope.isPaired:
             self*self.telescope
 
-    def initialize_phase_support(self):
-        if self.asterism is None:
-            phase_support = xp.zeros([self.telescope.resolution, self.telescope.resolution], dtype=self.precision())
-        else:
-            phase_support = []
-            for i in range(self.asterism.n_source):
-                phase_support.append(xp.zeros([self.telescope.resolution, self.telescope.resolution], dtype=self.precision()))
-        return phase_support
+    def relay(self, src):
+        # update the src attached to the atmosphere
+        self.src = src
+        # different cases between single and multiple sources
+        if src.tag == 'source':
+            self.src_list = [src]
+            self.asterism = None
+        elif src.tag == 'asterism':
+            self.src_list = src.src
+            self.asterism = src
+        # compute the pupil footprint for each layers and each source
+        self.set_pupil_footprint()
+        for src in self.src_list:
+            src.through_atm = True
+            src.optical_path.append([self.tag, self])
+        # intialize the OPD support
+        OPD_support = self.initialize_OPD_support()
+        # fill the support for each layer
+        for i_layer in range(self.nLayer):
+            tmp_layer = getattr(self, 'layer_' + str(i_layer + 1))
+            OPD_support = self.fill_OPD_support(tmp_layer, OPD_support, i_layer)
+        self.set_OPD(OPD_support)
 
-    def fill_phase_support(self, tmpLayer, phase_support, i_layer):
-        if self.asterism is None:
-            if self.telescope.src.altitude <= tmpLayer.altitude:
-                raise OopaoError('The source altitude ('+str(self.telescope.src.altitude)+' m) is below or at the same altitude as the atmosphere layer ('+str(tmpLayer.altitude)+' m)')
-            _im = tmpLayer.phase.copy()
-            h = self.telescope.src.altitude-tmpLayer.altitude
-            if xp.isinf(h):
-                # magnification due to cone effect not considered
-                magnification_cone_effect = 1
-                interpolate_im = False
-            else:
-                # magnification due to cone effect not considered
-                magnification_cone_effect = (h)/self.telescope.src.altitude
-                interpolate_im = True
-            pixel_size_in = 1
-            pixel_size_out = pixel_size_in*magnification_cone_effect
-            resolution_out = tmpLayer.resolution
+    def initialize_OPD_support(self):
+        OPD_support = []
+        for i in range(len(self.src_list)):
+            OPD_support.append(xp.zeros([self.telescope.resolution, self.telescope.resolution], dtype=self.precision()))
+        return OPD_support
 
-            if tmpLayer.extra_sx != 0 or tmpLayer.extra_sy != 0 or interpolate_im is True:
+    def fill_OPD_support(self, tmp_layer, OPD_support, i_layer):
+        for i_src in range(len(self.src_list)):
+            if self.src_list[i_src].altitude <= tmp_layer.altitude:
+                raise OopaoError('The source altitude ('+str(self.src_list[i_src].altitude[i_src])+' m) is below or at the same altitude as the atmosphere layer ('+str(tmp_layer.altitude)+' m)')
+            _im = tmp_layer.OPD.copy()
+            if tmp_layer.extra_sx[i_src] != 0 or tmp_layer.extra_sy[i_src] != 0:
+                pixel_size_in = 1
+                pixel_size_out = 1
+                resolution_out = _im.shape[0]
                 _im = xp.squeeze(interpolate_image(_im, pixel_size_in, pixel_size_out,
-                                 resolution_out, shift_x=tmpLayer.extra_sx, shift_y=tmpLayer.extra_sy))
-            phase_support += xp.reshape(_im[xp.where(tmpLayer.pupil_footprint == 1)], [
-                                        self.telescope.resolution, self.telescope.resolution]) * xp.sqrt(self.fractionalR0[i_layer])
-        else:
-            for i in range(self.asterism.n_source):
-                if self.asterism.altitude[i] <= tmpLayer.altitude:
-                    raise OopaoError('The source altitude ('+str(self.asterism.altitude[i])+' m) is below or at the same altitude as the atmosphere layer ('+str(tmpLayer.altitude)+' m)')
-                _im = tmpLayer.phase.copy()
-                if tmpLayer.extra_sx[i] != 0 or tmpLayer.extra_sy[i] != 0:
-                    pixel_size_in = 1
-                    pixel_size_out = 1
-                    resolution_out = _im.shape[0]
-                    _im = xp.squeeze(interpolate_image(_im, pixel_size_in, pixel_size_out,
-                                     resolution_out, shift_x=tmpLayer.extra_sx[i], shift_y=tmpLayer.extra_sy[i]))
-                if self.asterism.src[i].type == 'LGS':
-                    sub_im = xp.reshape(_im[xp.where(tmpLayer.pupil_footprint[i] == 1)], [
-                                        self.telescope.resolution, self.telescope.resolution])
-                    h = self.asterism.altitude[i]-tmpLayer.altitude
-                    if xp.isinf(h):
-                        # magnification due to cone effect not considered
-                        magnification_cone_effect = 1
-                        interpolate_im = False
-                    else:
-                        # magnification due to cone effect is considered
-                        magnification_cone_effect = (h)/self.asterism.altitude[i]
-                        interpolate_im = True
-                    cube_in = xp.atleast_3d(sub_im).T
-
+                                 resolution_out, shift_x=tmp_layer.extra_sx[i_src], shift_y=tmp_layer.extra_sy[i_src]))
+            interpolate_cone_effect = False
+            if self.src_list[i_src].altitude != np.inf:
+                sub_im = xp.reshape(_im[xp.where(tmp_layer.pupil_footprint[i_src] == 1)], [
+                                    self.telescope.resolution, self.telescope.resolution])
+                h = self.src_list[i_src].altitude-tmp_layer.altitude
+                if xp.isinf(h):
+                    # magnification due to cone effect not considered
+                    magnification_cone_effect = 1
+                else:
+                    # magnification due to cone effect considered
+                    magnification_cone_effect = (h)/self.src_list[i_src].altitude
+                    interpolate_cone_effect = True
                     pixel_size_in = 1
                     pixel_size_out = pixel_size_in*magnification_cone_effect
                     resolution_out = self.telescope.resolution
+                    cube_in = xp.atleast_3d(sub_im).T
+            if interpolate_cone_effect:
+                _im = xp.squeeze(interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out)).T
+            else:
+                _im = _im[tmp_layer.pupil_footprint[i_src] == 1].reshape(self.telescope.resolution, self.telescope.resolution)
+            _im *= self.wavelength/2/xp.pi
+            _im *= xp.sqrt(self.fractionalR0[i_layer])
+            OPD_support[i_src] += _im
+        return OPD_support
 
-                    if interpolate_im:
-                        phase_support[i] += xp.squeeze(interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out)).T * xp.sqrt(self.fractionalR0[i_layer])
-                    else:
-                        phase_support[i] += xp.reshape(_im[xp.where(tmpLayer.pupil_footprint[i] == 1)], [
-                                                   self.telescope.resolution, self.telescope.resolution]) * xp.sqrt(self.fractionalR0[i_layer])
-                else:
-                    phase_support[i] += xp.reshape(_im[xp.where(tmpLayer.pupil_footprint[i] == 1)], [
-                        self.telescope.resolution, self.telescope.resolution]) * xp.sqrt(self.fractionalR0[i_layer])
-        return phase_support
-
-    def set_OPD(self, phase_support):
-        if self.asterism is None:
-            self.OPD_no_pupil = phase_support*self.wavelength/2/xp.pi
-            self.OPD = self.OPD_no_pupil*self.telescope.pupil
-        else:
-            self.OPD = []
-            self.OPD_no_pupil = []
-            for i in range(self.asterism.n_source):
-                self.OPD_no_pupil.append(
-                    phase_support[i]*self.wavelength/2/xp.pi)
-                self.OPD.append(self.OPD_no_pupil[i]*self.telescope.pupil)
+    def set_OPD(self, OPD_support):
+        for i, src in enumerate(self.src_list):
+            src.OPD_no_pupil = OPD_support[i]
+            src.OPD = src.OPD_no_pupil*src.mask
+        self.OPD = np.squeeze(np.array(OPD_support))
         return
 
     def get_covariance_matrices(self, layer):
@@ -640,9 +592,9 @@ class Atmosphere:
         if seed is None:
             t = time.localtime()
             seed = t.tm_hour*3600 + t.tm_min*60 + t.tm_sec
-        phase_support = self.initialize_phase_support()
+        OPD_support = self.initialize_OPD_support()
         for i_layer in range(self.nLayer):
-            tmpLayer = getattr(self, 'layer_'+str(i_layer+1))
+            tmp_layer = getattr(self, 'layer_'+str(i_layer+1))
 
             if self.mode == 1:
                 raise DeprecationWarning("The dependency to the aotools package has been deprecated.")
@@ -650,27 +602,27 @@ class Atmosphere:
                 if self.mode == 2:
                     # with subharmonics
                     phase = ft_sh_phase_screen(
-                        self, tmpLayer.resolution, tmpLayer.D/tmpLayer.resolution, seed=seed+i_layer)
+                        self, tmp_layer.resolution, tmp_layer.D/tmp_layer.resolution, seed=seed+i_layer)
                 else:
                     phase = ft_phase_screen(
-                        self, tmpLayer.resolution, tmpLayer.D/tmpLayer.resolution, seed=seed+i_layer)
+                        self, tmp_layer.resolution, tmp_layer.D/tmp_layer.resolution, seed=seed+i_layer)
 
-            tmpLayer.phase = phase
-            tmpLayer.randomState = RandomState(seed+i_layer*1000)
+            tmp_layer.OPD = phase
+            tmp_layer.randomState = RandomState(seed+i_layer*1000)
             if self.compute_covariance:
-                Z = tmpLayer.phase[tmpLayer.innerMask[1:-1, 1:-1] != 0]
-                X = xp.matmul(tmpLayer.A, Z) + xp.matmul(tmpLayer.B,
-                                                         tmpLayer.randomState.normal(size=tmpLayer.B.shape[1]))
+                Z = tmp_layer.OPD[tmp_layer.innerMask[1:-1, 1:-1] != 0]
+                X = xp.matmul(tmp_layer.A, Z) + xp.matmul(tmp_layer.B, tmp_layer.randomState.normal(size=tmp_layer.B.shape[1]))
+                tmp_layer.mapShift[tmp_layer.outerMask != 0] = X
+                tmp_layer.mapShift[tmp_layer.outerMask == 0] = xp.reshape(
+                    tmp_layer.OPD, tmp_layer.resolution*tmp_layer.resolution)
+                tmp_layer.notDoneOnce = True
 
-                tmpLayer.mapShift[tmpLayer.outerMask != 0] = X
-                tmpLayer.mapShift[tmpLayer.outerMask == 0] = xp.reshape(
-                    tmpLayer.phase, tmpLayer.resolution*tmpLayer.resolution)
-                tmpLayer.notDoneOnce = True
+            setattr(self, 'layer_'+str(i_layer+1), tmp_layer)
+            OPD_support = self.fill_OPD_support(
+                tmp_layer, OPD_support, i_layer)
 
-            setattr(self, 'layer_'+str(i_layer+1), tmpLayer)
-            phase_support = self.fill_phase_support(
-                tmpLayer, phase_support, i_layer)
-        self.set_OPD(phase_support)
+        # self.set_OPD(OPD_support)
+
         if self.telescope.isPaired:
             self*self.telescope
 
@@ -684,11 +636,19 @@ class Atmosphere:
         print('r0 \t\t'+str(r0_wvl) + ' \t [m]')
         print('Seeing \t' + str(xp.round(seeingArcsec_wvl, 2)) + str('\t ["]'))
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        return r0_wvl,seeingArcsec_wvl
-       
+        return r0_wvl, seeingArcsec_wvl
+
+    # kept for backward compatibility
     def __mul__(self, obj):
         if obj.tag == 'telescope' or obj.tag == 'source' or obj.tag == 'asterism':
+
             if obj.tag == 'telescope':
+
+                if obj.src.type == 'asterism':
+                    self.asterism = obj.src
+                else:
+                    self.asterism = None
+
                 if self.fov == obj.fov:
                     self.telescope = obj
                 else:
@@ -696,64 +656,66 @@ class Atmosphere:
                         'Re-initializing the atmosphere to match the new telescope fov')
                     self.hasNotBeenInitialized = True
                     self.initializeAtmosphere(obj)
+
             elif obj.tag == 'source':
                 if obj.coordinates[0] <= self.fov/2:
-                    self.telescope.src = obj
-                    obj = self.telescope
-                    self.asterism = None
+                    # self.telescope.src = obj
+                    # obj = self.telescope
+                    # self.asterism = None
+                    self.relay(obj)
                 else:
                     raise OopaoError('The source object zenith ('+str(obj.coordinates[0])+'") is outside of the telescope fov ('+str(
                         self.fov//2)+'")! You can:\n - Reduce the zenith of the source \n - Re-initialize the atmosphere object using a telescope with a larger fov')
             elif obj.tag == 'asterism':
                 c_ = xp.asarray(obj.coordinates)
                 if xp.max(c_[:, 0]) <= self.fov/2:
-                    self.telescope.src = obj
-                    self.asterism = obj
-                    obj = self.telescope
+                    # self.telescope.src = obj
+                    # self.asterism = obj
+                    # obj = self.telescope
+                    self.relay(obj)
                 else:
                     raise OopaoError('One of the source is outside of the telescope fov ('+str(self.fov//2) +
                                      '")! You can:\n - Reduce the zenith of the source \n - Re-initialize the atmosphere object using a telescope with a larger fov')
             if self.user_defined_opd is False:
                 self.set_pupil_footprint()
-                phase_support = self.initialize_phase_support()
-                for i_layer in range(self.nLayer):
-                    tmpLayer = getattr(self, 'layer_'+str(i_layer+1))
-                    phase_support = self.fill_phase_support(
-                        tmpLayer, phase_support, i_layer)
-                self.set_OPD(phase_support)
-
-            if obj.src.tag == 'source':
-                obj.optical_path = [
-                    [obj.src.type + '('+obj.src.optBand+')', id(obj.src)]]
-            else:
-                obj.optical_path = [[obj.src.type, id(obj.src)]]
-            obj.optical_path.append([self.tag, id(self)])
-            obj.optical_path.append([obj.tag, id(obj)])
-            obj.OPD = self.OPD.copy()
-            obj.OPD_no_pupil = self.OPD_no_pupil.copy()
+                self.relay(self.src)
+            # if obj.src.tag == 'source':
+            #     obj.src.optical_path = [[obj.src.type + '(' + obj.src.optBand + ')', obj.src]]
+            #     obj.src.optical_path.append([self.tag, self])
+            #     obj.src.optical_path.append([obj.tag, obj])
+            # elif obj.src.tag == 'asterism':
+            #     for i, src in enumerate(obj.src.src):
+            #         src.optical_path = [[src.type + '(' + src.optBand + ')', src]]
+            #         src.optical_path.append([self.tag, self])
+            #         src.optical_path.append([obj.tag, obj])
             obj.isPaired = True
             return obj
         else:
             raise OopaoError('The atmosphere can be multiplied only with a Telescope or a Source object!')
 
     def display_atm_layers(self, layer_index=None, fig_index=None, list_src=None):
+        if self.hasNotBeenInitialized:
+            raise OopaoError('The atmosphere must be initialized first to make use of the display_atm_layers() method')
         display_cn2 = False
-
         if layer_index is None:
             layer_index = list(xp.arange(self.nLayer))
             n_sp = len(layer_index)
             display_cn2 = True
-            display_cn2 = True
         else:
             n_sp = len(layer_index)
+            display_cn2 = True
 
         if type(layer_index) is not list:
             raise OopaoError('layer_index should be a list')
-        if list_src is None:
-            if self.telescope.src.tag == 'asterism':
-                list_src = self.telescope.src.src
+        # when sources not yet propagated through atmosphere, we need to use src_list from telescope
+        if len(self.src_list) == 0:
+            if len(self.telescope.src_list) >= 1:
+                list_src = self.telescope.src_list
             else:
-                list_src = [self.telescope.src]
+                raise OopaoError('No sources yet associated/propagated either through atmosphere or telescope')
+        # when already propagated through atmosphere
+        else:
+            list_src = self.src_list
         plt.figure(fig_index, figsize=[
                    n_sp*4, 3*(1+display_cn2)], edgecolor=None)
         if display_cn2:
@@ -778,22 +740,25 @@ class Atmosphere:
             plt.ylabel('Altitude [km]')
 
         for i_l, ax in enumerate(axis_list):
-            tmpLayer = getattr(self, 'layer_'+str(layer_index[i_l]+1))
-            ax.imshow(tmpLayer.phase, extent=[-tmpLayer.D/2, tmpLayer.D/2, -tmpLayer.D/2, tmpLayer.D/2])
-            center = tmpLayer.D/2
-            [x_tel, y_tel] = pol2cart(tmpLayer.D_fov/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+            tmp_layer = getattr(self, 'layer_'+str(layer_index[i_l]+1))
+            ax.imshow(
+                tmp_layer.OPD, extent=[-tmp_layer.D/2, tmp_layer.D/2, -tmp_layer.D/2, tmp_layer.D/2])
+            center = tmp_layer.D/2
+            [x_tel, y_tel] = pol2cart(
+                tmp_layer.D_fov/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
             # if list_src is not None:
             cm = plt.get_cmap('gist_rainbow')
             col = []
             for i_source in range(len(list_src)):
                 col.append(cm(1.*i_source/len(list_src)))
                 [x_c, y_c] = pol2cart(self.telescope.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
-                h = list_src[i_source].altitude-tmpLayer.altitude
+                h = list_src[i_source].altitude-tmp_layer.altitude
                 if xp.isinf(h):
                     r = self.telescope.D/2
                 else:
-                    r = (h/list_src[i_source].altitude)*self.telescope.D/2
-                [x_cone, y_cone] = pol2cart(r, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+                    r = (h)/self.src.altitude[i_source]*self.telescope.D/2
+                [x_cone, y_cone] = pol2cart(
+                    r, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
                 if list_src[i_source].chromatic_shift is not None:
                     if len(list_src[i_source].chromatic_shift) == self.nLayer:
                         chromatic_shift = list_src[i_source].chromatic_shift[i_l]
@@ -801,11 +766,11 @@ class Atmosphere:
                         raise OopaoError('The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')
                 else:
                     chromatic_shift = 0
-                [x_z, y_z] = pol2cart(tmpLayer.altitude*xp.tan((list_src[i_source].coordinates[0] +
+                [x_z, y_z] = pol2cart(tmp_layer.altitude*xp.tan((list_src[i_source].coordinates[0] +
                                       chromatic_shift)/self.rad2arcsec), xp.deg2rad(list_src[i_source].coordinates[1]))
                 center = 0
                 [x_c, y_c] = pol2cart(
-                    tmpLayer.D_fov/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+                    tmp_layer.D_fov/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
                 nm = (list_src[i_source].type) + '@' + \
                     str(list_src[i_source].coordinates[0])+'"'
                 ax.plot(x_cone+x_z+center, y_cone+y_z+center,
@@ -814,7 +779,7 @@ class Atmosphere:
                         y_z+center, alpha=0.25, color=col[i_source])
             ax.set_xlabel('[m]')
             ax.set_ylabel('[m]')
-            ax.set_title('Altitude '+str(tmpLayer.altitude)+' m')
+            ax.set_title('Altitude '+str(tmp_layer.altitude)+' m')
             ax.plot(x_tel+center, y_tel+center, '--', color='k')
             ax.legend(loc='upper left')
             makeSquareAxes(plt.gca())
@@ -827,22 +792,18 @@ class Atmosphere:
     def r0(self, val):
         self._r0 = val
         if self.hasNotBeenInitialized is False:
-            if self.telescope.pixelSize*2 > val:
-                warning('The r0 @500 nm is smaller is sampled below Shannon precision with respect to the Telescope Pixel Size\n' +
-                        'This may cause issues with the Turbulent phase-screens statistics\n' +
-                        'Considering increasing the value of r0 or adding more pixels in the telescope resolution')
             print('Updating the Atmosphere covariance matrices...')
             self.seeingArcsec = self.rad2arcsec*(self.wavelength/val)
             self.cn2 = (self.r0**(-5. / 3) / (0.423 * (2*np.pi/self.wavelength)**2))/np.max([1, np.max(self.altitude)])  # Cn2 m^(-2/3)
             if self.compute_covariance:
                 for i_layer in range(self.nLayer):
-                    tmpLayer = getattr(self, 'layer_'+str(i_layer+1))
-                    tmpLayer.ZZt_r0 = tmpLayer.ZZt*(self.r0_def/self.r0)**(5/3)
-                    tmpLayer.ZXt_r0 = tmpLayer.ZXt*(self.r0_def/self.r0)**(5/3)
-                    tmpLayer.XXt_r0 = tmpLayer.XXt*(self.r0_def/self.r0)**(5/3)
-                    tmpLayer.ZZt_inv_r0 = tmpLayer.ZZt_inv / ((self.r0_def/self.r0)**(5/3))
-                    BBt = tmpLayer.XXt_r0 - xp.matmul(tmpLayer.A, tmpLayer.ZXt_r0)
-                    tmpLayer.B = xp.linalg.cholesky(BBt).astype(self.precision())
+                    tmp_layer = getattr(self, 'layer_'+str(i_layer+1))
+                    tmp_layer.ZZt_r0 = tmp_layer.ZZt*(self.r0_def/self.r0)**(5/3)
+                    tmp_layer.ZXt_r0 = tmp_layer.ZXt*(self.r0_def/self.r0)**(5/3)
+                    tmp_layer.XXt_r0 = tmp_layer.XXt*(self.r0_def/self.r0)**(5/3)
+                    tmp_layer.ZZt_inv_r0 = tmp_layer.ZZt_inv / ((self.r0_def/self.r0)**(5/3))
+                    BBt = tmp_layer.XXt_r0 - xp.matmul(tmp_layer.A, tmp_layer.ZXt_r0)
+                    tmp_layer.B = xp.linalg.cholesky(BBt).astype(self.precision())
 
     @property
     def L0(self):
@@ -876,17 +837,17 @@ class Atmosphere:
                 self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5)  # computation of equivalent wind speed, Roddier 1982
                 self.tau0 = 0.31 * self.r0 / self.V0  # Coherence time of atmosphere, Roddier 1981
                 for i_layer in range(self.nLayer):
-                    tmpLayer = getattr(self, 'layer_'+str(i_layer+1))
-                    tmpLayer.windSpeed = val[i_layer]
-                    tmpLayer.vY = tmpLayer.windSpeed * \
-                        xp.cos(xp.deg2rad(tmpLayer.direction))
-                    tmpLayer.vX = tmpLayer.windSpeed * \
-                        xp.sin(xp.deg2rad(tmpLayer.direction))
-                    ps_turb_x = tmpLayer.vX*self.telescope.samplingTime
-                    ps_turb_y = tmpLayer.vY*self.telescope.samplingTime
-                    tmpLayer.ratio[0] = ps_turb_x/self.ps_loop
-                    tmpLayer.ratio[1] = ps_turb_y/self.ps_loop
-                    setattr(self, 'layer_'+str(i_layer+1), tmpLayer)
+                    tmp_layer = getattr(self, 'layer_'+str(i_layer+1))
+                    tmp_layer.windSpeed = val[i_layer]
+                    tmp_layer.vY = tmp_layer.windSpeed * \
+                        xp.cos(xp.deg2rad(tmp_layer.direction))
+                    tmp_layer.vX = tmp_layer.windSpeed * \
+                        xp.sin(xp.deg2rad(tmp_layer.direction))
+                    ps_turb_x = tmp_layer.vX*self.telescope.samplingTime
+                    ps_turb_y = tmp_layer.vY*self.telescope.samplingTime
+                    tmp_layer.ratio[0] = ps_turb_x/tmp_layer.pixel_size
+                    tmp_layer.ratio[1] = ps_turb_y/tmp_layer.pixel_size
+                    setattr(self, 'layer_'+str(i_layer+1), tmp_layer)
 
     @property
     def windDirection(self):
@@ -902,17 +863,17 @@ class Atmosphere:
             else:
                 print('Updating the wind direction...')
                 for i_layer in range(self.nLayer):
-                    tmpLayer = getattr(self, 'layer_'+str(i_layer+1))
-                    tmpLayer.direction = val[i_layer]
-                    tmpLayer.vY = tmpLayer.windSpeed * \
-                        xp.cos(xp.deg2rad(tmpLayer.direction))
-                    tmpLayer.vX = tmpLayer.windSpeed * \
-                        xp.sin(xp.deg2rad(tmpLayer.direction))
-                    ps_turb_x = tmpLayer.vX*self.telescope.samplingTime
-                    ps_turb_y = tmpLayer.vY*self.telescope.samplingTime
-                    tmpLayer.ratio[0] = ps_turb_x/self.ps_loop
-                    tmpLayer.ratio[1] = ps_turb_y/self.ps_loop
-                    setattr(self, 'layer_'+str(i_layer+1), tmpLayer)
+                    tmp_layer = getattr(self, 'layer_'+str(i_layer+1))
+                    tmp_layer.direction = val[i_layer]
+                    tmp_layer.vY = tmp_layer.windSpeed * \
+                        xp.cos(xp.deg2rad(tmp_layer.direction))
+                    tmp_layer.vX = tmp_layer.windSpeed * \
+                        xp.sin(xp.deg2rad(tmp_layer.direction))
+                    ps_turb_x = tmp_layer.vX*self.telescope.samplingTime
+                    ps_turb_y = tmp_layer.vY*self.telescope.samplingTime
+                    tmp_layer.ratio[0] = ps_turb_x/tmp_layer.pixel_size
+                    tmp_layer.ratio[1] = ps_turb_y/tmp_layer.pixel_size
+                    setattr(self, 'layer_'+str(i_layer+1), tmp_layer)
 
     @property
     def fractionalR0(self):
@@ -939,10 +900,10 @@ class Atmosphere:
         self.prop['parameters'] = f"{'Layer':^7s}|{'Direction':^11s}|{'Speed':^7s}|{'Altitude':^10s}|{'Frac Cn²':^10s}|{'Diameter':^10s}|"
         self.prop['units'] = f"{'':^7s}|{'[°]':^11s}|{'[m/s]':^7s}|{'[m]':^10s}|{'[%]':^10s}|{'[m]':^10s}|"
         for i in range(self.nLayer):
-            if i%2==0:
-                self.prop['layer_%02d'%i] = f"\033[00m{i+1:^7d}|{self.windDirection[i]:^11.0f}|{self.windSpeed[i]:^7.1f}|{self.altitude[i]:^10.0e}|{self.fractionalR0[i]*100:^10.0f}|{getattr(self,'layer_'+str(i+1)).D:^10.3f}|"
+            if i % 2 == 0:
+                self.prop['layer_%02d' % i] = f"\033[00m{i+1:^7d}|{self.windDirection[i]:^11.0f}|{self.windSpeed[i]:^7.1f}|{self.altitude[i]:^10.0e}|{self.fractionalR0[i]*100:^10.0f}|{getattr(self, 'layer_'+str(i+1)).D:^10.3f}|"
             else:
-                self.prop['layer_%02d'%i] = f"\033[47m{i+1:^7d}|{self.windDirection[i]:^11.0f}|{self.windSpeed[i]:^7.1f}|{self.altitude[i]:^10.0e}|{self.fractionalR0[i]*100:^10.0f}|{getattr(self,'layer_'+str(i+1)).D:^10.3f}|"
+                self.prop['layer_%02d' % i] = f"\033[47m{i+1:^7d}|{self.windDirection[i]:^11.0f}|{self.windSpeed[i]:^7.1f}|{self.altitude[i]:^10.0e}|{self.fractionalR0[i]*100:^10.0f}|{getattr(self, 'layer_'+str(i+1)).D:^10.3f}|"
         self.prop['delimiter'] = ''
         self.prop['r0'] = f"{'r0 @ 500 nm [m]':<16s}|{self.r0:^10.2f}"
         self.prop['L0'] = f"{'L0 [m]':<16s}|{self.L0:^10.1f}"

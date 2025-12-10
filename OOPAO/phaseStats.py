@@ -235,7 +235,7 @@ def ft_phase_screen(atm, N, delta, l0=1e-10, seed=None, return_PSD = False):
         return phs
 
 
-def ft_sh_phase_screen(atm, N, delta, l0=1e-10, seed=None, return_PSD=False):
+def ft_sh_phase_screen(atm, resolution, pixel_size, l0=1e-10, seed=None, return_PSD=False):
     """
     ------------ Function adapted from aotools ----------------------
 
@@ -245,15 +245,15 @@ def ft_sh_phase_screen(atm, N, delta, l0=1e-10, seed=None, return_PSD=False):
 
     Args:
         r0 (float): r0 parameter of scrn in metres
-        N (int): Size of phase scrn in pxls
-        delta (float): size in Metres of each pxl
+        resolution (int): Size of phase scrn in pxls
+        pixel_size (float): size in Metres of each pxl
         L0 (float): Size of outer-scale in metres
         l0 (float): inner scale in metres
 
     Returns:
         ndarray: np array representing phase screen
     """
-    delta = float(delta)
+    pixel_size = float(pixel_size)
     r0 = float(atm.r0)
     L0 = float(atm.L0)
     R = random.SystemRandom(time.time())
@@ -261,12 +261,12 @@ def ft_sh_phase_screen(atm, N, delta, l0=1e-10, seed=None, return_PSD=False):
         seed = int(R.random()*100000)
     randomState = RandomState(seed)
 
-    D = N*delta
+    D = resolution*pixel_size
     # high-frequency screen from FFT method
-    phs_hi = ft_phase_screen(atm, N, delta, seed=seed)
+    phs_hi = ft_phase_screen(atm, resolution, pixel_size, seed=seed)
 
     # spatial grid [m]
-    coords = np.arange(-N/2, N/2)*delta
+    coords = np.arange(-resolution/2, resolution/2)*pixel_size
     x, y = np.meshgrid(coords, coords)
 
     # initialize low-freq screen
@@ -295,7 +295,7 @@ def ft_sh_phase_screen(atm, N, delta, l0=1e-10, seed=None, return_PSD=False):
         cn = ((randomState.normal(size=(3, 3))
                + 1j*randomState.normal(size=(3, 3)))
               * np.sqrt(PSD_phi)*del_f)
-        SH = np.zeros((N, N), dtype="complex")
+        SH = np.zeros((resolution, resolution), dtype="complex")
         # loop over frequencies on this grid
         for i in range(0, 2):
             for j in range(0, 2):

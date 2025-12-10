@@ -58,8 +58,6 @@ def applyMisRegistration(tel,
                         print('Mis-Registrations Applied on M4!')
             
                 elif param['isLBT'] is True:
-                    extra_dm_mis_registration = param['extra_dm_mis_registration']
-
                     # case with LBT asm model
                     if param['new_IF']:
                         from lbt_tools import get_influence_functions_new as get_influence_functions
@@ -71,8 +69,7 @@ def applyMisRegistration(tel,
                                                                             filename_IF          = param['filename_if'],\
                                                                             filename_mir_modes   = param['filename_mir_modes'],\
                                                                             filename_coordinates = param['filename_coord'],\
-                                                                            filename_M2C         = param['filename_m2c'],
-                                                                            fliplr               = param['fliplr'])
+                                                                            filename_M2C         = param['filename_m2c'])
                     param['isM4'] = False
                     # create a deformable mirror with input influence functions interpolated
                     dm_tmp = DeformableMirror(telescope    = tel,\
@@ -98,9 +95,9 @@ def applyMisRegistration(tel,
                                                   pitch        = pitch,\
                                                   misReg       = misRegistration_tmp + extra_dm_mis_registration,\
                                                   print_dm_properties = print_dm_properties)
-                        if print_dm_properties:
-                            print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-                            print('Mis-Registrations Applied on Synthetic DM!')
+                if print_dm_properties:
+                    print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+                    print('Mis-Registrations Applied on Synthetic DM!')
         else:
             # case when no parameter file is provided => copy the properties of the input DM
               dm_tmp = DeformableMirror(telescope    = tel,
