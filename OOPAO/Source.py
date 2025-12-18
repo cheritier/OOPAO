@@ -147,6 +147,8 @@ class Source:
         # initialize the OPD property
         self._OPD = None
         self._OPD_no_pupil = None
+        self.phase_filtered = None
+        self.amplitude_filtered = None
         # mask to compute the OPD with pupil.
         # Initally set to 1 so it doesnt do anything until the source is propagated through the telescope.
         self.mask = 1
@@ -160,7 +162,7 @@ class Source:
         # Re-propagation function. Same as .* in OOMAO
         obj.src = self
         self.optical_path = [[self.type + '(' + self.optBand + ')', self]]
-        self.resetOPD()
+        self.reset()
         self.through_atm = False
         self*obj
         return self
@@ -170,10 +172,12 @@ class Source:
         obj.relay(self)
         return self
 
-    def resetOPD(self):
+    def reset(self):
         self.mask = 1
         self.OPD = None
         self.OPD_no_pupil = None
+        self.phase_filtered = None
+        self.amplitude_filtered = None
 
     def print_optical_path(self):
         if self.optical_path is not None:

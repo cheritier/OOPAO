@@ -8,17 +8,12 @@ Created on Mon Mar 20 16:56:25 2023
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CLASS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 class OPD_map:
     
-    def __init__(self,telescope, OPD = None):
+    def __init__(self, OPD):
         """
         ************************** REQUIRED PARAMETERS **************************
         
         An OPD_map object consists in defining the 2D map that acts as a static OPD offset. It requires the following parameters
-        _ telescope              : the telescope object that contains all the informations (diameter, pupil, etc)
-                
-        ************************** OPTIONAL PARAMETERS **************************
-        
-        _ zernike_coefficients  : a list of coefficients of Zernike Polynomials (see Zernike class). The coefficients are normalized to 1 m. 
-
+               
         ************************** MAIN PROPERTIES **************************
         
         The main properties of a Telescope object are listed here: 
@@ -36,12 +31,17 @@ class OPD_map:
         src*tel*opd
         
         """
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
-        self.isInitialized               = False                
-        if OPD is None:
-            self.OPD = telescope.pupil.astype(float)
-        else:
-            self.OPD = OPD
-            
-            
+        
+        self.OPD = OPD            
         self.tag = 'OPD_map'
+        
+    def relay(self,src):
+        self.src = src
+        if src.tag == 'source':
+            self.src_list = [src]
+        elif src.tag == 'asterism':
+            self.src_list = src.src
+        for src in self.src_list:
+            src.optical_path.append([self.tag, self])
+            src.OPD_no_pupil += self.OPD
+               

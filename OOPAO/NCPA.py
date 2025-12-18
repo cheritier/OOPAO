@@ -122,6 +122,16 @@ class NCPA:
             raise TypeError(
                 'f2 should be a list containing [amplitude, start_mode, end_mode, cutoff]')
 
+    def relay(self, src):
+        self.src = src
+        if src.tag == 'source':
+            self.src_list = [src]
+        elif src.tag == 'asterism':
+            self.src_list = src.src
+        for src in self.src_list:
+            src.optical_path.append([self.tag, self])
+            src.OPD_no_pupil += self.OPD
+
     def KL_basis(self):
         from OOPAO.calibration.compute_KL_modal_basis import compute_KL_basis
         M2C_KL = compute_KL_basis(self.tel, self.atm, self.dm, lim=1e-2)

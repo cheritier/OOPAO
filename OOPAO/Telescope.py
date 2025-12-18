@@ -11,7 +11,7 @@ import sys
 try:
     import cupy as xp
     global_gpu_flag = True
-    xp = np #for now
+    xp = np  # for now
 except ImportError or ModuleNotFoundError:
     xp = np
 
@@ -194,6 +194,7 @@ class Telescope:
         self.isInitialized = True
         self.apply_off_axis_tip_tilt = True
         self.initial_pupil = self.pupil.copy()
+        self.static_OPD = np.zeros([self.resolution, self.resolution], dtype=self.precision)
 
     def relay(self, src):
         self.src = src
@@ -207,9 +208,10 @@ class Telescope:
             src.mask = self.pupil.copy()
             if src.OPD is None:
                 src.OPD_no_pupil = np.zeros(self.pupil.shape)
-            src.OPD = src.OPD_no_pupil*src.mask
+            src.OPD = (src.OPD_no_pupil)*src.mask
             src.var = np.var(src.phase[np.where(self.pupil == 1)])
             src.fluxMap = self.pupilReflectivity * src.nPhoton * self.samplingTime * (self.D / self.resolution) ** 2
+        return
 
     def set_pupil(self):
         # Case where the pupil is not input: circular pupil with central obstruction
@@ -222,8 +224,7 @@ class Telescope:
             self.pupil = circle < (D/2)**2
             self.pupil = self.pupil*obs
         else:
-            warning(
-                'User-defined pupil, the central obstruction will not be taken into account...')
+            warning('User-defined pupil, the central obstruction will not be taken into account...')
             self.pupil = self.user_defined_pupil.copy().astype(self.precision())
 
         # A non uniform reflectivity can be input by the user
@@ -274,7 +275,7 @@ class Telescope:
             x_max = (xp.abs(r * xp.cos(np.deg2rad(theta))))
             y_max = (xp.abs(r * xp.sin(np.deg2rad(theta))))
 
-        pixel_scale = self.rad2arcsec*(input_source[0].wavelength/self.D)/zeroPaddingFactor # in arcsec
+        pixel_scale = self.rad2arcsec*(input_source[0].wavelength/self.D)/zeroPaddingFactor  # in arcsec
         maximum_fov = pixel_scale*img_resolution/2
         n_extra = np.abs(np.floor((maximum_fov - max(x_max, y_max))/pixel_scale) - img_resolution//2)
         n_pix = np.ceil(max(int(img_resolution/2 + n_extra)*2, img_resolution)).astype('int')
@@ -294,14 +295,15 @@ class Telescope:
                 input_wavelenght = input_source[i_src].wavelength
             else:
                 raise OopaoError('The asterism contains sources with different wavelengths. Summing up PSFs with different wavelength is not implemented.')
-            if self.spatialFilter is None:
-                amp_mask = 1
+            # check if the source interacted with a spatial filter
+            if input_source[i_src].phase_filtered is None:
+                amp_mask = xp.sqrt(input_source[i_src].fluxMap)
                 phase = input_source[i_src].phase
             else:
-                amp_mask = self.amplitude_filtered
-                phase = self.phase_filtered
+                amp_mask = input_source[i_src].amplitude_filtered
+                phase = input_source[i_src].phase_filtered
             # amplitude of the EM field:
-            amp = amp_mask*self.pupil*self.pupilReflectivity * xp.sqrt(input_source[i_src].fluxMap)
+            amp = amp_mask*self.pupil*self.pupilReflectivity
             # add a Tip/Tilt for off-axis sources
             [Tip, Tilt] = xp.meshgrid(xp.linspace(-xp.pi, xp.pi, self.resolution, endpoint=False, dtype=self.precision()),
                                       xp.linspace(-xp.pi, xp.pi, self.resolution, endpoint=False, dtype=self.precision()))
@@ -434,21 +436,6 @@ class Telescope:
 
         return oversampling
 
-    def resetOPD(self):
-        if self.src is not None:
-            if self.src.tag == 'asterism':
-                self.optical_path = [[self.src.type, id(self.src)]]
-                self.optical_path.append([self.tag, id(self)])
-                self.OPD = [self.pupil.astype(self.precision())
-                            for i in range(self.src.n_source)]
-                self.OPD_no_pupil = [self.pupil.astype(self.precision())*0 + 1 for i in range(self.src.n_source)]
-            else:
-                self.optical_path = [
-                    [self.src.type + '('+self.src.optBand+')', id(self.src)]]
-                self.optical_path.append([self.tag, id(self)])
-                self.OPD = 0*self.pupil.astype(self.precision())
-                self.OPD_no_pupil = 0*self.pupil.astype(self.precision())
-
     def apply_spiders(self, angle, thickness_spider, offset_X=None, offset_Y=None):
         self.isInitialized = False
         if thickness_spider > 0:
@@ -486,7 +473,7 @@ class Telescope:
             self.set_pupil()
         return
 
-    def pad(self, padding_values=0,sky_offset = [0,0]):
+    def pad(self, padding_values=0, sky_offset=[0, 0]):
         """
         This functions allows to pad the pupil of padding_values pixels on both sides.
         The Telescope properties associated to it are automatically updated.
@@ -498,19 +485,16 @@ class Telescope:
         """
         pupil_padded = np.pad(self.initial_pupil, [padding_values, padding_values])*0
         n_extra_pix = padding_values
-        
-        if  max(sky_offset)<n_extra_pix:
-            pupil_padded[n_extra_pix-sky_offset[0] : - n_extra_pix-sky_offset[0],
-                         n_extra_pix-sky_offset[1] : - n_extra_pix-sky_offset[1]] = self.initial_pupil
+        if max(sky_offset) < n_extra_pix:
+            pupil_padded[n_extra_pix-sky_offset[0]:-n_extra_pix-sky_offset[0],
+                         n_extra_pix-sky_offset[1]:-n_extra_pix-sky_offset[1]] = self.initial_pupil
         else:
-            raise OopaoError('The sky_offsets are too large for the considered pupil')    
-            
-            
+            raise OopaoError('The sky_offsets are too large for the considered pupil')
         self.resolution = pupil_padded.shape[0]
         self.D = self.resolution * self.pixelSize
         self.pupil = pupil_padded.copy()
-        self.OPD = self.pupil.astype(self.precision())     # set the initial OPD
-        self.OPD_no_pupil = 1+self.pupil.astype(self.precision())*0  # set the initial OPD
+        # self.OPD = self.pupil.astype(self.precision())     # set the initial OPD
+        # self.OPD_no_pupil = 1+self.pupil.astype(self.precision())*0  # set the initial OPD
         return
 
     @property
@@ -547,8 +531,8 @@ class Telescope:
         self.src.OPD_no_pupil = val
 
     def resetOPD(self):
+        warning('The use of resetOPD is deprecated. Consider using the Source reset option using the ** operator to reset the light propagation:\n src**tel')
         self.src**self
-        # self.src.resetOPD()
 
     # This function was replaced by relay functions in different objects
     # Remains here for now for backward compatibility
@@ -573,150 +557,16 @@ class Telescope:
                 for i_obj in range(len(obj)):
                     self*obj[i_obj]
         else:
-            # interaction with WFS object: Propagation of the phase screen
-            if obj.tag == 'pyramid' or obj.tag == 'double_wfs' or obj.tag == 'shackHartmann' or obj.tag == 'bioEdge':
-                # self.optical_path.append([obj.tag, id(obj)])
-                # if self.display_optical_path is True:
-                #     self.print_optical_path()
-                # self.optical_path = self.optical_path[:-1]
-
-                if self.src.tag == 'asterism':
-                    input_source = copy.deepcopy(self.src.src)
-                    output_raw_data = xp.zeros(
-                        [obj.raw_data.shape[0], obj.raw_data.shape[0]])
-                    if obj.tag == 'pyramid':
-                        output_raw_em = xp.zeros(
-                            obj.focal_plane_camera.frame.shape)
-                    obj.telescope = copy.deepcopy(self)
-
-                    for i_src in range(len(input_source)):
-                        obj.telescope.src = input_source[i_src]
-                        [Tip, Tilt] = xp.meshgrid(xp.linspace(-xp.pi, xp.pi, self.resolution, endpoint=False, dtype=self.precision()),
-                                                  xp.linspace(-xp.pi, xp.pi, self.resolution, endpoint=False, dtype=self.precision()))
-                        r = (input_source[i_src].coordinates[0])
-                        # X/Y shift inversion to match convention for atmosphere
-                        delta_Tilt = (r*xp.sin(np.deg2rad(input_source[i_src].coordinates[1])))  # in arcsec
-                        delta_Tip = (r*xp.cos(np.deg2rad(input_source[i_src].coordinates[1])))  # in arcsec
-                        if delta_Tip > obj.max_fov_arcsec or delta_Tilt > obj.max_fov_arcsec:
-                            raise OopaoError('The source is outside of the field of view of the WFS object and cannot be propagated')
-
-                        delta_TT = (delta_Tip*Tip + delta_Tilt*Tilt)*self.pupil*(self.D/input_source[i_src].wavelength)*(1/self.rad2arcsec)
-                        obj.delta_TT = delta_TT
-                        obj.wfs_measure(
-                            phase_in=input_source[i_src].phase + delta_TT, integrate=False)
-                        output_raw_data += obj.raw_data.copy()
-                        if obj.tag == 'pyramid':
-                            obj*obj.focal_plane_camera
-                            if i_src == 0:
-                                output_raw_em = obj.focal_plane_camera.frame.copy()
-                            else:
-                                output_raw_em += obj.focal_plane_camera.frame
-                    if obj.tag == 'pyramid':
-                        obj.focal_plane_camera.frame = output_raw_em
-                    obj.raw_data = output_raw_data.copy()
-                    obj.signal_2D, obj.signal = obj.wfs_integrate()
-
-                else:
-                    obj.telescope = self
-                    obj.wfs_measure(phase_in=self.src.phase)
-
-            if obj.tag == 'detector':
-                # if self.optical_path[-1] != obj.tag:
-                    # self.optical_path.append([obj.tag, id(obj)])
-
-                self.computePSF(detector=obj)
-                obj.fov_arcsec = self.xPSF_arcsec[1] - self.xPSF_arcsec[0]
-                obj.fov_rad = self.xPSF_rad[1] - self.xPSF_rad[0]
-                if obj.integrationTime is not None:
-                    if obj.integrationTime < self.samplingTime:
-                        raise OopaoError('The Detector integration time is smaller than the AO loop sampling Time. ')
-                obj._integrated_time += self.samplingTime
-                if xp.ndim(self.PSF) == 3:
-                    obj.integrate(xp.sum(self.PSF, axis=0))
-                else:
-                    obj.integrate(self.PSF)
-
-                self.PSF = obj.frame
-
-            if obj.tag == 'OPD_map':
-                # self.optical_path.append([obj.tag, id(obj)])
-
-                self.OPD += obj.OPD
-                self.OPD_no_pupil += obj.OPD
-
-            if obj.tag == 'NCPA':
-                # self.optical_path.append([obj.tag, id(obj)])
-
-                self.OPD += obj.OPD
-                self.OPD_no_pupil += obj.OPD
-
-            if obj.tag == 'spatialFilter':
-                # self.optical_path.append([obj.tag, id(obj)])
-
-                self.spatialFilter = obj
-                N = obj.resolution
-                EF_in = xp.zeros([N, N], dtype=self.precision_complex())
-                EF_in[obj.center-self.resolution//2:obj.center+self.resolution//2, obj.center-self.resolution//2:obj.center +
-                      self.resolution//2] = self.pupilReflectivity*xp.exp(1j*(self.OPD_no_pupil*2*xp.pi/self.src.wavelength))
-                FP_in = xp.fft.fft2(EF_in)
-                FP_filtered = FP_in*xp.fft.fftshift(obj.mask)
-                em_field = xp.fft.ifft2(FP_filtered)
-                self.em_field_filtered = em_field[obj.center-self.resolution//2:obj.center +
-                                                  self.resolution//2, obj.center-self.resolution//2:obj.center+self.resolution//2]
-                # self.phase_filtered = xp.arctan2(xp.imag(self.em_field_filtered),xp.real(self.em_field_filtered))*self.pupil
-                self.phase_filtered = (
-                    (xp.angle(self.em_field_filtered)))*self.pupil
-
-                self.amplitude_filtered = xp.abs(self.em_field_filtered)
-                return self
-
-            if obj.tag == 'deformableMirror':
-                # if self.optical_path[-1][1] != id(obj):
-                #     self.optical_path.append([obj.tag, id(obj)])
-
-                pupil = xp.atleast_3d(self.pupil)
-
-                if self.src.tag == 'source':
-                    if obj.altitude is None or np.isinf(obj.altitude):
-                        self.OPD_no_pupil = obj.dm_propagation(self)
-                    else:
-                        self.OPD_no_pupil = obj.dm_propagation(self,src=self.src)                        
-                    if xp.ndim(self.OPD_no_pupil) == 2:
-                        self.OPD = self.OPD_no_pupil*self.pupil
-                    else:
-                        self.OPD = self.OPD_no_pupil*pupil
-                else:
-                    if self.src.tag == 'asterism':
-                        if len(self.OPD) == self.src.n_source:
-                            for i in range(self.src.n_source):
-                                if obj.altitude is not None:
-                                    self.OPD_no_pupil[i] = obj.dm_propagation(
-                                        self, OPD_in=self.OPD_no_pupil[i], i_source=i)
-                                else:
-                                    self.OPD_no_pupil[i] = obj.dm_propagation(
-                                        self, OPD_in=self.OPD_no_pupil[i])
-                                if xp.ndim(self.OPD_no_pupil[i]) == 2:
-                                    self.OPD[i] = self.OPD_no_pupil[i] * \
-                                        self.pupil
-                                else:
-                                    self.OPD[i] = self.OPD_no_pupil[i]*pupil
-                            self.OPD = self.OPD
-                            self.OPD_no_pupil = self.OPD_no_pupil
-                        else:
-                            raise OopaoError('The lenght of the OPD list ('+str(len(self._OPD_no_pupil))
-                                             + ') does not match the number of sources ('+str(self.src.n_source)+')')
-                    else:
-                        raise OopaoError('The wrong object was attached to the telescope')
+            obj.relay(self.src)
         return self
     # <JM @ SpaceODT> This is no longer needed as the atmosphere behaves as its own entity now.
     # Remains here for now for reference
     # Combining with an atmosphere object
+
     def __add__(self, obj):
         if obj.tag == 'atmosphere':
-
             obj*self
             self.atm = obj
-
             if self.isPetalFree:
                 self.removePetalling()
 

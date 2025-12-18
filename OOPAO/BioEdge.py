@@ -800,7 +800,27 @@ class BioEdge:
         if n==2:
             I=cameraFrame[centerPixel-n_pixels:(+centerPixel),centerPixel:(centerPixel+n_pixels)]
         return I
+    def relay(self, src):
+        if src.tag == 'source':
+            src_list = [src]
+        elif src.tag == 'asterism':
+            src_list = src.src
+        signal_2D_list = []
+        signal_list = []
+        frames_list = []
 
+        for src in src_list:
+            src.optical_path.append([self.tag, self])
+            self.src = src
+            self.wfs_measure(phase_in=self.src.phase)
+            signal_2D_list.append(self.signal_2D)
+            signal_list.append(self.signal)
+            frames_list.append(self.cam.frame)
+
+        self.signal_2D = np.squeeze(np.array(signal_2D_list))
+        self.signal = np.squeeze(np.array(signal_list))
+        self.frames = np.squeeze(np.array(frames_list))
+        return
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     #properties required for backward compatibility (20/10/2020)
     @property

@@ -384,17 +384,17 @@ class Pyramid:
         if mis_reg is not None:
             sx = [mis_reg.dX_1, mis_reg.dX_2, mis_reg.dX_3, mis_reg.dX_4]
             sy = [mis_reg.dY_1, mis_reg.dY_2, mis_reg.dY_3, mis_reg.dY_4]
-        # apply a TIP/TILT of the PWFS mask to shift the pupils
+        # factor to ensure backward compatibility
         if self.old_mask:
-            f=2
+            f = 2
         else:
-            f=1
-        
+            f = 1
+        # normalization factor to shift the pupil with the correct units
         if units == 'pixels':
             factor = f
         if units == 'm':
             factor = f/(self.telescope.D/self.nSubap)
-                    
+
         # sx and sy are the units of displacements in pixels
         if np.isscalar(sx) and np.isscalar(sy):
             shift_x = [factor*sx, factor*sx, factor*sx, factor*sx]
@@ -1173,6 +1173,7 @@ class Pyramid:
                 self.referenceSignal_2D = 0
                 self.wfs_calibration(self.telescope)
                 print('Done!')
+
     def relay(self, src):
         if src.tag == 'source':
             src_list = [src]
@@ -1193,6 +1194,8 @@ class Pyramid:
         self.signal_2D = np.squeeze(np.array(signal_2D_list))
         self.signal = np.squeeze(np.array(signal_list))
         self.frames = np.squeeze(np.array(frames_list))
+        return
+
     def __mul__(self, obj):
         if obj.tag == 'detector':
             obj._integrated_time += self.telescope.samplingTime

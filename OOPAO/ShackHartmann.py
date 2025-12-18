@@ -10,6 +10,7 @@ from .tools.tools import bin_ndarray, gaussian_2D, warning, OopaoError
 from joblib import Parallel, delayed
 import scipy as sp
 import sys
+from .OPD_map import OPD_map
 
 try:
     import cupy as xp
@@ -159,14 +160,20 @@ class ShackHartmann:
         self.src = self.telescope.src
         if self.telescope.src is None:
             raise OopaoError('The telescope was not coupled to any source object! Make sure to couple it with an src object using src*tel')
-        if telescope.src.type == 'LGS':
-            self.is_LGS = True
-            self.convolution_tag = 'FFT'
+        if self.src.type == 'asterism':
+            if self.src.src[0].type == 'LGS':
+                self.is_LGS = True
+                self.convolution_tag = 'FFT'
+            else:
+                self.is_LGS = False
         else:
-            self.is_LGS = False
-        # save wavelength used for the calibration of the Pyramid to avoid conflicts
-        self.wavelength_calibration = self.telescope.src.wavelength
-        # flag to switch between geometric and diffractive ShackHartmann
+            if self.src.type == 'LGS':
+                self.is_LGS = True
+                self.convolution_tag = 'FFT'
+            else:
+                self.is_LGS = False
+        self.wavelength_calibration = self.src.wavelength
+        self._valid_subapertures = None
         self.is_geometric = is_geometric
         # Number of subaperture
         self.nSubap = nSubap
@@ -250,7 +257,7 @@ class ShackHartmann:
 
         # Compute camera frame in case of multiple measurements
         self.get_raw_data_multi = False
-
+        # detector camera
         # WFS detector object
         self.cam = Detector(round(nSubap*self.n_pix_subap))
         self.cam.photonNoise = 0
@@ -286,7 +293,7 @@ class ShackHartmann:
         self.current_nPhoton = self.telescope.src.nPhoton
         self.index_x = np.asarray(self.index_x)
         self.index_y = np.asarray(self.index_y)
-        print('Valid subapertures selection based on flux considerations')
+        print('Selecting valid subapertures based on flux considerations..')
         self.photon_per_subaperture_2D = np.reshape(self.photon_per_subaperture, [self.nSubap, self.nSubap])
         self.valid_subapertures = np.reshape(self.photon_per_subaperture >= self.lightRatio*np.max(self.photon_per_subaperture), [self.nSubap, self.nSubap])
         self.valid_subapertures_1D = np.reshape(self.valid_subapertures, [self.nSubap**2])
@@ -309,8 +316,6 @@ class ShackHartmann:
         signal_2D_list = []
         signal_list = []
         reference_signal_2D_list = []
-        
-
         for src in self.src_list:
             self.src = src
             if src.type == "LGS":
@@ -326,14 +331,9 @@ class ShackHartmann:
             signal_2D_list.append(self.signal_2D)
             signal_list.append(self.signal)
             reference_signal_2D_list.append(self.reference_slopes_maps)
-
         self.signal_2D = signal_2D_list.copy()
         self.signal = signal_list.copy()
         self.reference_signal_2D = reference_signal_2D_list.copy()
-        
-        
-        # self.src.signal_2D = signal_2D_list.copy()
-        # self.src.signal = signal_list.copy()
 
     def relay(self, src):
         if src.tag == 'source':
@@ -343,13 +343,9 @@ class ShackHartmann:
         signal_2D_list = []
         signal_list = []
         frames_list = []
-
         for src in self.src_list:
-            # print(src)
-
             src.optical_path.append([self.tag, self])
             self.src = src
-
             if self.src.type == "LGS":
                 self.is_LGS = True
             else:
@@ -358,15 +354,11 @@ class ShackHartmann:
                 self.spot_kernel_elongation_fft = self.src.spot_kernel_elongation_fft.copy()
                 self.spot_kernel_elongation = self.src.spot_kernel_elongation.copy()
             self.reference_slopes_maps = np.squeeze(np.array(self.reference_signal_2D))
-
-                # self.shift_x_buffer, self.shift_y_buffer, self.spot_kernel_elongation_fft, self.spot_kernel_elongation = self.get_convolution_spot(compute_fft_kernel=True)
-
             self.wfs_measure(phase_in=self.src.phase)
             signal_2D_list.append(self.signal_2D)
             signal_list.append(self.signal)
             if self.is_geometric is False:
                 frames_list.append(self.cam.frame)
-
         self.signal_2D = np.squeeze(np.array(signal_2D_list))
         self.signal = np.squeeze(np.array(signal_list))
         if self.is_geometric is False:
@@ -377,7 +369,6 @@ class ShackHartmann:
         self.isInitialized = False
         readoutNoise = np.copy(self.cam.readoutNoise)
         photonNoise = np.copy(self.cam.photonNoise)
-
         self.cam.photonNoise = 0
         self.cam.readoutNoise = 0
         self.isInitialized = False
@@ -452,17 +443,17 @@ class ShackHartmann:
         self.set_slopes_units()
         return
 
-    def set_slopes_units(self):
-        print('Recalibrating the slopes units')
+    def set_slopes_units(self, tomographic_reconstructor=False, src = None):
+        if src is None:
+            src = self.src
+        print('Calibrating the slopes units')
+        [self.Tip, self.Tilt] = np.meshgrid(np.linspace(-np.pi, np.pi, self.telescope.resolution, endpoint=False), np.linspace(-np.pi, np.pi, self.telescope.resolution, endpoint=False))
         tmp_opd = self.src.OPD.copy()
-
         self.isInitialized = False
         readoutNoise = np.copy(self.cam.readoutNoise)
         photonNoise = np.copy(self.cam.photonNoise)
-
         self.cam.photonNoise = 0
         self.cam.readoutNoise = 0
-
         # reference signal
         self.SX = np.zeros([self.nSubap, self.nSubap])
         self.SY = np.zeros([self.nSubap, self.nSubap])
@@ -471,23 +462,29 @@ class ShackHartmann:
         self.slopes_units = 1
         print('Acquiring reference slopes..')
         self.src**self.telescope
-
         self.wfs_measure(self.src.phase)
-
         self.reference_slopes_maps = np.copy(self.signal_2D)
         self.isInitialized = True
         print('Done!')
-        [Tip, Tilt] = np.meshgrid(np.linspace(-np.pi, np.pi, self.telescope.resolution, endpoint=False),
-                                  np.linspace(-np.pi, np.pi, self.telescope.resolution, endpoint=False))
-        self.src.OPD = ((Tip+Tilt)*self.src.wavelength/2/np.pi) \
-            * self.pixel_scale / (self.src.wavelength / self.telescope.D) / self.rad2arcsec
-
-        self.wfs_measure(self.src.phase)
-
-        if self.is_geometric is False:
-            self.slopes_units = np.mean(self.signal)
+        if tomographic_reconstructor is False:
+            self.src.OPD = ((self.Tip+self.Tilt)*self.src.wavelength/2/np.pi) * self.pixel_scale / (self.src.wavelength / self.telescope.D) / self.rad2arcsec
+            self.wfs_measure(self.src.phase)
+            if self.is_geometric is False:
+                self.slopes_units = np.mean(self.signal)
+            else:
+                self.slopes_units = np.mean(self.signal_2D[self.lighted_subap*self.valid_slopes_maps])
         else:
-            self.slopes_units = np.mean(self.signal_2D[self.lighted_subap*self.valid_slopes_maps])
+            if src.type != 'asterism':
+                raise OopaoError('Only asterisms objects can be used to calibrate the SH WFS with a tomographic reconsctrutor')
+            self.slopes_units = 1
+            TT_out = OPD_map(self.Tip*0)
+
+            for i in range(2):
+                TT_in = OPD_map((self.Tip - TT_out.OPD)*self.telescope.pupil*1e-9)
+                src**self.telescope*TT_in*self
+                wfs_signal = np.hstack(self.signal)
+                TT_out = OPD_map((tomographic_reconstructor@wfs_signal).reshape([self.telescope.resolution,self.telescope.resolution])*self.telescope.pupil)
+                self.slopes_units *= np.std(TT_out.OPD) / np.std(TT_in.OPD)
         self.cam.photonNoise = photonNoise
         self.cam.readoutNoise = readoutNoise
         self.isCalibrated = True
@@ -591,7 +588,7 @@ class ShackHartmann:
         self.raw_data = tmp_raw_data.copy()
         return output_raw_data
 
-    def split_raw_data(self,input_frame=None):
+    def split_raw_data(self, input_frame=None):
         if input_frame is None:
             input_frame = self.cam.frame
         raw_data_h_split = np.vsplit((input_frame), self.nSubap)
@@ -831,12 +828,12 @@ class ShackHartmann:
                 norma = self.cube_flux.shape[1]
 
                 # compute spot intensity
-                if self.telescope.spatialFilter is None:
+                if self.src.phase_filtered is None:
                     phase = self.src.phase
                     self.initialize_flux()
                 else:
-                    phase = self.phase_filtered
-                    self.initialize_flux(((self.telescope.amplitude_filtered)**2).T*self.src.fluxMap.T)
+                    phase = self.src.phase_filtered
+                    self.initialize_flux(((self.src.amplitude_filtered)**2).T*self.src.fluxMap.T)
 
                 intensity = (np.abs(np.fft.fft2(np.asarray(self.get_lenslet_em_field(phase)), axes=[1, 2])/norma)**2)
                 # reduce to valid subaperture
@@ -982,12 +979,14 @@ class ShackHartmann:
                     self.compute_raw_data_multi(self.maps_intensity)
         else:
             # Geometric SH with single WF
-            if np.ndim(self.telescope.src.phase) == 2:
-                self.signal_2D = self.lenslet_propagation_geometric(self.telescope.src.phase)*self.valid_slopes_maps/self.slopes_units
+            if np.ndim(self.src.phase) == 2:
+                self.signal_2D = self.lenslet_propagation_geometric(
+                    self.src.phase)*self.valid_slopes_maps/self.slopes_units
                 self.signal = self.signal_2D[self.valid_slopes_maps]
             # Geometric SH with multiple WFS
             else:
-                self.phase_buffer = np.moveaxis(self.telescope.src.phase, -1, 0)
+                self.phase_buffer = np.moveaxis(
+                    self.src.phase, -1, 0)
 
                 def compute_geometric_signals():
                     Q = Parallel(n_jobs=1, prefer='processes')(
