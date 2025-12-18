@@ -15,7 +15,7 @@ import matplotlib.gridspec as gridspec
 from .phaseStats import ft_phase_screen, ft_sh_phase_screen, makeCovarianceMatrix
 from .tools.displayTools import makeSquareAxes
 from .tools.interpolateGeometricalTransformation import interpolate_cube, interpolate_image
-from .tools.tools import createFolder, emptyClass, globalTransformation, pol2cart, translationImageMatrix, OopaoError
+from .tools.tools import createFolder, emptyClass, globalTransformation, pol2cart, translationImageMatrix, OopaoError, warning
 try:
     import cupy as xp
     global_gpu_flag = True
@@ -156,7 +156,7 @@ class Atmosphere:
         self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5)  # computation of equivalent wind speed, Roddier 1982
         self.tau0 = 0.31 * self.r0 / self.V0  # Coherence time of atmosphere, Roddier 1981
         # default value to update phase screens at each iteration
-        self.user_defined_opd = False
+        self.is_user_defined_opd = False
         self.mode = mode              # DEBUG -> first phase screen generation mode
         self.seeingArcsec = self.rad2arcsec*(self.wavelength/self.r0)
         if src is None and self.telescope.src is None:
@@ -421,20 +421,17 @@ class Atmosphere:
     def update(self, OPD=None):
         if self.hasNotBeenInitialized:
             raise OopaoError('The Atmosphere object needs to be initialised using the initialiseAtmosphere()')
-
         if OPD is None:
-            self.user_defined_opd = False
+            self.is_user_defined_opd = False
             for i_layer in range(self.nLayer):
                 tmp_layer = getattr(self, 'layer_'+str(i_layer+1))
                 self.updateLayer(tmp_layer)
         else:
-            self.user_defined_opd = True
-            # case where the OPD is input
-            self.telescope.src.OPD_no_pupil = OPD
-            self.telescope.src.OPD = OPD*self.telescope.src.mask
+            # raise OopaoError('The use of a user-defined OPD is now deprecated and made using the OPD_map class.')
+            self.is_user_defined_opd = True
+            self.user_defined_opd = OPD
 
-        if self.telescope.isPaired:
-            self*self.telescope
+        return
 
     def relay(self, src):
         # update the src attached to the atmosphere
@@ -446,18 +443,24 @@ class Atmosphere:
         elif src.tag == 'asterism':
             self.src_list = src.src
             self.asterism = src
-        # compute the pupil footprint for each layers and each source
-        self.set_pupil_footprint()
-        for src in self.src_list:
-            src.through_atm = True
-            src.optical_path.append([self.tag, self])
-        # intialize the OPD support
-        OPD_support = self.initialize_OPD_support()
-        # fill the support for each layer
-        for i_layer in range(self.nLayer):
-            tmp_layer = getattr(self, 'layer_' + str(i_layer + 1))
-            OPD_support = self.fill_OPD_support(tmp_layer, OPD_support, i_layer)
+        if self.is_user_defined_opd:
+            OPD_support = [self.user_defined_opd]*len(self.src_list)
+            warning('User-Defined OPD are only propagated once in the Atmosphere class. Consider using the OPD_map class.')
+        else:
+            # compute the pupil footprint for each layers and each source
+            self.set_pupil_footprint()
+            for src in self.src_list:
+                src.through_atm = True
+                src.optical_path.append([self.tag, self])
+            # intialize the OPD support
+            OPD_support = self.initialize_OPD_support()
+            # fill the support for each layer
+            for i_layer in range(self.nLayer):
+                tmp_layer = getattr(self, 'layer_' + str(i_layer + 1))
+                OPD_support = self.fill_OPD_support(tmp_layer, OPD_support, i_layer)
         self.set_OPD(OPD_support)
+        self.is_user_defined_opd = False
+        return
 
     def initialize_OPD_support(self):
         OPD_support = []
@@ -478,8 +481,7 @@ class Atmosphere:
                                  resolution_out, shift_x=tmp_layer.extra_sx[i_src], shift_y=tmp_layer.extra_sy[i_src]))
             interpolate_cone_effect = False
             if self.src_list[i_src].altitude != np.inf:
-                sub_im = xp.reshape(_im[xp.where(tmp_layer.pupil_footprint[i_src] == 1)], [
-                                    self.telescope.resolution, self.telescope.resolution])
+                sub_im = xp.reshape(_im[xp.where(tmp_layer.pupil_footprint[i_src] == 1)], [self.telescope.resolution, self.telescope.resolution])
                 h = self.src_list[i_src].altitude-tmp_layer.altitude
                 if xp.isinf(h):
                     # magnification due to cone effect not considered
