@@ -1,32 +1,34 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon May  6 14:01:52 2024
+Created on Mon Feb  6 13:40:49 2023
 
 @author: cheritier
 
+Tutorial Description — End-to-End AO Simulation in OOPAO (Telescope → Atmosphere → WFS → DM → Closed Loop)
 
-Tutorial Description — Shack-Hartmann Wave-Front Sensing in OOPAO
+This tutorial walks through a full end-to-end adaptive optics (AO) simulation in OOPAO, starting from basic
+optical elements and progressing all the way to a closed-loop correction with performance metrics.
+It provides a compact but complete example of how to assemble and operate every subsystem of an AO instrument.
 
-This tutorial provides a focused walkthrough of Shack-Hartmann (SH) wave-front sensing in OOPAO, 
-illustrating how to configure, sample, visualize, and calibrate a SH sensor within a full optical chain.
+The script first constructs the telescope, guide stars, and detectors, and demonstrates on-axis and off-axis PSF formation with and without anisoplanatism. 
 
-Starting from a telescope, guide star, and optional atmosphere, the script introduces the SH WFS as a modular optical element, showing how it receives the propagated NGS signal via the * operator.
-It compares several SH sampling regimes:
-    - Shannon/2
-    - Shannon
-    - custom pixel scales
-    
-Users can inspect raw camera frames, slope maps, valid-subaperture masks, and cubes of individual subaperture spots.
+A multi-layer atmosphere is introduced and dynamically updated to generate evolving phase screens. 
+Light is propagated through the system using OOPAO’s symbolic operators (* for optical propagation, +/– for adding/removing turbulence).
 
-The tutorial highlights practical SH utilities:
-    - enabling/disabling photon-noise
-    - switching between diffractive and geometric (gradient-only) sensing
-    - applying Gaussian centroid-weighting maps to optimize slope estimation. 
+A deformable mirror (DM) is created with optional misregistration parameters, and its actuator geometry is visualized. 
 
-A KL modal basis is generated and used to build a modal interaction matrix with the SH sensor.
+A Pyramid WFS is then instantiated, including examples of detector shifts, custom modulation patterns, user-defined valid pixels, and focal-plane visualization.
 
-The calibrated interaction matrix is then used to set up a closed-loop environment, where the SH slopes drive the DM via a modal reconstructor.
+The script builds a modal control basis using Karhunen–Loève modes and calibrates the system by computing a modal interaction matrix, used to form the reconstructor.
 
+ A closed-loop AO simulation is then executed: 
+     - the atmosphere is updated every frame, 
+     - signals are read from the Pyramid, 
+     - DM commands are applied with a configurable loop delay, 
+     - residual OPD, WFE, and Strehl ratio are stored.
+
+A live visualization panel monitors turbulence, residual phases, WFS signals, and focal-plane PSFs. 
+After the loop, performance curves (WFE and SR over time) are plotted for both the on-axis guide star and the off-axis science target, illustrating anisoplanatism and AO correction quality.
 """
 
 import time
@@ -51,19 +53,7 @@ tel = Telescope(resolution           = 6*n_subaperture,                         
                 samplingTime         = 1/1000,                                   # Sampling time in [s] of the AO loop
                 centralObstruction   = 0.1,                                      # Central obstruction in [%] of a diameter 
                 display_optical_path = False,                                    # Flag to display optical path
-                fov                  = 2 )                                     # field of view in [arcsec]. If set to 0 (default) this speeds up the computation of the phase screens but is uncompatible with off-axis targets
-
-# # Apply spiders to the telescope pupil
-# thickness_spider    = 0.05                                                       # thickness of the spiders in m
-# angle               = [45, 135, 225, 315]                                        # angle in degrees for each spider
-# offset_Y            = [-0.2, -0.2, 0.2, 0.2]                                     # shift offsets for each spider
-# offset_X            = None
-
-# tel.apply_spiders(angle, thickness_spider, offset_X=offset_X, offset_Y=offset_Y)
-
-# # display current pupil
-# plt.figure()
-# plt.imshow(tel.pupil)
+                fov                  = 0 )                                     # field of view in [arcsec]. If set to 0 (default) this speeds up the computation of the phase screens but is uncompatible with off-axis targets
 
 #%% -----------------------     NGS   ----------------------------------
 from OOPAO.Source import Source
@@ -79,56 +69,13 @@ ngs*tel
 # create the Scientific Target object located at 10 arcsec from the  ngs
 src = Source(optBand     = 'K',           # Optical band (see photometry.py)
              magnitude   = 8,              # Source Magnitude
-             coordinates = [1,0])        # Source coordinated [arcsec,deg]
+             coordinates = [0,0])        # Source coordinated [arcsec,deg]
 
 # combine the SRC to the telescope using '*'
 src*tel
 
 # check that the ngs and tel.src objects are the same
 tel.src.print_properties()
-#%% Computing PSF using the telescope method
-
-# you can apply the focal plane shift of the PSF for off-axis source 
-tel.apply_off_axis_tip_tilt = True
-
-tel.computePSF(zeroPaddingFactor = 6)
-plt.figure()
-plt.imshow(np.log10(np.abs(tel.PSF)),
-           extent = [tel.xPSF_arcsec[0],tel.xPSF_arcsec[1],tel.xPSF_arcsec[0],tel.xPSF_arcsec[1]])
-plt.clim([-1,4])
-plt.xlabel('[Arcsec]')
-plt.ylabel('[Arcsec]')
-plt.colorbar()
-plt.title('src PSF with off-axis tip tilt enabled')
-
-# you can remove the focal plane shift of the PSF 
-tel.apply_off_axis_tip_tilt = False
-
-
-# compute PSF 
-tel.computePSF(zeroPaddingFactor = 6)
-plt.figure()
-plt.imshow(np.log10(np.abs(tel.PSF)),
-           extent = [tel.xPSF_arcsec[0],tel.xPSF_arcsec[1],tel.xPSF_arcsec[0],tel.xPSF_arcsec[1]])
-plt.clim([-1,4])
-plt.xlabel('[Arcsec]')
-plt.ylabel('[Arcsec]')
-plt.colorbar()
-plt.title('src PSF with off-axis tip tilt disabled')
-
-
-# same with NGS (on-axis) and different wavelength
-ngs*tel
-tel.computePSF(zeroPaddingFactor = 6)
-plt.figure()
-plt.imshow(np.log10(np.abs(tel.PSF)),
-           extent = [tel.xPSF_arcsec[0],tel.xPSF_arcsec[1],tel.xPSF_arcsec[0],tel.xPSF_arcsec[1]])
-plt.clim([-1,4])
-plt.xlabel('[Arcsec]')
-plt.ylabel('[Arcsec]')
-plt.colorbar()
-plt.title('ngs PSF')
-
 
 #%% -----------------------     ATMOSPHERE   ----------------------------------
 from OOPAO.Atmosphere import Atmosphere
@@ -157,82 +104,6 @@ plt.colorbar()
 
 # display the atmosphere layers for the sources specified in list_src: 
 atm.display_atm_layers(list_src=[ngs,src])
-
-# the sources coordinates can be updated on the fly: 
-src.coordinates = [0,0]
-atm.display_atm_layers(list_src=[ngs,src])
-
-
-#%% -----------------------     Scientific Detector   ----------------------------------
-from OOPAO.Detector import Detector
-
-# define a detector with its properties (see Detector class for further documentation)
-cam = Detector(integrationTime = tel.samplingTime,      # integration time of the detector
-               photonNoise     = True,                  # enable photon noise
-               readoutNoise    = 0,                     # readout of the detector in [e-/pixel]
-               QE              = 1,                   # quantum efficiency
-               psf_sampling    = 2,                     # sampling for the PSF computation 2 = Shannon sampling
-               binning         = 1)                     # Binning factor of the PSF
-
-cam_binned = Detector( integrationTime = tel.samplingTime,      # integration time of the detector
-                       photonNoise     = True,                  # enable photon noise
-                       readoutNoise    = 2,                     # readout of the detector in [e-/pixel]
-                       QE              = 0.8,                   # quantum efficiency
-                       psf_sampling    = 2,                     # sampling for the PSF computation 2 = Shannon sampling
-                       binning         = 4)                     # Binning factor of the PSF
-
-
-# computation of a PSF on the detector using the '*' operator
-src**tel*cam*cam_binned
-
-plt.figure()
-plt.imshow(cam.frame,extent=[-cam.fov_arcsec/2,cam.fov_arcsec/2,-cam.fov_arcsec/2,cam.fov_arcsec/2])
-plt.xlabel('Angular separation [arcsec]')
-plt.ylabel('Angular separation [arcsec]')
-plt.title('Pixel size: '+str(np.round(cam.pixel_size_arcsec,3))+'"')
-
-plt.figure()
-plt.imshow(cam_binned.frame,extent=[-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2,-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2])
-plt.xlabel('Angular separation [arcsec]')
-plt.ylabel('Angular separation [arcsec]')
-plt.title('Pixel size: '+str(np.round(cam_binned.pixel_size_arcsec,3))+'"')
-
-#%%         PROPAGATE THE LIGHT THROUGH THE ATMOSPHERE
-# Propagation of the light through all the objects using the * operator
-ngs**atm*tel*cam*cam_binned
-# It is possible to print the optical path: 
-ngs.print_optical_path()
-
-plt.figure()
-plt.imshow(cam.frame,extent=[-cam.fov_arcsec/2,cam.fov_arcsec/2,-cam.fov_arcsec/2,cam.fov_arcsec/2])
-plt.xlabel('Angular separation [arcsec]')
-plt.ylabel('Angular separation [arcsec]')
-plt.title('Pixel size: '+str(np.round(cam.pixel_size_arcsec,3))+'"')
-
-plt.figure()
-plt.imshow(cam_binned.frame,extent=[-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2,-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2])
-plt.xlabel('Angular separation [arcsec]')
-plt.ylabel('Angular separation [arcsec]')
-plt.title('Pixel size: '+str(np.round(cam_binned.pixel_size_arcsec,3))+'"')
-
-# Propagation of the light through all the objects using the * operator
-ngs**tel*cam*cam_binned
-
-# It is possible to print the optical path: 
-ngs.print_optical_path()
-
-
-plt.figure()
-plt.imshow(cam.frame,extent=[-cam.fov_arcsec/2,cam.fov_arcsec/2,-cam.fov_arcsec/2,cam.fov_arcsec/2])
-plt.xlabel('Angular separation [arcsec]')
-plt.ylabel('Angular separation [arcsec]')
-plt.title('Pixel size: '+str(np.round(cam.pixel_size_arcsec,3))+'"')
-
-plt.figure()
-plt.imshow(cam_binned.frame,extent=[-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2,-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2])
-plt.xlabel('Angular separation [arcsec]')
-plt.ylabel('Angular separation [arcsec]')
-plt.title('Pixel size: '+str(np.round(cam_binned.pixel_size_arcsec,3))+'"')
 
 #%% -----------------------     DEFORMABLE MIRROR   ----------------------------------
 from OOPAO.DeformableMirror import DeformableMirror
@@ -265,108 +136,28 @@ plt.ylabel('[m]')
 plt.title('DM Actuator Coordinates')
 
 
-#%% -----------------------     SHACK-HARTMANN WFS   ----------------------------------
-from OOPAO.ShackHartmann import ShackHartmann
+#%% -----------------------     Bi-O Edge WFS   ----------------------------------
+from OOPAO.BioEdge import BioEdge
 
 # make sure that the ngs is propagated to the wfs
-ngs*tel
+ngs**tel
 
-# shannon/2 sampled Shack-Hartmann spots
-wfs = ShackHartmann(nSubap = n_subaperture,
-                    telescope = tel,
-                    lightRatio = 0.5,
-                    shannon_sampling = False)
-#%% variant of ShackHartmann spot sampling
-
-# shannon sampled Shack-Hartmann spots
-wfs_ = ShackHartmann(nSubap = n_subaperture//2,
-                    telescope = tel,
-                    lightRatio = 0.5,
-                    shannon_sampling = True)
-
-plt.figure()
-plt.imshow(wfs_.cam.frame)
-
-wfs__ = ShackHartmann(nSubap = n_subaperture//2,
-                    telescope = tel,
-                    lightRatio = 0.5,
-                    pixel_scale = 0.1, 
-                    n_pixel_per_subaperture = 10)# request a 0.1 arcsec pixel scale with 10 pix per subaperture
-plt.figure()
-plt.imshow(wfs__.cam.frame)
-
-wfs___ = ShackHartmann(nSubap = n_subaperture//2,
-                    telescope = tel,
-                    lightRatio = 0.5,
-                    pixel_scale = 0.05, 
-                    n_pixel_per_subaperture = 10)# request a 0.1 arcsec pixel scale with 10 pix per subaperture
-plt.figure()
-plt.imshow(wfs___.cam.frame)
-
-#%% Useful Shack Hartmann methods an properties
-
-# propagate the light to the Wave-Front Sensor
-ngs**tel*wfs
-
-plt.close('all')
-plt.figure()
-plt.imshow(wfs.cam.frame)
-plt.title('WFS Camera Frame')
-
-plt.figure()
-plt.imshow(wfs.signal_2D)
-plt.title('WFS Signal')
-
-# The photon Noise of the detector can be disabled the same way than for a Detector class
-wfs.cam.photonNoise = True
-
-ngs**tel*wfs
-
-plt.figure()
-plt.imshow(wfs.cam.frame)
-plt.title('WFS Camera Frame - With Noise')
-
-wfs.cam.photonNoise = False
-ngs**tel*wfs
-plt.figure()
-plt.imshow(wfs.cam.frame)
-plt.title('WFS Camera Frame - Without Noise')
-
-# show the map of valid subapertures:
-plt.figure()
-plt.imshow(wfs.valid_subapertures)
-plt.title('WFS valid subaperture map')
-
-# extract all the individual Shack Hartmann spots as a cube from an input frame in [n_valid,n_pix,n_pix] forma
-cube_spots = wfs.split_raw_data()
-# display them concatenated
-displayMap(cube_spots,axis=0)
-
-# apply a weighting map on the center of gravity with a gaussian function with 4x4 pixels FWHM (in WFS pixel scale unit)
-wfs.set_weighted_centroiding_map(is_lgs = False,
-                                 is_gaussian = True,
-                                 fwhm_factor = [4,4])
-# display the weighting map applied
-plt.figure()
-plt.imshow(wfs.weighting_map[0])
+wfs = BioEdge(nSubap                = n_subaperture,\
+              telescope             = tel,\
+              modulation            = 0,\
+              grey_width            = 2,\
+              lightRatio            = 0.01,\
+              n_pix_separation      = 0,\
+              psfCentering          = False,\
+              postProcessing        = 'fullFrame_incidence_flux')
 
 #%%
-
-# switch to a gerometric Shack-Hartmann (=gradient computation, no optical propagation, no noise)
-wfs.is_geometric = True
-ngs**atm*tel*wfs
+    
 plt.figure()
-plt.imshow(wfs.signal_2D)
-plt.title('WFS Signal - Geometric')
-plt.colorbar()
-
-# switch to a gerometric Shack-Hartmann (=gradient computation, no optical propagation, no noise)
-wfs.is_geometric = False
-ngs**atm*tel*wfs
-plt.figure()
-plt.imshow(wfs.signal_2D)
-plt.title('WFS Signal - Diffractive')
-plt.colorbar()
+for i in range(4):
+    plt.subplot(1,4,i+1)
+    plt.imshow(np.abs(wfs.mask[i]))
+    plt.title('Bi-O Edge Mask - Channel '+str(i+1))
 
 #%% -----------------------     Modal Basis - Zernike  ----------------------------------
 # from OOPAO.Zernike import Zernike
@@ -413,7 +204,6 @@ M2C_modal = M2C_KL[:,:300]
 
 # swap to geometric WFS for the calibration
 ngs**tel*wfs # make sure that the proper source is propagated to the WFS
-wfs.is_geometric = True
 # zonal interaction matrix
 calib_modal = InteractionMatrix(ngs            = ngs,
                                 atm            = atm,
@@ -422,7 +212,7 @@ calib_modal = InteractionMatrix(ngs            = ngs,
                                 wfs            = wfs,   
                                 M2C            = M2C_modal, # M2C matrix used 
                                 stroke         = stroke,    # stroke for the push/pull in M2C units
-                                nMeasurements  = 1,        # number of simultaneous measurements
+                                nMeasurements  = 8,        # number of simultaneous measurements
                                 noise          = 'off',     # disable wfs.cam noise 
                                 display        = True,      # display the time using tqdm
                                 single_pass    = True)      # only push to compute the interaction matrix instead of push-pull
@@ -444,7 +234,7 @@ src_cam.psf_sampling = 4  # sampling of the PSF
 src_cam.integrationTime = tel.samplingTime # exposure time for the PSF
 
 # put the scientific target off-axis to simulate anisoplanetism (set to  [0,0] to remove anisoplanetism)
-src.coordinates = [1,0]
+src.coordinates = [0,0]
 
 # WFS path
 ngs_cam = Detector(tel.resolution*2)
@@ -462,6 +252,7 @@ src_psf_ref = src_cam.frame.copy()
 from OOPAO.tools.tools import strehlMeter
 
 plt.close('all')
+
 # These are the calibration data used to close the loop
 calib_CL = calib_modal
 M2C_CL = M2C_modal
@@ -469,11 +260,6 @@ reconstructor = M2C_CL@calib_CL.M
 
 # initialize DM commands
 dm.coefs=0
-
-# You can update the the atmosphere parameter on the fly
-atm.r0 = 0.15
-atm.windSpeed = list(np.random.randint(5,20,atm.nLayer))
-atm.windDirection = list(np.random.randint(0,360,atm.nLayer))
 
 # To make sure to always replay the same turbulence, generate a new phase screen for the atmosphere and combine it with the Telescope
 atm.generateNewPhaseScreen(seed=10)
@@ -503,7 +289,7 @@ plot_obj = cl_plot(list_fig=[atm.OPD,  # list of data for the different subplots
                              tel.OPD,
                              tel.OPD,
                              wfs.cam.frame,
-                             [dm.coordinates[:, 0], np.flip(dm.coordinates[:, 1]), dm.coefs],
+                             wfs.focal_plane_camera.frame,
                              [[0, 0], [0, 0], [0, 0]],
                              np.log10(ngs_cam.frame),
                              np.log10(src_cam.frame)],
@@ -511,7 +297,7 @@ plot_obj = cl_plot(list_fig=[atm.OPD,  # list of data for the different subplots
                              'imshow',
                              'imshow',
                              'imshow',
-                             'scatter',
+                             'imshow',
                              'plot',
                              'imshow',
                              'imshow'],
@@ -519,7 +305,7 @@ plot_obj = cl_plot(list_fig=[atm.OPD,  # list of data for the different subplots
                                'NGS residual [m]',
                                'SRC residual [m]',
                                'WFS Detector',
-                               'DM Commands',
+                               'WFS Foxal Plane Camera',
                                None,
                                None,
                                None],
@@ -561,6 +347,8 @@ for i in range(nLoop):
     wfe_atmosphere[i] = np.std(tel.OPD[np.where(tel.pupil > 0)])*1e9
     # propagate light from the ngs through the atmosphere, telescope, DM to the WFS and ngs camera
     ngs**atm*tel*dm*wfs*ngs_cam
+    # propagate to the focal plane camera
+    wfs*wfs.focal_plane_camera
     # save residuals corresponding to the ngs
     wfe_residual_NGS[i] = np.std(tel.OPD[np.where(tel.pupil > 0)])*1e9
     # save Strehl ratio from the PSF image
@@ -608,7 +396,7 @@ for i in range(nLoop):
                                'NGS residual '+str(np.round(wfe_residual_NGS[i]))+'[nm]',
                                'SRC residual '+str(np.round(wfe_residual_SRC[i]))+'[nm]',
                                'WFS Detector',
-                               'DM Commands',
+                               'WFS Focal Plance Camera',
                                None,
                                None,
                                None]
@@ -617,7 +405,7 @@ for i in range(nLoop):
                           1e9*OPD_NGS,
                           1e9*OPD_SRC,
                           wfs.cam.frame,
-                          dm.coefs,
+                          np.log10(wfs.focal_plane_camera.frame),
                           [np.arange(i+1), wfe_residual_SRC[:i+1], wfe_residual_NGS[:i+1]],
                           NGS_PSF,
                           SRC_PSF],
@@ -648,4 +436,3 @@ plt.plot(np.arange(nLoop)*tel.samplingTime, SR_src, label='SRC@' + str(np.round(
 plt.legend()
 plt.xlabel('Time [s]')
 plt.ylabel('SR [%]')
-

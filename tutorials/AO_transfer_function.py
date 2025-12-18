@@ -139,16 +139,12 @@ M2C = compute_KL_basis(tel, atm, dm,lim=0)
 
 tel.resetOPD()
 dm.coefs = M2C  
-tel*dm
+ngs**tel*dm
 KL_DM = tel.OPD.reshape(tel.resolution**2,M2C.shape[1])
 covmat = KL_DM.T@KL_DM
 projector = np.diag(1/np.diag(covmat))@KL_DM.T
 
- # reinitialize
-dm.coefs = 0
-tel.resetOPD()
 
-tel*dm
 
 #%%
 
@@ -189,6 +185,7 @@ for i_g in range(2):
     for i in range(N):
         print(str(i)+'/'+str(N))
         atm.update()
+        
         phase_turb = np.reshape(atm.OPD, tel.resolution**2)
                 
         mod_coeffs_turb[i,:,i_g] = projector@phase_turb

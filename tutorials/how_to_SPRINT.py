@@ -279,6 +279,7 @@ displayMap(tel.OPD)
 
 #%%
 from OOPAO.tools.tools import emptyClass
+from OOPAO.MisRegistration import MisRegistration
 
 """
 Case where the initial mis-registration is quite small (Closed Loop) => USE A MIDDLE ORDER MODE!
@@ -289,7 +290,7 @@ basis =  emptyClass()
 basis.modes         = M2C_KL[:,index_modes]
 basis.extra = ''
 dm.coefs = basis.modes
-tel*dm
+ngs**tel*dm
 
 plt.figure()
 displayMap(tel.OPD)
@@ -300,22 +301,22 @@ obj.tel     = tel
 obj.atm     = atm
 obj.wfs     = wfs
 obj.dm      = dm
+m_zero_point = MisRegistration()
 
 
 from OOPAO.SPRINT import SPRINT
 
-Sprint = SPRINT(obj,basis, recompute_sensitivity=True, dm_input = dm)
+Sprint = SPRINT(obj,basis, recompute_sensitivity=True, dm_input = dm,mis_registration_zero_point=m_zero_point)
 
 
 #%%
 from OOPAO.mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
-from OOPAO.MisRegistration import MisRegistration
 
 
 m_input = MisRegistration()
 m_input.shiftX = dm.pitch/2
-m_input.shiftY = dm.pitch*1.5
-m_input.rotationAngle = 3
+m_input.shiftY = dm.pitch/2
+m_input.rotationAngle = 1
 
 # create a mis-registered DM
 dm_mis_registered = applyMisRegistration(tel=tel, misRegistration_tmp = m_input, dm_input = dm,print_dm_properties=False)
@@ -324,20 +325,31 @@ dm_mis_registered = applyMisRegistration(tel=tel, misRegistration_tmp = m_input,
 dm_mis_registered.coefs = Sprint.basis.modes * 1e-9
 
 # Acquire corresponding WFS signals 
-ngs*tel*dm_mis_registered*wfs
+ngs**tel*dm_mis_registered*wfs
 
+input_wfs_signals = wfs.signal/1e-9
 #%%
 plt.close('all')
 
 Sprint.estimate(obj,
-                on_sky_slopes = wfs.signal/1e-9,
+                on_sky_slopes = input_wfs_signals,
                 dm_input=dm,
                 n_iteration=10,
                 gain_estimation=1,
-                n_update_zero_point=3,
-                tolerance = 1/10)
+                n_update_zero_point=2,
+                tolerance = 1/100)
 
 
+#%%
+from OOPAO.tools.displayTools import interactive_show,display_wfs_signals
+
+a = display_wfs_signals(wfs, input_wfs_signals,returnOutput=True)
+b = display_wfs_signals(wfs, Sprint.calib_last.D,returnOutput=True)
+
+a[np.isinf(a)] = 0
+b[np.isinf(b)] = 0
+  
+interactive_show(a, b)
 
 
 

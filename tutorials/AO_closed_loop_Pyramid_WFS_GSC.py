@@ -80,48 +80,6 @@ src*tel
 
 # check that the ngs and tel.src objects are the same
 tel.src.print_properties()
-#%% Computing PSF using the telescope method
-
-# you can apply the focal plane shift of the PSF for off-axis source 
-tel.apply_off_axis_tip_tilt = True
-
-tel.computePSF(zeroPaddingFactor = 6)
-plt.figure()
-plt.imshow(np.log10(np.abs(tel.PSF)),
-           extent = [tel.xPSF_arcsec[0],tel.xPSF_arcsec[1],tel.xPSF_arcsec[0],tel.xPSF_arcsec[1]])
-plt.clim([-1,4])
-plt.xlabel('[Arcsec]')
-plt.ylabel('[Arcsec]')
-plt.colorbar()
-plt.title('src PSF with off-axis tip tilt enabled')
-
-# you can remove the focal plane shift of the PSF 
-tel.apply_off_axis_tip_tilt = False
-
-
-# compute PSF 
-tel.computePSF(zeroPaddingFactor = 6)
-plt.figure()
-plt.imshow(np.log10(np.abs(tel.PSF)),
-           extent = [tel.xPSF_arcsec[0],tel.xPSF_arcsec[1],tel.xPSF_arcsec[0],tel.xPSF_arcsec[1]])
-plt.clim([-1,4])
-plt.xlabel('[Arcsec]')
-plt.ylabel('[Arcsec]')
-plt.colorbar()
-plt.title('src PSF with off-axis tip tilt disabled')
-
-
-# same with NGS (on-axis) and different wavelength
-ngs*tel
-tel.computePSF(zeroPaddingFactor = 6)
-plt.figure()
-plt.imshow(np.log10(np.abs(tel.PSF)),
-           extent = [tel.xPSF_arcsec[0],tel.xPSF_arcsec[1],tel.xPSF_arcsec[0],tel.xPSF_arcsec[1]])
-plt.clim([-1,4])
-plt.xlabel('[Arcsec]')
-plt.ylabel('[Arcsec]')
-plt.colorbar()
-plt.title('ngs PSF')
 
 
 #%% -----------------------     ATMOSPHERE   ----------------------------------
@@ -152,11 +110,6 @@ plt.colorbar()
 # display the atmosphere layers for the sources specified in list_src: 
 atm.display_atm_layers(list_src=[ngs,src])
 
-# the sources coordinates can be updated on the fly: 
-src.coordinates = [0,0]
-atm.display_atm_layers(list_src=[ngs,src])
-
-
 #%% -----------------------     Scientific Detector   ----------------------------------
 from OOPAO.Detector import Detector
 
@@ -178,47 +131,6 @@ cam_binned = Detector( integrationTime = tel.samplingTime,      # integration ti
 
 # computation of a PSF on the detector using the '*' operator
 src*tel*cam*cam_binned
-
-plt.figure()
-plt.imshow(cam.frame,extent=[-cam.fov_arcsec/2,cam.fov_arcsec/2,-cam.fov_arcsec/2,cam.fov_arcsec/2])
-plt.xlabel('Angular separation [arcsec]')
-plt.ylabel('Angular separation [arcsec]')
-plt.title('Pixel size: '+str(np.round(cam.pixel_size_arcsec,3))+'"')
-
-plt.figure()
-plt.imshow(cam_binned.frame,extent=[-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2,-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2])
-plt.xlabel('Angular separation [arcsec]')
-plt.ylabel('Angular separation [arcsec]')
-plt.title('Pixel size: '+str(np.round(cam_binned.pixel_size_arcsec,3))+'"')
-
-#%%         PROPAGATE THE LIGHT THROUGH THE ATMOSPHERE
-# The Telescope and Atmosphere can be combined using the '+' operator (Propagation through the atmosphere): 
-tel+atm # This operations makes that the tel.OPD is automatically over-written by the value of atm.OPD when atm.OPD is updated. 
-
-# It is possible to print the optical path: 
-tel.print_optical_path()
-
-# computation of a PSF on the detector using the '*' operator
-atm*ngs*tel*cam*cam_binned
-
-plt.figure()
-plt.imshow(cam.frame,extent=[-cam.fov_arcsec/2,cam.fov_arcsec/2,-cam.fov_arcsec/2,cam.fov_arcsec/2])
-plt.xlabel('Angular separation [arcsec]')
-plt.ylabel('Angular separation [arcsec]')
-plt.title('Pixel size: '+str(np.round(cam.pixel_size_arcsec,3))+'"')
-
-plt.figure()
-plt.imshow(cam_binned.frame,extent=[-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2,-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2])
-plt.xlabel('Angular separation [arcsec]')
-plt.ylabel('Angular separation [arcsec]')
-plt.title('Pixel size: '+str(np.round(cam_binned.pixel_size_arcsec,3))+'"')
-
-# The Telescope and Atmosphere can be separated using the '-' operator (Free space propagation) 
-tel-atm
-tel.print_optical_path()
-
-# computation of a PSF on the detector using the '*' operator
-ngs*tel*cam*cam_binned
 
 plt.figure()
 plt.imshow(cam.frame,extent=[-cam.fov_arcsec/2,cam.fov_arcsec/2,-cam.fov_arcsec/2,cam.fov_arcsec/2])
@@ -267,15 +179,15 @@ plt.title('DM Actuator Coordinates')
 from OOPAO.Pyramid import Pyramid
 
 # make sure that the ngs is propagated to the wfs
-ngs*tel
+ngs**tel
 
 wfs = Pyramid(nSubap            = n_subaperture,                # number of subaperture = number of pixel accros the pupil diameter
               telescope         = tel,                          # telescope object
               lightRatio        = 0.5,                          # flux threshold to select valid sub-subaperture
               modulation        = 3,                            # Tip tilt modulation radius
               binning           = 1,                            # binning factor (applied only on the )
-              n_pix_separation  = 4,                            # number of pixel separating the different pupils
-              n_pix_edge        = 8,                            # number of pixel on the edges of the pupils
+              n_pix_separation  = 2,                            # number of pixel separating the different pupils
+              n_pix_edge        = 1,                            # number of pixel on the edges of the pupils
               postProcessing    = 'slopesMaps_incidence_flux')  # slopesMap_incidence_flux, fullFrame_incidence_flux (see documentation)
 
 
@@ -319,9 +231,8 @@ dm.coefs=0
 #%%
 
 # compute basis truncatedby the pupil
-tel.resetOPD()
 dm.coefs = M2C_KL[:,:300]
-ngs*tel*dm
+ngs**tel*dm
 
 basis_3D = tel.OPD.copy()
 # flatten the npix*npix dimension to compute pseudo inverse
@@ -336,8 +247,7 @@ gsc = GainSensingCamera(mask  = wfs.mask,
 wfs.focal_plane_camera.resolution = wfs.nRes
 
 # GSC calibration using flat OPD
-tel.resetOPD()
-tel * wfs
+ngs** tel * wfs
 wfs*wfs.focal_plane_camera
 wfs.focal_plane_camera * gsc
 
@@ -353,16 +263,18 @@ OPD_fitting_error, OPD_input, OPD_correction = getFittingError(OPD = atm.OPD,
                                                              basis = basis)
 # OPEN LOOP Phase screen
 atm.update()
-ngs * tel * wfs
+ngs ** tel * wfs
 wfs * wfs.focal_plane_camera
 wfs.focal_plane_camera * gsc
 
 plt.figure(),
 plt.plot(gsc.og,label = 'OG -- open loop')
 
-# replace atm OPD by fitting error using atm.update method
-atm.update(OPD_fitting_error)
-ngs * tel * wfs
+# replace atm OPD by fitting error using the static OPD class
+from OOPAO.OPD_map import OPD_map
+
+fitting_OPD = OPD_map(OPD_fitting_error)
+ngs ** tel * fitting_OPD * wfs
 wfs * wfs.focal_plane_camera
 wfs.focal_plane_camera * gsc
 
@@ -400,10 +312,6 @@ plt.figure()
 plt.plot(np.std(calib_modal.D,axis=0))
 plt.xlabel('Mode Number')
 plt.ylabel('WFS slopes STD')
-
-# switch back to diffractive WFS
-wfs.is_geometric = False
-
 #%% Define instrument and WFS path detectors
 from OOPAO.Detector import Detector
 # instrument path
@@ -419,13 +327,10 @@ ngs_cam = Detector(tel.resolution*2)
 ngs_cam.psf_sampling = 4
 ngs_cam.integrationTime = tel.samplingTime
 
-# initialize the Strehl Ratio computation
-tel.resetOPD()
-
-ngs*tel*ngs_cam
+ngs**tel*ngs_cam
 ngs_psf_ref = ngs_cam.frame.copy()
 
-src*tel*src_cam
+src**tel*src_cam
 
 src_psf_ref = src_cam.frame.copy()
 
@@ -439,10 +344,7 @@ calib_CL = calib_modal
 M2C_CL = M2C_modal
 
 # initialize Telescope DM commands
-tel.resetOPD()
 dm.coefs=0
-ngs*tel*dm*wfs
-
 
 # You can update the the atmosphere parameter on the fly
 atm.r0 = 0.1
@@ -573,7 +475,6 @@ for i in range(nLoop):
         dm.coefs = dm.coefs - gainCL*M2C_CL@np.diag(1/gsc.og)@calib_CL.M@wfsSignal
     else:
         dm.coefs = dm.coefs - gainCL*M2C_CL@calib_CL.M@wfsSignal
-        
 
     # store the slopes after computing the commands <=> 2 frames delay
     if frame_delay == 2:

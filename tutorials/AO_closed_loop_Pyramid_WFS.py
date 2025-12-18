@@ -53,7 +53,7 @@ tel = Telescope(resolution           = 6*n_subaperture,                         
                 samplingTime         = 1/1000,                                   # Sampling time in [s] of the AO loop
                 centralObstruction   = 0.1,                                      # Central obstruction in [%] of a diameter 
                 display_optical_path = False,                                    # Flag to display optical path
-                fov                  = 4 )                                     # field of view in [arcsec]. If set to 0 (default) this speeds up the computation of the phase screens but is uncompatible with off-axis targets
+                fov                  = 2 )                                     # field of view in [arcsec]. If set to 0 (default) this speeds up the computation of the phase screens but is uncompatible with off-axis targets
 
 # # Apply spiders to the telescope pupil
 # thickness_spider    = 0.05                                                       # thickness of the spiders in m
@@ -81,7 +81,7 @@ ngs*tel
 # create the Scientific Target object located at 10 arcsec from the  ngs
 src = Source(optBand     = 'K',           # Optical band (see photometry.py)
              magnitude   = 8,              # Source Magnitude
-             coordinates = [2,0])        # Source coordinated [arcsec,deg]
+             coordinates = [1,0])        # Source coordinated [arcsec,deg]
 
 # combine the SRC to the telescope using '*'
 src*tel
@@ -185,7 +185,7 @@ cam_binned = Detector( integrationTime = tel.samplingTime,      # integration ti
 
 
 # computation of a PSF on the detector using the '*' operator
-src*tel*cam*cam_binned
+src**tel*cam*cam_binned
 
 plt.figure()
 plt.imshow(cam.frame,extent=[-cam.fov_arcsec/2,cam.fov_arcsec/2,-cam.fov_arcsec/2,cam.fov_arcsec/2])
@@ -200,14 +200,10 @@ plt.ylabel('Angular separation [arcsec]')
 plt.title('Pixel size: '+str(np.round(cam_binned.pixel_size_arcsec,3))+'"')
 
 #%%         PROPAGATE THE LIGHT THROUGH THE ATMOSPHERE
-# The Telescope and Atmosphere can be combined using the '+' operator (Propagation through the atmosphere): 
-tel+atm # This operations makes that the tel.OPD is automatically over-written by the value of atm.OPD when atm.OPD is updated. 
-
+# Propagation of the light through all the objects using the * operator
+ngs**atm*tel*cam*cam_binned
 # It is possible to print the optical path: 
-tel.print_optical_path()
-
-# computation of a PSF on the detector using the '*' operator
-atm*ngs*tel*cam*cam_binned
+ngs.print_optical_path()
 
 plt.figure()
 plt.imshow(cam.frame,extent=[-cam.fov_arcsec/2,cam.fov_arcsec/2,-cam.fov_arcsec/2,cam.fov_arcsec/2])
@@ -221,12 +217,12 @@ plt.xlabel('Angular separation [arcsec]')
 plt.ylabel('Angular separation [arcsec]')
 plt.title('Pixel size: '+str(np.round(cam_binned.pixel_size_arcsec,3))+'"')
 
-# The Telescope and Atmosphere can be separated using the '-' operator (Free space propagation) 
-tel-atm
-tel.print_optical_path()
+# Propagation of the light through all the objects using the * operator
+ngs**tel*cam*cam_binned
 
-# computation of a PSF on the detector using the '*' operator
-ngs*tel*cam*cam_binned
+# It is possible to print the optical path: 
+ngs.print_optical_path()
+
 
 plt.figure()
 plt.imshow(cam.frame,extent=[-cam.fov_arcsec/2,cam.fov_arcsec/2,-cam.fov_arcsec/2,cam.fov_arcsec/2])
@@ -282,8 +278,8 @@ wfs = Pyramid(nSubap            = n_subaperture,                # number of suba
               lightRatio        = 0.5,                          # flux threshold to select valid sub-subaperture
               modulation        = 3,                            # Tip tilt modulation radius
               binning           = 1,                            # binning factor (applied only on the )
-              n_pix_separation  = 4,                            # number of pixel separating the different pupils
-              n_pix_edge        = 8,                            # number of pixel on the edges of the pupils
+              n_pix_separation  = 2,                            # number of pixel separating the different pupils
+              n_pix_edge        = 1,                            # number of pixel on the edges of the pupils
               postProcessing    = 'slopesMaps_incidence_flux')  # slopesMap_incidence_flux, fullFrame_incidence_flux (see documentation)
 
 
@@ -422,7 +418,7 @@ M2C_KL = compute_KL_basis(tel,
 # apply the 10 first KL modes
 dm.coefs = M2C_KL[:,:10]
 # propagate through the DM
-ngs*tel*dm
+ngs**tel*dm
 # show the first 10 KL modes applied on the DM
 displayMap(tel.OPD)
 #%% -----------------------     Calibration: Interaction Matrix  ----------------------------------
@@ -436,8 +432,7 @@ M2C_zonal = np.eye(dm.nValidAct)
 M2C_modal = M2C_KL[:,:300]
 
 # swap to geometric WFS for the calibration
-ngs*tel*wfs # make sure that the proper source is propagated to the WFS
-wfs.is_geometric = True
+ngs**tel*wfs # make sure that the proper source is propagated to the WFS
 # zonal interaction matrix
 calib_modal = InteractionMatrix(ngs            = ngs,
                                 atm            = atm,
@@ -457,9 +452,6 @@ plt.plot(np.std(calib_modal.D,axis=0))
 plt.xlabel('Mode Number')
 plt.ylabel('WFS slopes STD')
 
-# switch back to diffractive WFS
-wfs.is_geometric = False
-
 #%% Define instrument and WFS path detectors
 from OOPAO.Detector import Detector
 # instrument path
@@ -468,20 +460,17 @@ src_cam.psf_sampling = 4  # sampling of the PSF
 src_cam.integrationTime = tel.samplingTime # exposure time for the PSF
 
 # put the scientific target off-axis to simulate anisoplanetism (set to  [0,0] to remove anisoplanetism)
-src.coordinates = [2,0]
+src.coordinates = [1,0]
 
 # WFS path
 ngs_cam = Detector(tel.resolution*2)
 ngs_cam.psf_sampling = 4
 ngs_cam.integrationTime = tel.samplingTime
 
-# initialize the Strehl Ratio computation
-tel.resetOPD()
-
-ngs*tel*ngs_cam
+ngs**tel*ngs_cam
 ngs_psf_ref = ngs_cam.frame.copy()
 
-src*tel*src_cam
+src**tel*src_cam
 
 src_psf_ref = src_cam.frame.copy()
 
@@ -496,9 +485,7 @@ M2C_CL = M2C_modal
 reconstructor = M2C_CL@calib_CL.M 
 
 # initialize Telescope DM commands
-tel.resetOPD()
 dm.coefs=0
-ngs*tel*dm*wfs
 
 
 # You can update the the atmosphere parameter on the fly
@@ -513,8 +500,8 @@ atm.generateNewPhaseScreen(seed=10)
 tel+atm
 
 # propagate both sources
-atm*ngs*tel*ngs_cam
-atm*src*tel*src_cam
+ngs**atm*tel*ngs_cam
+src**atm*tel*src_cam
 
 # loop parameters
 nLoop = 500  # number of iterations
@@ -594,7 +581,7 @@ for i in range(nLoop):
     # save the wave-front error of the incoming turbulence within the pupil
     wfe_atmosphere[i] = np.std(tel.OPD[np.where(tel.pupil > 0)])*1e9
     # propagate light from the ngs through the atmosphere, telescope, DM to the WFS and ngs camera
-    atm*ngs*tel*dm*wfs*ngs_cam
+    ngs**atm*tel*dm*wfs*ngs_cam
     # propagate to the focal plane camera
     wfs*wfs.focal_plane_camera
     # save residuals corresponding to the ngs
@@ -602,16 +589,16 @@ for i in range(nLoop):
     # save Strehl ratio from the PSF image
     SR_ngs[i] = strehlMeter(PSF=ngs_cam.frame, tel=tel, PSF_ref=ngs_psf_ref, display=False)
     # save the OPD seen by the ngs
-    OPD_NGS = tel.mean_removed_OPD.copy()
+    OPD_NGS = ngs.OPD.copy()
     if display:
         NGS_PSF = np.log10(np.abs(ngs_cam.frame))
 
     # propagate light from the src through the atmosphere, telescope, DM to the src camera
-    atm*src*tel*dm*src_cam
+    src**atm*tel*dm*src_cam
     # save residuals corresponding to the SRC
     wfe_residual_SRC[i] = np.std(tel.OPD[np.where(tel.pupil > 0)])*1e9
     # save the OPD seen by the src
-    OPD_SRC = tel.mean_removed_OPD.copy()
+    OPD_SRC = src.OPD.copy()
     # save Strehl ratio from the PSF image
     SR_src[i] = strehlMeter(PSF=src_cam.frame, tel=tel, PSF_ref=src_psf_ref, display=False)
 

@@ -46,7 +46,7 @@ for i in range(len(x_science)):
         
 ast = Asterism(src_obj)
 
-ast*tel
+ast**tel
 
 ast.display_asterism()
 
@@ -78,12 +78,12 @@ dm = DeformableMirror(telescope = tel, nSubap = 20)
 
 # update the NGS coordinates (where the correction will be applied)
 ngs.coordinates = [0,0]
-atm*ngs*tel
+ngs**atm*tel
 # project the OPD in the NGS direction on the DM
 dm.coefs = -np.linalg.pinv(dm.modes)@tel.OPD.reshape(tel.resolution**2)
 
 # re-propagate through the DM to get the "AO corrected" PSF
-atm*ast*tel*dm*cam
+ast**atm*tel*dm*cam
 #%%
 # Display the PSFs at their exact location in the field using the tel.PSF property
 plt.figure()

@@ -24,9 +24,6 @@ ngs*tel
 atm = Atmosphere(telescope= tel, r0 = 0.1, L0=20, windSpeed=[10], fractionalR0=[1], windDirection=[10], altitude=[0])
 atm.initializeAtmosphere(tel)
 
-# combine telescope with the atmosphere
-tel+atm
-
 # create different detector objects
 
 cam = Detector(psf_sampling=1)
@@ -35,7 +32,7 @@ cam2 = Detector(psf_sampling=2)
 
 cam3 = Detector(psf_sampling=4)
 
-ngs*tel*cam*cam2*cam3
+ngs**atm*tel*cam*cam2*cam3
 
 # set the different parameters
 cam.integrationTime = None # if None it will use the AO loop frequency
@@ -74,10 +71,9 @@ plot_obj = cl_plot(list_fig          = [cam.frame[:],cam2.frame[:],cam3.frame[:]
 
 for i in range(20000):
     atm.generateNewPhaseScreen(i)
-    tel+atm
-    ngs*tel*cam
-    ngs*tel*cam2
-    ngs*tel*cam3
+    ngs**atm*tel*cam
+    ngs**atm*tel*cam2
+    ngs**atm*tel*cam3
 
     cl_plot(list_fig   = [cam.frame[:],cam2.frame[:],cam3.frame[:]],
                                plt_obj = plot_obj)

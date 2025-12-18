@@ -371,7 +371,7 @@ M2C_zernike = np.linalg.pinv(np.squeeze(dm.modes[tel.pupilLogical,:]))@Z.modes
 
 # show the first 10 zernikes applied on the DM
 dm.coefs = M2C_zernike[:,:10]
-tel*dm
+ngs**tel*dm
 displayMap(tel.OPD)
 
 #%%------------------------ Modal Basis - KL  ---------------------------------
@@ -383,7 +383,7 @@ M2C_KL = compute_KL_basis(tel, atm, dm,lim = 1e-2) # matrix to apply modes on th
 # apply the 10 first KL modes
 dm.coefs = M2C_KL[:,:10]
 # propagate through the DM
-ngs*tel*dm
+ngs**tel*dm
 # show the first 10 KL modes applied on the DM
 displayMap(tel.OPD)
 
@@ -392,7 +392,7 @@ displayMap(tel.OPD)
 from OOPAO.calibration.InteractionMatrix import InteractionMatrix
 
 # amplitude of the modes in m
-stroke=ngs.wavelength/16
+stroke=ngs.wavelength/40
 # zonal Interaction Matrix
 M2C_zonal = np.eye(dm.nValidAct)
 
