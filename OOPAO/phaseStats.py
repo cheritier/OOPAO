@@ -131,41 +131,6 @@ def makeCovarianceMatrix(rho1, rho2, atm):
 
     return out
 
-# def fourierPhaseScreen(atm,D,resolution):
-#
-#    N = int(8* resolution)
-#
-#    L = (N-1)*D/(resolution-1)
-#
-#
-#    fx = np.fft.fftshift(np.fft.fftfreq(N))
-#    fy = np.fft.fftshift(np.fft.fftfreq(N))
-#
-#    fx,fy = np.meshgrid(fx,fy)
-#    f_r,f_phi = cart2pol(fx,fx)
-#
-#    f_r = np.fft.fftshift(f_r*(N-1)/L/2)
-#    f_r+=f_r.T
-#
-#    psdRoot = np.sqrt(spectrum(f_r,atm))
-#    index = np.where(f_r==0)
-#    psdRoot[index]=0
-#
-#    # low order correc
-#
-#    fourierSampling = 1./L
-#
-#    u = np.arange(resolution+1)
-#    WNF = np.fft.fft2(np.random.randn(N,N))/N
-#
-#    outMap = psdRoot*WNF
-#    outMap = np.real(np.fft.ifft2(outMap))*fourierSampling*N**2
-#
-#    out = outMap[u[0]:u[-1],u[0]:u[-1]]
-#
-#
-#    return out
-
 
 def ift2(G, delta_f):
     """
@@ -220,13 +185,11 @@ def ft_phase_screen(atm, N, delta, l0=1e-10, seed=None, return_PSD = False):
     fm = 5.92/l0/(2*np.pi)
     f0 = 1./L0
 
-    PSD_phi = (0.023*r0**(-5./3.) * np.exp(-1*((f/fm)**2)) /
-               (((f**2) + (f0**2))**(11./6)))
+    PSD_phi = (0.023*r0**(-5./3.) * np.exp(-1*((f/fm)**2)) / (((f**2) + (f0**2))**(11./6)))
 
     PSD_phi[int(N/2), int(N/2)] = 0
 
-    cn = ((randomState.normal(size=(N, N)) + 1j * randomState.normal(size=(N, N)))
-          * np.sqrt(PSD_phi)*del_f)
+    cn = ((randomState.normal(size=(N, N)) + 1j * randomState.normal(size=(N, N))) * np.sqrt(PSD_phi)*del_f)
 
     phs = ift2(cn, 1).real
     if return_PSD:
@@ -292,23 +255,16 @@ def ft_sh_phase_screen(atm, resolution, pixel_size, l0=1e-10, seed=None, return_
         PSD_phi[1, 1] = 0
 
         # random draws of Fourier coefficients
-        cn = ((randomState.normal(size=(3, 3))
-               + 1j*randomState.normal(size=(3, 3)))
-              * np.sqrt(PSD_phi)*del_f)
+        cn = ((randomState.normal(size=(3, 3)) + 1j*randomState.normal(size=(3, 3))) * np.sqrt(PSD_phi)*del_f)
         SH = np.zeros((resolution, resolution), dtype="complex")
         # loop over frequencies on this grid
         for i in range(0, 2):
             for j in range(0, 2):
-
                 SH += cn[i, j] * np.exp(1j*2*np.pi*(fx[i, j]*x+fy[i, j]*y))
-
         phs_lo = phs_lo + SH
         # accumulate subharmonics
-
     phs_lo = phs_lo.real - phs_lo.real.mean()
-
     phs = phs_lo+phs_hi
-
     if return_PSD:
         return phs, PSD_phi
     else:

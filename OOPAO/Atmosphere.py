@@ -407,7 +407,6 @@ class Atmosphere:
                 stepInPixel[0] = 1*xp.sign(layer.buff[0])
                 stepInPixel[1] = 1*xp.sign(layer.buff[1])
                 stepInPixel[xp.where(xp.abs(layer.buff) < 1)] = 0
-
                 layer.OPD = self.add_row(layer, stepInPixel)
 
             layer.buff[0] = (xp.abs(layer.buff[0]) % 1)*xp.sign(layer.buff[0])
@@ -427,10 +426,8 @@ class Atmosphere:
                 tmp_layer = getattr(self, 'layer_'+str(i_layer+1))
                 self.updateLayer(tmp_layer)
         else:
-            # raise OopaoError('The use of a user-defined OPD is now deprecated and made using the OPD_map class.')
             self.is_user_defined_opd = True
             self.user_defined_opd = OPD
-
         return
 
     def relay(self, src):
@@ -450,6 +447,9 @@ class Atmosphere:
             # compute the pupil footprint for each layers and each source
             self.set_pupil_footprint()
             for src in self.src_list:
+                if src.coordinates[0] > self.fov/2:
+                    raise OopaoError('The source object zenith ('+str(src.coordinates[0])+'") is outside of the telescope fov ('+str(
+                        self.fov//2)+'")! You can:\n - Reduce the zenith of the source \n - Re-initialize the atmosphere object using a telescope with a larger fov')
                 src.through_atm = True
                 src.optical_path.append([self.tag, self])
             # intialize the OPD support
@@ -527,23 +527,19 @@ class Atmosphere:
                 f = time.time()
                 print('XXt.. : ' + str(f-e) + ' s')
                 self.ZZt_inv_r0 = self.ZZt_inv_r0
-
-                print(
-                    'SCAO system considered: covariance matrices were already computed!')
+                print('SCAO system considered: covariance matrices were already computed!')
                 compute_covariance_matrices = False
             except:
                 compute_covariance_matrices = True
         if compute_covariance_matrices:
             c = time.time()
             self.ZZt = makeCovarianceMatrix(layer.innerZ, layer.innerZ, self)
-
             if self.param is None:
                 self.ZZt_inv = xp.linalg.pinv(self.ZZt)
             else:
                 try:
                     print('Loading pre-computed data...')
-                    name_data = 'ZZt_inv_spider_L0_'+str(self.L0)+'_m_r0_'+str(
-                        self.r0_def)+'_shape_'+str(self.ZZt.shape[0])+'x'+str(self.ZZt.shape[1])+'.json'
+                    name_data = 'ZZt_inv_spider_L0_'+str(self.L0)+'_m_r0_'+str(self.r0_def)+'_shape_'+str(self.ZZt.shape[0])+'x'+str(self.ZZt.shape[1])+'.json'
                     location_data = self.param['pathInput'] + \
                         self.param['name'] + '/sk_v/'
                     try:
@@ -559,19 +555,15 @@ class Atmosphere:
 
                 except:
                     print('Something went wrong.. re-computing ZZt_inv ...')
-                    name_data = 'ZZt_inv_spider_L0_'+str(self.L0)+'_m_r0_'+str(
-                        self.r0_def)+'_shape_'+str(self.ZZt.shape[0])+'x'+str(self.ZZt.shape[1])+'.json'
+                    name_data = 'ZZt_inv_spider_L0_'+str(self.L0)+'_m_r0_'+str(self.r0_def)+'_shape_'+str(self.ZZt.shape[0])+'x'+str(self.ZZt.shape[1])+'.json'
                     location_data = self.param['pathInput'] + \
                         self.param['name'] + '/sk_v/'
                     createFolder(location_data)
-
                     self.ZZt_inv = xp.linalg.pinv(self.ZZt)
-
                     print('saving for future...')
                     data = dict()
                     data['pupil'] = self.telescope.pupil
                     data['ZZt_inv'] = self.ZZt_inv
-
                     data_encoded = jsonpickle.encode(data)
                     with open(location_data+name_data, 'w') as f:
                         json.dump(data_encoded, f)
@@ -603,11 +595,9 @@ class Atmosphere:
             else:
                 if self.mode == 2:
                     # with subharmonics
-                    phase = ft_sh_phase_screen(
-                        self, tmp_layer.resolution, tmp_layer.D/tmp_layer.resolution, seed=seed+i_layer)
+                    phase = ft_sh_phase_screen(self, tmp_layer.resolution, tmp_layer.D/tmp_layer.resolution, seed=seed+i_layer)
                 else:
-                    phase = ft_phase_screen(
-                        self, tmp_layer.resolution, tmp_layer.D/tmp_layer.resolution, seed=seed+i_layer)
+                    phase = ft_phase_screen(self, tmp_layer.resolution, tmp_layer.D/tmp_layer.resolution, seed=seed+i_layer)
 
             tmp_layer.OPD = phase
             tmp_layer.randomState = RandomState(seed+i_layer*1000)
@@ -615,24 +605,17 @@ class Atmosphere:
                 Z = tmp_layer.OPD[tmp_layer.innerMask[1:-1, 1:-1] != 0]
                 X = xp.matmul(tmp_layer.A, Z) + xp.matmul(tmp_layer.B, tmp_layer.randomState.normal(size=tmp_layer.B.shape[1]))
                 tmp_layer.mapShift[tmp_layer.outerMask != 0] = X
-                tmp_layer.mapShift[tmp_layer.outerMask == 0] = xp.reshape(
-                    tmp_layer.OPD, tmp_layer.resolution*tmp_layer.resolution)
+                tmp_layer.mapShift[tmp_layer.outerMask == 0] = xp.reshape(tmp_layer.OPD, tmp_layer.resolution*tmp_layer.resolution)
                 tmp_layer.notDoneOnce = True
 
             setattr(self, 'layer_'+str(i_layer+1), tmp_layer)
-            OPD_support = self.fill_OPD_support(
-                tmp_layer, OPD_support, i_layer)
-
-        # self.set_OPD(OPD_support)
-
+            OPD_support = self.fill_OPD_support(tmp_layer, OPD_support, i_layer)
         if self.telescope.isPaired:
             self*self.telescope
 
     def print_atm_at_wavelength(self, wavelength):
-
         r0_wvl = self.r0*((wavelength/self.wavelength)**(6/5))
         seeingArcsec_wvl = self.rad2arcsec*(wavelength/r0_wvl)
-
         print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE AT ' +
               str(wavelength)+' nm %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         print('r0 \t\t'+str(r0_wvl) + ' \t [m]')
@@ -643,54 +626,15 @@ class Atmosphere:
     # kept for backward compatibility
     def __mul__(self, obj):
         if obj.tag == 'telescope' or obj.tag == 'source' or obj.tag == 'asterism':
-
             if obj.tag == 'telescope':
-
-                if obj.src.type == 'asterism':
-                    self.asterism = obj.src
-                else:
-                    self.asterism = None
-
                 if self.fov == obj.fov:
                     self.telescope = obj
                 else:
-                    print(
-                        'Re-initializing the atmosphere to match the new telescope fov')
+                    print('Re-initializing the atmosphere to match the new telescope fov')
                     self.hasNotBeenInitialized = True
                     self.initializeAtmosphere(obj)
-
-            elif obj.tag == 'source':
-                if obj.coordinates[0] <= self.fov/2:
-                    # self.telescope.src = obj
-                    # obj = self.telescope
-                    # self.asterism = None
-                    self.relay(obj)
-                else:
-                    raise OopaoError('The source object zenith ('+str(obj.coordinates[0])+'") is outside of the telescope fov ('+str(
-                        self.fov//2)+'")! You can:\n - Reduce the zenith of the source \n - Re-initialize the atmosphere object using a telescope with a larger fov')
-            elif obj.tag == 'asterism':
-                c_ = xp.asarray(obj.coordinates)
-                if xp.max(c_[:, 0]) <= self.fov/2:
-                    # self.telescope.src = obj
-                    # self.asterism = obj
-                    # obj = self.telescope
-                    self.relay(obj)
-                else:
-                    raise OopaoError('One of the source is outside of the telescope fov ('+str(self.fov//2) +
-                                     '")! You can:\n - Reduce the zenith of the source \n - Re-initialize the atmosphere object using a telescope with a larger fov')
-            if self.user_defined_opd is False:
-                self.set_pupil_footprint()
-                self.relay(self.src)
-            # if obj.src.tag == 'source':
-            #     obj.src.optical_path = [[obj.src.type + '(' + obj.src.optBand + ')', obj.src]]
-            #     obj.src.optical_path.append([self.tag, self])
-            #     obj.src.optical_path.append([obj.tag, obj])
-            # elif obj.src.tag == 'asterism':
-            #     for i, src in enumerate(obj.src.src):
-            #         src.optical_path = [[src.type + '(' + src.optBand + ')', src]]
-            #         src.optical_path.append([self.tag, self])
-            #         src.optical_path.append([obj.tag, obj])
-            obj.isPaired = True
+            elif obj.tag == 'source' or obj.tag == 'asterism':
+                self.relay(obj)
             return obj
         else:
             raise OopaoError('The atmosphere can be multiplied only with a Telescope or a Source object!')
@@ -706,7 +650,6 @@ class Atmosphere:
         else:
             n_sp = len(layer_index)
             display_cn2 = True
-
         if type(layer_index) is not list:
             raise OopaoError('layer_index should be a list')
         # when sources not yet propagated through atmosphere, we need to use src_list from telescope
@@ -718,21 +661,17 @@ class Atmosphere:
         # when already propagated through atmosphere
         else:
             list_src = self.src_list
-        plt.figure(fig_index, figsize=[
-                   n_sp*4, 3*(1+display_cn2)], edgecolor=None)
+        plt.figure(fig_index, figsize=[n_sp*4, 3*(1+display_cn2)], edgecolor=None)
         if display_cn2:
-            gs = gridspec.GridSpec(
-                1, n_sp+1, height_ratios=[1], width_ratios=xp.ones(n_sp+1), hspace=0.5, wspace=0.5)
+            gs = gridspec.GridSpec(1, n_sp+1, height_ratios=[1], width_ratios=xp.ones(n_sp+1), hspace=0.5, wspace=0.5)
         else:
-            gs = gridspec.GridSpec(1, n_sp, height_ratios=xp.ones(
-                1), width_ratios=xp.ones(n_sp), hspace=0.25, wspace=0.25)
+            gs = gridspec.GridSpec(1, n_sp, height_ratios=xp.ones(1), width_ratios=xp.ones(n_sp), hspace=0.25, wspace=0.25)
 
         axis_list = []
         for i in range(len(layer_index)):
             axis_list.append(plt.subplot(gs[0, i]))
 
         if display_cn2:
-            # axCn2 = f.add_subplot(gs[1, :])
             ax = plt.subplot(gs[0, -1])
             for i_layer in range(self.nLayer):
                 p = ax.barh(self.altitude[i_layer]*1e-3, 100*np.round(self.fractionalR0[i_layer], 2), height=1.5, edgecolor='k', label='Layer '+str(i_layer+1))
@@ -743,12 +682,9 @@ class Atmosphere:
 
         for i_l, ax in enumerate(axis_list):
             tmp_layer = getattr(self, 'layer_'+str(layer_index[i_l]+1))
-            ax.imshow(
-                tmp_layer.OPD, extent=[-tmp_layer.D/2, tmp_layer.D/2, -tmp_layer.D/2, tmp_layer.D/2])
+            ax.imshow(tmp_layer.OPD, extent=[-tmp_layer.D/2, tmp_layer.D/2, -tmp_layer.D/2, tmp_layer.D/2])
             center = tmp_layer.D/2
-            [x_tel, y_tel] = pol2cart(
-                tmp_layer.D_fov/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
-            # if list_src is not None:
+            [x_tel, y_tel] = pol2cart(tmp_layer.D_fov/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
             cm = plt.get_cmap('gist_rainbow')
             col = []
             for i_source in range(len(list_src)):
@@ -768,15 +704,11 @@ class Atmosphere:
                         raise OopaoError('The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')
                 else:
                     chromatic_shift = 0
-                [x_z, y_z] = pol2cart(tmp_layer.altitude*xp.tan((list_src[i_source].coordinates[0] +
-                                      chromatic_shift)/self.rad2arcsec), xp.deg2rad(list_src[i_source].coordinates[1]))
+                [x_z, y_z] = pol2cart(tmp_layer.altitude*xp.tan((list_src[i_source].coordinates[0] + chromatic_shift)/self.rad2arcsec), xp.deg2rad(list_src[i_source].coordinates[1]))
                 center = 0
-                [x_c, y_c] = pol2cart(
-                    tmp_layer.D_fov/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
-                nm = (list_src[i_source].type) + '@' + \
-                    str(list_src[i_source].coordinates[0])+'"'
-                ax.plot(x_cone+x_z+center, y_cone+y_z+center,
-                        '-', color=col[i_source], label=nm)
+                [x_c, y_c] = pol2cart(tmp_layer.D_fov/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+                nm = (list_src[i_source].type) + '@' + str(list_src[i_source].coordinates[0])+'"'
+                ax.plot(x_cone+x_z+center, y_cone+y_z+center, '-', color=col[i_source], label=nm)
                 ax.fill(x_cone+x_z+center, y_cone+y_z+center,
                         y_z+center, alpha=0.25, color=col[i_source])
             ax.set_xlabel('[m]')
@@ -841,10 +773,8 @@ class Atmosphere:
                 for i_layer in range(self.nLayer):
                     tmp_layer = getattr(self, 'layer_'+str(i_layer+1))
                     tmp_layer.windSpeed = val[i_layer]
-                    tmp_layer.vY = tmp_layer.windSpeed * \
-                        xp.cos(xp.deg2rad(tmp_layer.direction))
-                    tmp_layer.vX = tmp_layer.windSpeed * \
-                        xp.sin(xp.deg2rad(tmp_layer.direction))
+                    tmp_layer.vY = tmp_layer.windSpeed * xp.cos(xp.deg2rad(tmp_layer.direction))
+                    tmp_layer.vX = tmp_layer.windSpeed * xp.sin(xp.deg2rad(tmp_layer.direction))
                     ps_turb_x = tmp_layer.vX*self.telescope.samplingTime
                     ps_turb_y = tmp_layer.vY*self.telescope.samplingTime
                     tmp_layer.ratio[0] = ps_turb_x/tmp_layer.pixel_size
@@ -867,10 +797,8 @@ class Atmosphere:
                 for i_layer in range(self.nLayer):
                     tmp_layer = getattr(self, 'layer_'+str(i_layer+1))
                     tmp_layer.direction = val[i_layer]
-                    tmp_layer.vY = tmp_layer.windSpeed * \
-                        xp.cos(xp.deg2rad(tmp_layer.direction))
-                    tmp_layer.vX = tmp_layer.windSpeed * \
-                        xp.sin(xp.deg2rad(tmp_layer.direction))
+                    tmp_layer.vY = tmp_layer.windSpeed * xp.cos(xp.deg2rad(tmp_layer.direction))
+                    tmp_layer.vX = tmp_layer.windSpeed * xp.sin(xp.deg2rad(tmp_layer.direction))
                     ps_turb_x = tmp_layer.vX*self.telescope.samplingTime
                     ps_turb_y = tmp_layer.vY*self.telescope.samplingTime
                     tmp_layer.ratio[0] = ps_turb_x/tmp_layer.pixel_size

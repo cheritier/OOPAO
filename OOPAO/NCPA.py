@@ -8,7 +8,6 @@ import numpy as np
 
 
 class NCPA:
-
     def __init__(self,
                  tel,
                  dm,
@@ -81,7 +80,6 @@ class NCPA:
                 else:
                     raise TypeError(
                         'The zernike coefficients should be input as a list.')
-
             self.OPD = np.matmul(self.B, np.asarray(coefficients))
 
         else:
@@ -94,30 +92,23 @@ class NCPA:
         if type(f2) is list and len(f2) == 4:
             if self.basis == 'KL':
                 self.B = self.KL_basis()
-                phase = np.sum([np.random.RandomState(i*self.seed).randn()/np.sqrt(
-                    i+f2[3])*self.B[:, :, i] for i in range(f2[1], f2[2])], axis=0)
-                self.OPD = phase / \
-                    np.std(phase[np.where(self.tel.pupil == 1)]) * f2[0]
+                phase = np.sum([np.random.RandomState(i*self.seed).randn()/np.sqrt(i+f2[3])*self.B[:, :, i] for i in range(f2[1], f2[2])], axis=0)
+                self.OPD = phase / np.std(phase[np.where(self.tel.pupil == 1)]) * f2[0]
 
             if self.basis == 'Zernike':
                 self.B = self.Zernike_basis(f2[2])
-                self.OPD = np.sum([np.random.RandomState(i*self.seed).randn()/np.sqrt(
-                    i+f2[3])*self.B[:, :, i] for i in range(f2[1], f2[2])], axis=0)
-                self.OPD = self.OPD / \
-                    np.std(self.OPD[np.where(self.tel.pupil == 1)]) * f2[0]
+                self.OPD = np.sum([np.random.RandomState(i*self.seed).randn()/np.sqrt(i+f2[3])*self.B[:, :, i] for i in range(f2[1], f2[2])], axis=0)
+                self.OPD = self.OPD / np.std(self.OPD[np.where(self.tel.pupil == 1)]) * f2[0]
 
             if self.basis == 'M2C':
                 if self.M2C is not None:
                     self.B = self.M2C_basis(self.M2C)
-                    self.coefs = ([np.random.RandomState(
-                        i*self.seed).randn()/np.sqrt(i+f2[3])*self.B[:, :, i] for i in range(f2[1], f2[2])])
+                    self.coefs = ([np.random.RandomState(i*self.seed).randn()/np.sqrt(i+f2[3])*self.B[:, :, i] for i in range(f2[1], f2[2])])
                     phase = np.sqrt(np.sum(np.array(self.coefs)**2, axis=0))
-                    self.OPD = phase / \
-                        np.std(phase[np.where(self.tel.pupil == 1)]) * f2[0]
+                    self.OPD = phase / np.std(phase[np.where(self.tel.pupil == 1)]) * f2[0]
                 else:
                     raise TypeError(
                         'M2C should not be None if modal_basis is set to \'M2C\'')
-
         else:
             raise TypeError(
                 'f2 should be a list containing [amplitude, start_mode, end_mode, cutoff]')
@@ -155,7 +146,7 @@ class NCPA:
 
     def properties(self) -> dict:
         self.prop = dict()
-        self.prop['basis']     = f"{'Modal basis':<20s}|{self.basis:^9s}"
+        self.prop['basis'] = f"{'Modal basis':<20s}|{self.basis:^9s}"
         self.prop['amplitude'] = f"{'Amplitude [nm RMS]':<20s}|{np.std(self.OPD[np.where(self.tel.pupil > 0)])*1e9:^9.1f}"
         return self.prop
 

@@ -89,8 +89,6 @@ class Source:
         Create a source object in H band with a magnitude 8 and combine it to the telescope
         src = Source(opticalBand = 'H', magnitude = 8)
         src*tel
-
-
         """
         OOPAO_path = [s for s in sys.path if "OOPAO" in s]
         l = []

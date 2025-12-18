@@ -254,10 +254,8 @@ class Detector:
 
     def set_dark_shot_noise(self, frame):
         self.dark_shot_noise = np.sqrt(self.darkCurrent * self.integrationTime)
-        dark_current_map = np.ones(frame.shape) * \
-            (self.darkCurrent * self.integrationTime)
-        dark_shot_noise_map = self.random_state_dark_shot_noise.poisson(
-            dark_current_map)
+        dark_current_map = np.ones(frame.shape) * (self.darkCurrent * self.integrationTime)
+        dark_shot_noise_map = self.random_state_dark_shot_noise.poisson(dark_current_map)
         frame += dark_shot_noise_map
         return frame
 
@@ -350,8 +348,7 @@ class Detector:
         else:
             self.SNR_max = np.NaN
 
-        self.SNR = self.signal / np.sqrt(self.quantification_noise**2 +
-                                         self.photon_noise**2 + self.readoutNoise**2 + self.dark_shot_noise**2)
+        self.SNR = self.signal / np.sqrt(self.quantification_noise**2 + self.photon_noise**2 + self.readoutNoise**2 + self.dark_shot_noise**2)
         print()
         print('Theoretical maximum SNR: %.2f' % self.SNR_max)
         print('Current SNR: %.2f' % self.SNR)

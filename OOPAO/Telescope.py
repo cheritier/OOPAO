@@ -334,13 +334,11 @@ class Telescope:
                              (input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor)]
             self.yPSF_rad = [-(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor),
                              (input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor)]
-
             # propagate the EM Field
             self.PropagateField(amplitude=amp,
                                 phase=phase+self.delta_TT*factor,
                                 zeroPaddingFactor=zeroPaddingFactor,
                                 img_resolution=img_resolution)
-
             # normalized PSF
             self.PSF_norma = self.PSF/self.PSF.max()
             output_PSF.append(self.PSF.copy())
@@ -350,7 +348,6 @@ class Telescope:
         if len(output_PSF) == 1:
             output_PSF = output_PSF[0]
             output_PSF_norma = output_PSF_norma[0]
-
         self.PSF = self.support_PSF
         self.PSF_norma = self.PSF/self.PSF.max()
         self.PSF_list = output_PSF
@@ -368,19 +365,12 @@ class Telescope:
         # If PSF is undersampled apply the integer oversampling
         if zeroPaddingFactor * oversampling < 2:
             oversampling = (xp.ceil(2.0 / zeroPaddingFactor)).astype('int')
-        # This is to ensure that PSF will be binned properly if number of pixels is odd
-        # if img_resolution is not None:
-        #     if oversampling % 2 != img_resolution % 2:
-        #         oversampling += 1
-
         img_size = xp.ceil(img_resolution * oversampling).astype('int')
         N = xp.fix(zeroPaddingFactor * oversampling * resolution).astype('int')
         pad_width = xp.ceil((N - resolution) / 2).astype('int')
-
         supportPadded = xp.pad(amplitude * xp.exp(1j * phase), pad_width=((pad_width, pad_width), (pad_width, pad_width)), constant_values=0).astype(self.precision_complex())
         # make sure the number of pxels is correct after the padding
         N = supportPadded.shape[0]
-
         # case considering a coronograph
         if self.coronagraph_diameter is not None:
             [xx, yy] = xp.meshgrid(xp.linspace(0, N-1, N, dtype=self.precision()), xp.linspace(0, N-1, N, dtype=self.precision()))
@@ -390,19 +380,15 @@ class Telescope:
             self.pupilSpiderPadded = xp.pad(self.pupil, pad_width=((pad_width, pad_width), (pad_width, pad_width)), constant_values=0).astype(self.precision_complex())
             self.focalMask = xp.sqrt(xxc**2 + yyc**2) > self.coronagraph_diameter/2 * zeroPaddingFactor
             self.lyotStop = ((xp.sqrt((xxc-1.0)**2 + (yyc-1.0)**2) < N/2 * 0.9) * self.pupilSpiderPadded)
-
             # PSF computation
             [xx, yy] = xp.meshgrid(xp.linspace(0, N - 1, N, dtype=self.precision()), xp.linspace(0, N - 1, N, dtype=self.precision()), copy=False)
-
             phasor = xp.exp(-1j * xp.pi / N * (xx + yy) * (1 - img_resolution % 2)).astype(self.precision_complex)
             #                                                        ^--- this is to account odd/even number of pixels
             # Propagate with Fourier shifting
             EMF = xp.fft.fftshift(1 / N * xp.fft.fft2(xp.fft.ifftshift(supportPadded * phasor*self.apodiser)))
             self.B = EMF * self.focalMask * phasor
-            self.C = xp.fft.fftshift(
-                1 * xp.fft.ifft2(xp.fft.ifftshift(self.B))).astype(self.precision_complex) * self.lyotStop * phasor
+            self.C = xp.fft.fftshift(1 * xp.fft.ifft2(xp.fft.ifftshift(self.B))).astype(self.precision_complex) * self.lyotStop * phasor
             EMF = (xp.fft.fftshift(1 * xp.fft.fft2(xp.fft.ifftshift(self.C)))).astype(self.precision_complex)
-
         else:
             # PSF computation
             [xx, yy] = xp.meshgrid(xp.linspace(0, N - 1, N, dtype=self.precision()), xp.linspace(0, N - 1, N, dtype=self.precision()), copy=False)
@@ -411,7 +397,6 @@ class Telescope:
             # Propagate with Fourier shifting
             EMF = xp.fft.fftshift(1 / N * xp.fft.fft2(xp.fft.ifftshift(supportPadded * self.phasor))).astype(self.precision_complex())
             EMF = (1 / N * xp.fft.fft2((supportPadded * self.phasor))).astype(self.precision_complex())
-
         # Again, this is to properly crop a PSF with the odd/even number of pixels
         if N % 2 == img_size % 2:
             shift_pix = 0
@@ -421,19 +406,13 @@ class Telescope:
             else:
                 shift_pix = -1
         # Support only rectangular PSFs
-        ids = xp.array(
-            [xp.ceil(N / 2) - img_size // 2 + (1 - N % 2) - 1, xp.ceil(N / 2) + img_size // 2 + shift_pix]).astype(
-            xp.int32)
+        ids = xp.array([xp.ceil(N / 2) - img_size // 2 + (1 - N % 2) - 1, xp.ceil(N / 2) + img_size // 2 + shift_pix]).astype(xp.int32)
         EMF = EMF[ids[0]:ids[1], ids[0]:ids[1]]
-
         self.focal_EMF = EMF
-
         if oversampling != 1:
             self.PSF = set_binning(xp.abs(EMF) ** 2, oversampling)
-
         else:
             self.PSF = xp.abs(EMF) ** 2
-
         return oversampling
 
     def apply_spiders(self, angle, thickness_spider, offset_X=None, offset_Y=None):
@@ -444,7 +423,6 @@ class Telescope:
             max_offset = self.centralObstruction*self.D/2 - thickness_spider/2
             if offset_X is None:
                 offset_X = xp.zeros(len(angle))
-
             if offset_Y is None:
                 offset_Y = xp.zeros(len(angle))
 
@@ -493,8 +471,6 @@ class Telescope:
         self.resolution = pupil_padded.shape[0]
         self.D = self.resolution * self.pixelSize
         self.pupil = pupil_padded.copy()
-        # self.OPD = self.pupil.astype(self.precision())     # set the initial OPD
-        # self.OPD_no_pupil = 1+self.pupil.astype(self.precision())*0  # set the initial OPD
         return
 
     @property
@@ -543,8 +519,7 @@ class Telescope:
             if type(self.OPD) is list:
                 if len(self.OPD) == len(obj):
                     for i_obj in range(len(self.OPD)):
-                        tel_tmp = copy.deepcopy(
-                            getattr(obj[i_obj], 'telescope'))
+                        tel_tmp = copy.deepcopy(getattr(obj[i_obj], 'telescope'))
                         tel_tmp.OPD = self.OPD[i_obj]
                         tel_tmp.OPD_no_pupil = self.OPD_no_pupil[i_obj]
                         self.src.src[i_obj]*tel_tmp*obj[i_obj]

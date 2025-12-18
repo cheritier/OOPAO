@@ -11,7 +11,7 @@ import numpy as np
 try:
     import cupy as xp
     global_gpu_flag = True
-    xp = np  #for now
+    xp = np  # for now
 except ImportError or ModuleNotFoundError:
     xp = np
 from joblib import Parallel, delayed
@@ -208,7 +208,6 @@ class DeformableMirror:
                 print_('Building the set of influence functions of M4...',
                        print_dm_properties)
                 # generate the M4 influence functions
-
                 pup = telescope.pupil
                 filename = M4_param['m4_filename']
                 nAct = M4_param['nActuator']
@@ -252,7 +251,6 @@ class DeformableMirror:
                 self.isM4 = True
                 print_('Done!', print_dm_properties)
                 b = time.time()
-
                 print_('Done! M4 influence functions computed in ' +
                        str(b-a) + ' s!', print_dm_properties)
             else:
@@ -270,13 +268,11 @@ class DeformableMirror:
             self.mechCoupling = mechCoupling
             self.tag = 'deformableMirror'
             self.D = telescope.D
-
         else:
             if telescope.src.tag == 'asterism':
                 self.oversampling_factor = np.max((np.asarray(self.telescope.src.coordinates)[:, 0]/(self.resolution/2)))
             else:
                 self.oversampling_factor = self.telescope.src.coordinates[0]/(self.resolution/2)
-
             self.altitude_layer = self.buildLayer(self.telescope, altitude)
             # Resolution of the DM influence Functions
             self.resolution = self.altitude_layer.resolution
@@ -322,13 +318,10 @@ class DeformableMirror:
             self.nValidAct = sum(self.validAct)
 
         # If the coordinates are specified
-
         else:
             if np.shape(coordinates)[1] != 2:
                 raise OopaoError('Wrong size for the DM coordinates, the (x,y) coordinates should be input as a 2D array of dimension [nAct,2]')
-
             print_('Coordinates loaded...', print_dm_properties)
-
             self.xIF0 = coordinates[:, 0]
             self.yIF0 = coordinates[:, 1]
             # In that case corresponds to the total number of actuators
@@ -346,12 +339,10 @@ class DeformableMirror:
         yIF0 = self.yIF0[self.validAct]
 
         # anamorphosis
-        xIF3, yIF3 = self.anamorphosis(xIF0, yIF0, self.misReg.anamorphosisAngle *
-                                       np.pi/180, self.misReg.tangentialScaling, self.misReg.radialScaling)
+        xIF3, yIF3 = self.anamorphosis(xIF0, yIF0, self.misReg.anamorphosisAngle * np.pi/180, self.misReg.tangentialScaling, self.misReg.radialScaling)
 
         # rotation
-        xIF4, yIF4 = self.rotateDM(
-            xIF3, yIF3, self.misReg.rotationAngle*np.pi/180)
+        xIF4, yIF4 = self.rotateDM(xIF3, yIF3, self.misReg.rotationAngle*np.pi/180)
 
         # shifts
         xIF = xIF4-self.misReg.shiftX
@@ -431,9 +422,7 @@ class DeformableMirror:
 
     def set_pupil_footprint(self):
         if len(self.src_list) == 1:
-
-            [x_z, y_z] = pol2cart(self.altitude_layer.altitude * xp.tan(self.src_list[0].coordinates[0] / self.rad2arcsec)
-                                  * self.altitude_layer.resolution / self.altitude_layer.D, xp.deg2rad(self.src_list[0].coordinates[1]))
+            [x_z, y_z] = pol2cart(self.altitude_layer.altitude * xp.tan(self.src_list[0].coordinates[0] / self.rad2arcsec) * self.altitude_layer.resolution / self.altitude_layer.D, xp.deg2rad(self.src_list[0].coordinates[1]))
             center_x = int(y_z) + self.altitude_layer.resolution // 2
             center_y = int(x_z) + self.altitude_layer.resolution // 2
             self.altitude_layer.pupil_footprint = xp.zeros([self.altitude_layer.resolution, self.altitude_layer.resolution], dtype=self.precision())
@@ -468,16 +457,14 @@ class DeformableMirror:
         layer.altitude = altitude
         # Diameter and resolution of the layer including the Field Of View and the number of extra pixels
         layer.D_fov = telescope.D+2*xp.tan(telescope.fov_rad/2)*layer.altitude
-        layer.resolution_fov = int(
-            xp.ceil((telescope.resolution/telescope.D)*layer.D_fov))
+        layer.resolution_fov = int(xp.ceil((telescope.resolution/telescope.D)*layer.D_fov))
         # 4 pixels are added as a margin for the edges
         layer.resolution = layer.resolution_fov + 4
         layer.D = layer.resolution * telescope.D / telescope.resolution
         layer.center = layer.resolution//2
 
         if telescope.src.tag == 'source':
-            [x_z, y_z] = pol2cart(layer.altitude*xp.tan(telescope.src.coordinates[0]/self.rad2arcsec)
-                                  * layer.resolution / layer.D, xp.deg2rad(telescope.src.coordinates[1]))
+            [x_z, y_z] = pol2cart(layer.altitude*xp.tan(telescope.src.coordinates[0]/self.rad2arcsec) * layer.resolution / layer.D, xp.deg2rad(telescope.src.coordinates[1]))
             center_x = int(y_z)+layer.resolution//2
             center_y = int(x_z)+layer.resolution//2
             layer.pupil_footprint = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
@@ -490,8 +477,7 @@ class DeformableMirror:
             layer.center_x = []
             layer.center_y = []
             for i in range(telescope.src.n_source):
-                [x_z, y_z] = pol2cart(layer.altitude*xp.tan(telescope.src.coordinates[i][0]/self.rad2arcsec)
-                                      * layer.resolution / layer.D, xp.deg2rad(telescope.src.coordinates[i][1]))
+                [x_z, y_z] = pol2cart(layer.altitude*xp.tan(telescope.src.coordinates[i][0]/self.rad2arcsec) * layer.resolution / layer.D, xp.deg2rad(telescope.src.coordinates[i][1]))
                 layer.extra_sx.append(int(x_z)-x_z)
                 layer.extra_sy.append(int(y_z)-y_z)
                 center_x = int(y_z)+layer.resolution//2
@@ -515,8 +501,7 @@ class DeformableMirror:
         else:
             OPD = np.reshape(self.OPD[self.altitude_layer.center_x[self.src.ast_idx]-self.resolution//2:self.altitude_layer.center_x[self.src.ast_idx]+self.resolution//2,
                                       self.altitude_layer.center_y[self.src.ast_idx] - self.resolution//2:self.altitude_layer.center_y[self.src.ast_idx]+self.resolution//2, :],
-                             [self.resolution, self.resolution, self.OPD.shape[2]])
-
+                                     [self.resolution, self.resolution, self.OPD.shape[2]])
         if ~np.isinf(src.altitude):
             if np.ndim(self.OPD) == 2:
                 sub_im = np.atleast_3d(OPD)
@@ -531,7 +516,6 @@ class DeformableMirror:
             pixel_size_in = 1
             pixel_size_out = pixel_size_in*magnification_cone_effect
             resolution_out = self.resolution
-
             OPD = np.asarray(np.squeeze(interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out)).T)
 
         return OPD
@@ -546,25 +530,21 @@ class DeformableMirror:
         mRad += 1
         mNorm += 1
         xOut = x * (mRad*np.cos(angle)**2 + mNorm * np.sin(angle)**2) + y * (mNorm*np.sin(2*angle)/2 - mRad*np.sin(2*angle)/2)
-        yOut = y * (mRad*np.sin(angle)**2 + mNorm * np.cos(angle)**2) + \
-            x * (mNorm*np.sin(2*angle)/2 - mRad*np.sin(2*angle)/2)
-
+        yOut = y * (mRad*np.sin(angle)**2 + mNorm * np.cos(angle)**2) + x * (mNorm*np.sin(2*angle)/2 - mRad*np.sin(2*angle)/2)
         return xOut, yOut
 
     def modesComputation(self, i, j):
         x0 = i
         y0 = j
-        cx = (1+self.misReg.radialScaling)*(self.resolution /
-                                            self.nActAlongDiameter)/np.sqrt(2*np.log(1./self.mechCoupling))
-        cy = (1+self.misReg.tangentialScaling)*(self.resolution /
-                                                self.nActAlongDiameter)/np.sqrt(2*np.log(1./self.mechCoupling))
+        cx = (1+self.misReg.radialScaling)*(self.resolution / self.nActAlongDiameter)/np.sqrt(2*np.log(1./self.mechCoupling))
+        cy = (1+self.misReg.tangentialScaling)*(self.resolution / self.nActAlongDiameter)/np.sqrt(2*np.log(1./self.mechCoupling))
 
-#                    Radial direction of the anamorphosis
+        # Radial direction of the anamorphosis
         theta = self.misReg.anamorphosisAngle*np.pi/180
         x = np.linspace(0, 1, self.resolution)*self.resolution
         X, Y = np.meshgrid(x, x)
 
-#                Compute the 2D Gaussian coefficients
+        # Compute the 2D Gaussian coefficients
         a = np.cos(theta)**2/(2*cx**2) + np.sin(theta)**2/(2*cy**2)
         b = -np.sin(2*theta)/(4*cx**2) + np.sin(2*theta)/(4*cy**2)
         c = np.sin(theta)**2/(2*cx**2) + np.cos(theta)**2/(2*cy**2)
@@ -622,12 +602,9 @@ class DeformableMirror:
                 [x_z, y_z] = pol2cart(self.altitude*xp.tan((list_src[i_source].coordinates[0])/self.rad2arcsec), xp.deg2rad(list_src[i_source].coordinates[1]))
             center = 0
             [x_c, y_c] = pol2cart(self.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
-            nm = (list_src[i_source].type) + '@' + \
-                str(list_src[i_source].coordinates[0])+'"'
-            ax.plot(x_cone+x_z+center, y_cone+y_z+center,
-                    '-', color=col[i_source], label=nm)
-            ax.fill(x_cone+x_z+center, y_cone+y_z+center,
-                    y_z+center, alpha=0.1, color=col[i_source])
+            nm = (list_src[i_source].type) + '@' + str(list_src[i_source].coordinates[0])+'"'
+            ax.plot(x_cone+x_z+center, y_cone+y_z+center, '-', color=col[i_source], label=nm)
+            ax.fill(x_cone+x_z+center, y_cone+y_z+center, y_z+center, alpha=0.1, color=col[i_source])
         ax.set_xlabel('[m]')
         ax.set_ylabel('[m]')
         ax.set_title('Altitude '+str(self.altitude)+' m')
@@ -646,7 +623,6 @@ class DeformableMirror:
             self._coefs = np.float32(val)
         else:
             self._coefs = val
-
         if np.isscalar(val):
             if val == 0:
                 self._coefs = np.zeros(self.nValidAct, dtype=self.precision())
@@ -654,7 +630,6 @@ class DeformableMirror:
                     self.OPD = self.precision(np.reshape(np.matmul(self.modes, self._coefs), [self.resolution, self.resolution]))
                 except:
                     self.OPD = self.precision(np.reshape(self.modes@self._coefs, [self.resolution, self.resolution]))
-
             else:
                 print('Error: wrong value for the coefficients')
         else:
@@ -670,12 +645,10 @@ class DeformableMirror:
                     except:
                         self.OPD = self.precision(np.reshape(
                             self.modes@self._coefs, [self.resolution, self.resolution, val.shape[1]]))
-
             else:
                 print('Error: wrong value for the coefficients')
                 sys.exit(0)
             self.current_coefs = self.coefs.copy()
-
     # for backward compatibility
     def print_properties(self):
         print(self)

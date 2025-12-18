@@ -267,7 +267,6 @@ class MisRegistration:
         self.prop['tengential_scaling'] = f"{'Tangential scaling [%]':<25s}|{self.tangentialScaling*100:^9.3f}"
         self.prop['radial_scaling'] = f"{'Radial scaling [%]':<25s}|{self.radialScaling*100:^9.3f}"
         return self.prop
-        
 
     def __repr__(self):
         self.properties()

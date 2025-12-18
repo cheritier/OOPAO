@@ -163,7 +163,7 @@ def split_basis_product(basis: np.array, n_jobs: int) -> np.array:
     for i, split in enumerate(splits):
         progress_bar = '\033[1;31m\u2501\033[1;00m' * (int(25*i/n_chunks)) + \
                        '\u2501' * (25 - int(25*i/n_chunks)-2) + \
-                       ' %3.1f%%'%((i+1)/n_chunks*100)
+                       ' %3.1f%%' % ((i+1)/n_chunks*100)
         print(progress_bar, end="\r", flush=True)
         end = start + split.shape[-1]
         # split = np.array_split(basis, n_chunks, axis=-1)[i]
