@@ -126,7 +126,7 @@ class Asterism:
         obj.src = self
         for src in self.src:
             src.optical_path = [[src.type + '('+src.optBand+')', src]]
-        self.resetOPD()
+        self.reset()
         self*obj
         return self
 
@@ -135,9 +135,9 @@ class Asterism:
         obj.relay(self)
         return self
 
-    def resetOPD(self):
+    def reset(self):
         for src in self.src:
-            src.resetOPD()
+            src.reset()
 
     def print_optical_path(self):
         for src in self.src:
