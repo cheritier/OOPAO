@@ -68,8 +68,6 @@ def crop(imageArray, size, axis, maximum = 0):
 
 def zero_pad_array(array,padding:int):
     """
-    
-
     Parameters
     ----------
     array : TYPE
@@ -96,19 +94,6 @@ def zero_pad_array(array,padding:int):
         center_y = support.shape[1]//2
         support[center_x-array.shape[0]//2:center_x+array.shape[0]//2,center_y-array.shape[1]//2:center_y+array.shape[1]//2] = array.copy()
         return support
-    # else:
-    #     if axis is None or len(axis)!=0:
-    #         raise ValueError('The axis on which the padding should be applied is not specified or not properly set, specify 2 axis aver which apply the padding. For instance, axis = [0,1] to pad the 2 first dimensions')
-    #     else: 
-    #         if axis == [0,1]:
-    #             np.tile(array[])
-    #         elif
-            
-                
-                
-    
-    
-
 
 def strehlMeter(PSF, tel, PSF_ref = None, zeroPaddingFactor = 2, display = True, title = ''):
     # Measures the Strehl ratio from a focal plane image PSF

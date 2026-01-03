@@ -22,14 +22,13 @@ except:
     fft2 = scipy.fft.fft2
 
 
-class Pyramid:
+class BioEdge:
     def __init__(self,
                  nSubap: float,
                  telescope,
                  modulation: float,
                  lightRatio: float,
                  postProcessing: str = 'slopesMaps',
-                 psfCentering: bool = True,
                  n_pix_separation: float = 2.,
                  calibModulation: float = 50.,
                  n_pix_edge: float = None,
@@ -37,9 +36,8 @@ class Pyramid:
                  binning: int = 1,
                  nTheta_user_defined: int = None,
                  userValidSignal: bool = None,
-                 old_mask: bool = False,
-                 rooftop: float = 0,
-                 theta_rotation: float = 0,
+                 grey_width: float = 0,
+                 grey_length: bool = False,
                  delta_theta: float = 0.,
                  user_modulation_path: list = None,
                  pupilSeparationRatio: float = None,
@@ -238,14 +236,15 @@ class Pyramid:
         # user defined mask for the valid pixel selection
         self.userValidSignal = userValidSignal
         # tag for the PSF centering on  or 4 pixels
-        self.psfCentering = psfCentering
+        self.psfCentering = True
         # binning factor for the detector
         self.binning = binning
-        self.old_mask = old_mask
         # user defined modulation path
         self.user_modulation_path = user_modulation_path
         # Separation ratio of the PWFS pupils (Diameter/Distance Center to Center) -- DEPRECATED -> use n_pix_separation instead)
         self.pupilSeparationRatio = pupilSeparationRatio
+        self.joblib_prefer_masks = 'threads'
+        self.nJobs_masks = 1
         self.weight_vector = None
         if edgePixel is not None:
             raise OopaoError('The use of the edgePixel property has been deprecated. Consider using n_pix_edge instead')
@@ -266,8 +265,9 @@ class Pyramid:
             self.joblib_setting = 'processes'
         else:
             self.joblib_setting = 'threads'
-        self.rooftop = rooftop
-        self.theta_rotation = theta_rotation
+        # half width of the grey area of the mask in [l/D]
+        self.grey_width = grey_width  # half width of the grey area of the mask
+        self.grey_length = grey_length
         if zeroPadding is not None:
             raise OopaoError('The use of the zeroPadding property has been deprecated')
         # Case where the zero-padding is not specificed => taking the smallest value ensuring to get edgePixel space from the edge.
@@ -360,29 +360,56 @@ class Pyramid:
         self.wfs_measure(phase_in=self.src.phase)
         print(self)
 
-    def mask_computation(self):
-        print('Pyramid Mask initialization...')
-        if self.old_mask:
-            self.m = self.get_phase_mask_old(resolution=self.resolution,
-                                             n_subap=self.nSubap,
-                                             n_pix_separation=self.n_pix_separation,
-                                             n_pix_edge=self.n_pix_edge,
-                                             psf_centering=self.psfCentering,
-                                             sx=self.sx,
-                                             sy=self.sy)
+    def mask_computation(self, sx=[0]*4, sy=[0]*4):
+        print('Bio-Edge Mask initialization...')
+        A = np.zeros([self.resolution, self.resolution], dtype=self.precision_complex)
+        n_tot = int((self.nSubap*2+self.n_pix_separation+self.n_pix_edge*2) * self.telescope.resolution/self.nSubap)
+
+        # mask centered on 4 pixel
+        lim = np.pi
+        norma = (self.nSubap*2) * (self.telescope.resolution/self.nSubap) * (1/(self.nSubap*2))
+        # create a Tip/Tilt combination for each quadrant
+        [Tip, Tilt] = np.meshgrid(np.linspace(-lim, lim, n_tot, endpoint=False),
+                                  np.linspace(-lim, lim, n_tot, endpoint=False))
+        BW = np.zeros([self.resolution])
+        BW[0:self.resolution//2] = 1.
+        r = int(np.round(self.zeroPaddingFactor*self.grey_width))
+        if self.grey_width != 0:
+            self.gray_gradient = np.hstack([np.linspace(1, 0.5, r, endpoint=True),
+                                            np.linspace(0.5, 0, r, endpoint=True)])
+            BW[self.resolution//2-r:self.resolution//2+r] = self.gray_gradient
+        [X, Y] = np.meshgrid(BW, BW)
+        A = np.sqrt(X)
+        if self.grey_length is not False:
+            r_grey = self.zeroPaddingFactor
+            r_length = int(np.round(r_grey*self.grey_length))
+            A[0:self.resolution//2-r_length, 0:self.resolution//2] = 1.
+            A[self.resolution//2+r_length:, 0:self.resolution//2] = 1.
+            A[0:self.resolution//2-r_length, self.resolution//2:] = 0.
+            A[self.resolution//2+r_length:, self.resolution//2:] = 0.
+        B = np.sqrt(1-A**2)
+        C = np.copy(A.T)
+        D = np.copy(B.T)
+        if len(self.sx) == 4 and len(self.sy) == 4:
+            A_TT = self.sx[0]*Tip*norma + self.sy[0]*Tilt*norma
+            B_TT = self.sx[1]*Tip*norma + self.sy[1]*Tilt*norma
+            C_TT = self.sx[2]*Tip*norma + self.sy[2]*Tilt*norma
+            D_TT = self.sx[3]*Tip*norma + self.sy[3]*Tilt*norma
+
+            A = A*np.exp(1j*A_TT)
+            B = B*np.exp(1j*B_TT)
+            C = C*np.exp(1j*C_TT)
+            D = D*np.exp(1j*D_TT)
+
+            self.mask = [A, B, C, D]
+            self.mask_TT = [A_TT, B_TT, C_TT, D_TT]
         else:
-            self.m = self.get_phase_mask(resolution=self.resolution,
-                                         n_subap=self.nSubap,
-                                         n_pix_separation=self.n_pix_separation,
-                                         n_pix_edge=self.n_pix_edge,
-                                         psf_centering=self.psfCentering,
-                                         sx=self.sx,
-                                         sy=self.sy)
-        self.initial_m = self.m.copy()
-        # compute the PWFS mask)
-        self.mask = self.convert_for_gpu(np.complex64(np.exp(1j*self.m)))
+            self.mask = [A, B, C, D]
+        # convert for GPU
+        self.mask = self.convert_for_gpu(self.mask)
         # Save a copy of the initial mask
         self.initial_mask = np.copy(self.mask)
+        print('Done!')
         return
 
     def apply_shift_wfs(self, sx=None, sy=None, mis_reg=None, units='pixels'):
@@ -394,10 +421,8 @@ class Pyramid:
             sx = [mis_reg.dX_1, mis_reg.dX_2, mis_reg.dX_3, mis_reg.dX_4]
             sy = [mis_reg.dY_1, mis_reg.dY_2, mis_reg.dY_3, mis_reg.dY_4]
         # factor to ensure backward compatibility
-        if self.old_mask:
-            f = 2
-        else:
-            f = 1
+        f = 2
+
         # normalization factor to shift the pupil with the correct units
         if units == 'pixels':
             factor = f
@@ -419,119 +444,24 @@ class Pyramid:
         if np.max(np.abs(shift_x)) > self.n_pix_edge or np.max(np.abs(shift_y)) > self.n_pix_edge:
             warning('The Pyramid pupils have been shifted outside of the detector!' +
                     'Wrapping of the signal is currently occuring!!')
-
+        self.mask_computation(sx=sx, sy=sy)
         self.sx = np.asarray(shift_x)/factor
         self.sy = np.asarray(shift_y)/factor
-        if self.old_mask:
-            self.m = self.get_phase_mask_old(resolution=self.resolution,
-                                             n_subap=self.nSubap,
-                                             n_pix_separation=self.n_pix_separation,
-                                             n_pix_edge=self.n_pix_edge,
-                                             psf_centering=self.psfCentering,
-                                             sx=shift_x,
-                                             sy=shift_y)
-        else:
-            self.m = self.get_phase_mask(resolution=self.resolution,
-                                         n_subap=self.nSubap,
-                                         n_pix_separation=self.n_pix_separation,
-                                         n_pix_edge=self.n_pix_edge,
-                                         psf_centering=self.psfCentering,
-                                         sx=shift_x,
-                                         sy=shift_y)
-        self.mask = self.convert_for_gpu(np.complex64(np.exp(1j*self.m)))
         self.slopesUnits = 1
         self.referenceSignal = 0
         self.referenceSignal_2D = 0
         self.wfs_calibration()
         return
 
-    def get_phase_mask(self, resolution, n_subap, n_pix_separation, n_pix_edge, psf_centering=False, sx=[0, 0, 0, 0], sy=[0, 0, 0, 0]):
-        # new mask compution to include Pyramid rooftop (F.Oyarzun 08/2025)
-        rooftop_pixels = self.rooftop * self.zeroPaddingFactor / np.sqrt(2)
-        # size of the mask in pixel
-        n_tot = int((n_subap*2+n_pix_separation+n_pix_edge*2) * self.telescope.resolution/self.nSubap)
-
-        # normalization factor for the Tip/Tilt
-        n_pix_per_subap = self.telescope.resolution/self.nSubap
-        norma = n_pix_per_subap
-        # support for the mask
-        lim = np.pi
-        # create a Tip/Tilt normalized to apply a 1 pixel shift
-        x = np.linspace(-(1-self.psfCentering*1/n_tot)*lim, (1-self.psfCentering*1/n_tot)*lim, n_tot, endpoint=self.psfCentering)
-        x_, y_ = np.meshgrid(x, x)
-        # rotation of the Pyramid Mask
-        x = x_*np.cos(self.theta_rotation) - y_*np.sin(self.theta_rotation)
-        y = y_*np.cos(self.theta_rotation) + x_*np.sin(self.theta_rotation)
-        # radius for the pupil separation
-        r = (self.nSubap+self.n_pix_separation)/2
-        # separation of the pupils, rotation and shift of the PWFS mask:
-        P1 = x*r + x_*sx[0] + y*r - y_*sy[0] + rooftop_pixels
-        P2 = -x*r + x_*sx[1] + y*r - y_*sy[1]
-        P3 = -x*r + x_*sx[2] - y*r - y_*sy[2] + rooftop_pixels
-        P4 = x*r + x_*sx[3] - y*r - y_*sy[3]
-        # Stack and compute final mask
-        stacked = np.stack([P1, P2, P3, P4])*norma  # shape: (4, N, N)
-        F = np.max(stacked, axis=0)  # shape: (N, N)
-        return -F
-
-    def get_phase_mask_old(self, resolution, n_subap, n_pix_separation, n_pix_edge, psf_centering=False, sx=[0, 0, 0, 0], sy=[0, 0, 0, 0]):
-        # 25/08/2025: old computation of the PWFS mask apply shift of the pupil using local Tip/Tilt in the quadrants
-        # size of the mask in pixel
-        n_tot = int((n_subap*2+n_pix_separation+n_pix_edge*2) * self.telescope.resolution/self.nSubap)
-
-        # normalization factor for the Tip/Tilt
-        n_pix_per_subap = self.telescope.resolution/self.nSubap
-        norma = n_pix_per_subap/4
-        # support for the mask
-        m = np.zeros([n_tot, n_tot])
-        if psf_centering:
-            # mask centered on 4 pixel
-            lim = np.pi
-            # create a Tip/Tilt combination for each quadrant
-            [Tip, Tilt] = np.meshgrid(np.linspace(-lim, lim, n_tot//2, endpoint=False),
-                                      np.linspace(-lim, lim, n_tot//2, endpoint=False))
-            # make sur it is zero-mean
-            Tip -= np.mean(Tip)
-            Tilt -= np.mean(Tilt)
-
-            m[:n_tot//2, : n_tot//2] = (Tip * (n_subap + n_pix_separation + sx[0]) + Tilt * (n_subap + n_pix_separation - sy[0])) * norma
-            m[:n_tot//2, -n_tot//2:] = (-Tip * (n_subap + n_pix_separation - sx[1]) + Tilt * (n_subap + n_pix_separation - sy[1])) * norma
-            m[-n_tot//2:, -n_tot//2:] = (-Tip * (n_subap + n_pix_separation - sx[2]) - Tilt * (n_subap + n_pix_separation + sy[2])) * norma
-            m[-n_tot//2:, :n_tot//2] = (Tip * (n_subap + n_pix_separation + sx[3]) - Tilt * (n_subap + n_pix_separation + sy[3])) * norma
-        else:
-            # mask centered on 1 pixel => different normalization for each Tip/tilt
-            d_pix = (np.pi) / (n_tot)     # size of a pixel in angle
-            lim_p = np.pi
-            lim_m = np.pi - 2*d_pix
-
-            # create a Tip/Tilt combination for each quadrant
-            [Tip_1, Tilt_1] = np.meshgrid(np.linspace(-lim_p, lim_p, n_tot//2 + 1, endpoint=True), np.linspace(-lim_p, lim_p, n_tot//2 + 1, endpoint=True))
-            [Tip_2, Tilt_2] = np.meshgrid(np.linspace(-lim_p, lim_p, n_tot//2 + 1, endpoint=True), np.linspace(-lim_m, lim_m, n_tot//2 - 1, endpoint=False))
-            [Tip_3, Tilt_3] = np.meshgrid(np.linspace(-lim_m, lim_m, n_tot//2 - 1, endpoint=False), np.linspace(-lim_m, lim_m, n_tot//2 - 1, endpoint=False))
-            [Tip_4, Tilt_4] = np.meshgrid(np.linspace(-lim_m, lim_m, n_tot//2 - 1, endpoint=False), np.linspace(-lim_p, lim_p, n_tot//2 + 1, endpoint=True))
-
-            # make sur it is zero-mean
-            Tip_1 -= np.mean(Tip_1)
-            Tilt_1 -= np.mean(Tilt_1)
-
-            # make sur it is zero-mean
-            Tip_2 -= np.mean(Tip_2)
-            Tilt_2 -= np.mean(Tilt_2)
-
-            # make sur it is zero-mean
-            Tip_3 -= np.mean(Tip_3)
-            Tilt_3 -= np.mean(Tilt_3)
-
-            # make sur it is zero-mean
-            Tip_4 -= np.mean(Tip_4)
-            Tilt_4 -= np.mean(Tilt_4)
-
-            m[:n_tot//2 + 1, :n_tot//2+1] = (Tip_1 * (n_subap + n_pix_separation + sx[0]) + Tilt_1 * (n_subap + n_pix_separation - sy[0]))*norma
-            m[:n_tot//2 + 1, -n_tot//2+1:] = (-Tip_4 * (n_subap + n_pix_separation - sx[1]) + Tilt_4 * (n_subap + n_pix_separation - sy[1]))*norma
-            m[-n_tot//2 + 1:, -n_tot//2 + 1:] = (-Tip_3 * (n_subap + n_pix_separation - sx[2]) - Tilt_3 * (n_subap + n_pix_separation + sy[2]))*norma
-            m[-n_tot//2 + 1:, :n_tot//2 + 1] = (Tip_2 * (n_subap + n_pix_separation + sx[3]) - Tilt_2 * (n_subap + n_pix_separation + sy[3]))*norma
-
-        return -m  # sign convention for backward compatibility
+    def convolution(self, mask, em_field_ft):
+        if self.psfCentering:  # case with mask centered on 4 pixels
+            em_field_pwfs = np.fft.ifft2(em_field_ft*mask)
+            intensity = np.abs(em_field_pwfs)**2
+        else:  # case with mask centered on 1 pixel
+            em_field_pwfs = np.fft.ifft2(em_field_ft*mask)
+            intensity = np.abs(em_field_pwfs)**2
+        self.modulation_camera_em.append(em_field_ft)
+        return intensity
 
     def initialization(self):
         self.src**self.telescope
@@ -574,11 +504,9 @@ class Pyramid:
                 self.validSignal = np.concatenate(
                     (self.validI4Q, self.validI4Q))
                 self.nSignal = int(np.sum(self.validSignal))
-
             if self.postProcessing[:9] == 'fullFrame':
                 self.validSignal = self.userValidSignal
                 self.nSignal = int(np.sum(self.validSignal))
-
         # Tag to indicate that the wfs is initialized
         self.isInitialized = True
         return
@@ -601,50 +529,41 @@ class Pyramid:
         self.src.OPD = tmp_OPD
         return
 
-    def pyramid_transform(self, phase_in):
+    def bio_edge_transform(self, phase_in):
         # copy of the support for the zero-padding
         support = self.supportPadded.copy()
         # em field corresponding to phase_in
-        if np.ndim(self.src.OPD) == 2 or type(self.src.OPD) is list:
+        if np.ndim(self.telescope.OPD) == 2:
             if self.modulation == 0:
-                em_field = self.maskAmplitude*np.exp(1j*(phase_in))
+                em_field = 0.5*self.maskAmplitude*np.exp(1j*(phase_in))
             else:
-                em_field = self.maskAmplitude * np.exp(1j*(self.convert_for_gpu(self.src.phase)+phase_in))
+                em_field = 0.5*self.maskAmplitude*np.exp(1j*(self.convert_for_gpu(self.telescope.src.phase)+phase_in))
         else:
-            em_field = self.maskAmplitude*np.exp(1j*phase_in)
+            em_field = 0.5*self.maskAmplitude*np.exp(1j*phase_in)
+        n = (self.resolution-self.telescope.resolution)//2
         # zero-padding for the FFT computation
-        support[self.center-self.telescope.resolution//2:self.center+self.telescope.resolution//2,
-                self.center-self.telescope.resolution//2:self.center+self.telescope.resolution//2] = em_field
+        support[n:-n, n:-n] = em_field
         del em_field
         # case with mask centered on 4 pixels
         if self.psfCentering:
-            em_field_ft = fft2(support*self.phasor).astype(self.precision_complex())
-            em_field_pwfs = xp.fft.ifft2(em_field_ft*self.mask).astype(self.precision_complex())
-            intensity = xp.abs(em_field_pwfs)**2
+            em_field_ft = xp.fft.fft2(support*self.phasor)
         # case with mask centered on 1 pixel
         else:
-            if self.spatialFilter is not None:
-                em_field_ft = xp.fft.fftshift(fft2(support))*self.spatialFilter
-            else:
-                em_field_ft = xp.fft.fftshift(fft2(support)).astype(self.precision_complex())
-            em_field_pwfs = xp.fft.ifft2(em_field_ft*self.mask).astype(self.precision_complex())
-            intensity = xp.abs(em_field_pwfs)**2
-        del support
-        del em_field_pwfs
-        self.modulation_camera_em.append(self.convert_for_numpy(em_field_ft)/em_field_ft.shape[0])
+            em_field_ft = xp.fft.fftshift(xp.fft.fft2(support))
+        support_list = [em_field_ft]*4
+        intensity = np.zeros([2*self.resolution, 2*self.resolution])
 
-        del em_field_ft
-        del phase_in
+        def job_loop_mask():
+            Q = Parallel(n_jobs=self.nJobs_masks, prefer=self.joblib_prefer_masks)(delayed(self.convolution)(i, j) for i, j in zip(self.mask, support_list))
+            return Q
+
+        out = self.convert_for_numpy(xp.asarray(job_loop_mask()))
+        count = 0
+        for i in range(2):
+            for j in range(2):
+                intensity[i*self.resolution:(i+1)*self.resolution, j*self.resolution:(j+1)*self.resolution] = out[count, :, :]
+                count += 1
         return intensity
-
-    def setPhaseBuffer(self, phaseIn):
-        B = self.phaseBuffModulationLowres_CPU+phaseIn
-        return B
-
-    def pyramid_propagation(self, telescope):
-        # backward compatibility with previous version
-        self.wfs_measure(phase_in=telescope.src.phase)
-        return
 
     def wfs_integrate(self):
         # propagate to the detector to apply the noise
@@ -654,6 +573,10 @@ class Pyramid:
             return signal_2D, signal
         else:
             return None, None
+
+    def setPhaseBuffer(self, phaseIn):
+        B = self.phaseBuffModulationLowres_CPU+phaseIn
+        return B
 
     def wfs_measure(self, phase_in=None, integrate=True):
         if self.isInitialized and self.isCalibrated:
@@ -677,7 +600,7 @@ class Pyramid:
         self.modulation_camera_em = []
         if self.modulation == 0 and self.user_modulation_path is None:
             if np.ndim(phase_in) == 2:
-                self.raw_data = self.convert_for_numpy(self.pyramid_transform(self.convert_for_gpu(self.src.phase)))
+                self.raw_data = self.convert_for_numpy(self.bio_edge_transform(self.convert_for_gpu(self.src.phase)))
                 if integrate:
                     self.signal_2D, self.signal = self.wfs_integrate()
             else:
@@ -688,7 +611,7 @@ class Pyramid:
 
                 def job_loop_multiple_modes_non_modulated():
                     Q = Parallel(n_jobs=self.nJobs,
-                                 prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.phase_buffer)
+                                 prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.phase_buffer)
                     return Q
                 # apply the pyramid transform in parallel
                 maps = self.convert_for_numpy(xp.asarray(job_loop_multiple_modes_non_modulated()))
@@ -718,13 +641,13 @@ class Pyramid:
                         if i < nCycle-1:
                             def job_loop_single_mode_modulated():
                                 Q = Parallel(n_jobs=self.nJobs,
-                                             prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.convert_for_gpu(self.phaseBuffModulationLowres[i*n_max_:(i+1)*n_max_, :, :]))
+                                             prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.convert_for_gpu(self.phaseBuffModulationLowres[i*n_max_:(i+1)*n_max_, :, :]))
                                 return Q
                             maps += self.convert_for_numpy(xp.sum(xp.asarray(job_loop_single_mode_modulated()), axis=0))
                         else:
                             def job_loop_single_mode_modulated():
                                 Q = Parallel(n_jobs=self.nJobs,
-                                             prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.convert_for_gpu(self.phaseBuffModulationLowres[i*n_max_:, :, :]))
+                                             prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.convert_for_gpu(self.phaseBuffModulationLowres[i*n_max_:, :, :]))
                                 return Q
                             maps += self.convert_for_numpy(xp.sum(xp.asarray(job_loop_single_mode_modulated()), axis=0))
                     self.maps = maps.copy()
@@ -734,7 +657,7 @@ class Pyramid:
                     # define the parallel jobs
                     def job_loop_single_mode_modulated():
                         Q = Parallel(n_jobs=self.nJobs,
-                                     prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.phaseBuffModulationLowres)
+                                     prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.phaseBuffModulationLowres)
                         return Q
                     # apply the pyramid transform in parallel
                     self.maps = xp.asarray(job_loop_single_mode_modulated())
@@ -776,14 +699,14 @@ class Pyramid:
                             if i < nCycle-1:
                                 def job_loop_multiple_mode_modulated():
                                     Q = Parallel(n_jobs=self.nJobs,
-                                                 prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.convert_for_gpu(self.phaseBuffer[i*n_measurement_max*self.nTheta:(i+1)*n_measurement_max*self.nTheta, :, :]))
+                                                 prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.convert_for_gpu(self.phaseBuffer[i*n_measurement_max*self.nTheta:(i+1)*n_measurement_max*self.nTheta, :, :]))
                                     return Q
                                 maps[i*n_measurement_max*self.nTheta:(i+1)*n_measurement_max*self.nTheta, :, :] = xp.asarray(
                                     job_loop_multiple_mode_modulated())
                             else:
                                 def job_loop_multiple_mode_modulated():
                                     Q = Parallel(n_jobs=self.nJobs,
-                                                 prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.convert_for_gpu(self.phaseBuffer[i*n_measurement_max*self.nTheta:, :, :]))
+                                                 prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.convert_for_gpu(self.phaseBuffer[i*n_measurement_max*self.nTheta:, :, :]))
                                     return Q
                                 maps[i*n_measurement_max*self.nTheta:, :,
                                      :] = xp.asarray(job_loop_multiple_mode_modulated())
@@ -799,10 +722,11 @@ class Pyramid:
                     else:
                         def job_loop_multiple_mode_modulated():
                             Q = Parallel(n_jobs=self.nJobs,
-                                         prefer=self.joblib_setting)(delayed(self.pyramid_transform)(i) for i in self.convert_for_gpu(self.phaseBuffer))
+                                         prefer=self.joblib_setting)(delayed(self.bio_edge_transform)(i) for i in self.convert_for_gpu(self.phaseBuffer))
                             return Q
 
-                        self.buffer_intensity = self.convert_for_numpy(xp.asarray(job_loop_multiple_mode_modulated()))
+                        self.buffer_intensity = self.convert_for_numpy(
+                            xp.asarray(job_loop_multiple_mode_modulated()))
 
                     self.signal_2D = np.zeros(
                         [self.validSignal.shape[0], self.validSignal.shape[1], nModes])
@@ -936,20 +860,19 @@ class Pyramid:
         return modulation_camera_frame_zoom
 
     def grabQuadrant(self, n, cameraFrame=None):
-
-        nExtraPix = int(np.round((self.n_pix_separation/self.nSubap) * self.telescope.resolution/(self.telescope.resolution/self.nSubap)/2/self.binning))
         centerPixel = int(np.round((self.cam.resolution/self.binning)/2))
-        n_pixels = int(np.ceil(self.nSubap/self.binning))
+        n_pixels    = centerPixel
         if cameraFrame is None:
-            cameraFrame = self.cam.frame.copy()
-        if n == 3:
-            quadrant = cameraFrame[nExtraPix+centerPixel:(nExtraPix+centerPixel+n_pixels), nExtraPix+centerPixel:(nExtraPix+centerPixel+n_pixels)]
-        if n == 4:
-            quadrant = cameraFrame[nExtraPix+centerPixel:(nExtraPix+centerPixel+n_pixels), -nExtraPix+centerPixel-n_pixels:(-nExtraPix+centerPixel)]
-        if n == 1:
-            quadrant = cameraFrame[-nExtraPix+centerPixel - n_pixels:(-nExtraPix+centerPixel), -nExtraPix+centerPixel-n_pixels:(-nExtraPix+centerPixel)]
-        if n == 2:
-            quadrant = cameraFrame[-nExtraPix+centerPixel - n_pixels:(-nExtraPix+centerPixel), nExtraPix+centerPixel:(nExtraPix+centerPixel+n_pixels)]
+            cameraFrame=self.cam.frame
+
+        if n==3:
+            quadrant=cameraFrame[centerPixel:(centerPixel+n_pixels),centerPixel:(centerPixel+n_pixels)]
+        if n==4:
+            quadrant=cameraFrame[centerPixel:(centerPixel+n_pixels),centerPixel-n_pixels:(centerPixel)]
+        if n==1:
+            quadrant=cameraFrame[centerPixel-n_pixels:(+centerPixel),centerPixel-n_pixels:(centerPixel)]
+        if n==2:
+            quadrant=cameraFrame[centerPixel-n_pixels:(+centerPixel),centerPixel:(centerPixel+n_pixels)]
         return quadrant
 
     def grabFullQuadrant(self, n, cameraFrame=None):
@@ -966,44 +889,6 @@ class Pyramid:
         if n == 2:
             quadrant = cameraFrame[-n_tot//2:, :n_tot//2]
         return quadrant
-
-    # properties required for backward compatibility (20/10/2020)
-    @property
-    def signal(self):
-        return self._signal
-
-    @signal.setter
-    def signal(self, val):
-        self._signal = val
-        self.pyramidSignal = val
-
-    @property
-    def resolution(self):
-        return self._resolution
-
-    @resolution.setter
-    def resolution(self, val):
-        self._resolution = val
-        self.nRes = val
-
-    @property
-    def signal_2D(self):
-        return self._signal_2D
-
-    @signal_2D.setter
-    def signal_2D(self, val):
-        self._signal_2D = val
-        self.pyramidSignal_2D = val
-
-    # #properties required for backward compatibility (20/09/2024)
-    @property
-    def raw_data(self):
-        return self._raw_data
-
-    @raw_data.setter
-    def raw_data(self, val):
-        self._raw_data = val
-        self.pyramidFrame = val
 
     @property
     def lightRatio(self):
@@ -1163,8 +1048,7 @@ class Pyramid:
             obj._integrated_time += self.telescope.samplingTime
             try:
                 if obj.is_focal_plane_camera:
-                    intensity = np.sum(
-                        np.abs(self.modulation_camera_em)**2, axis=0)
+                    intensity = np.sum(np.abs(self.modulation_camera_em)**2, axis=0)
                     if obj.resolution > self.resolution:
                         frame = intensity
                         warning('Maximum resolution for focal plane camera is %i, cropping field to this dimension' % self.resolution)

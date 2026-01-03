@@ -60,6 +60,27 @@ class Asterism:
         self.wavelength = self.src[0].wavelength
 
     @property
+    def laser_coordinates(self):
+        _laser_coordinates = []
+        for src in self.src:
+            _laser_coordinates.append(src.laser_coordinates)
+        return _laser_coordinates
+
+    @property
+    def Na_profile(self):
+        _Na_profile = []
+        for src in self.src:
+            _Na_profile.append(src.Na_profile)
+        return _Na_profile
+   
+    @property
+    def fwhm_spot_up(self):
+        _fwhm_spot_up = []
+        for src in self.src:
+            _fwhm_spot_up.append(src.fwhm_spot_up)
+        return _fwhm_spot_up
+    
+    @property
     def fluxMap(self):
         _fluxMap = []
         for src in self.src:

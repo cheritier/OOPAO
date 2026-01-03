@@ -377,47 +377,6 @@ class BioEdge:
         self.referenceSignal_2D         = 0
         self.wfs_calibration(self.telescope)
 
-    def get_phase_mask(self, resolution, n_subap, n_pix_separation, n_pix_edge, psf_centering=False, sx=[0, 0, 0, 0], sy=[0, 0, 0, 0]):
-        # size of the mask in pixel
-        n_tot = int((n_subap*2+n_pix_separation+n_pix_edge*2) * self.telescope.resolution/self.nSubap)
-
-        # normalization factor for the Tip/Tilt
-        norma = (n_subap + n_pix_separation) * (self.telescope.resolution/self.nSubap)/2
-
-        # support for the mask
-        m = np.zeros([n_tot, n_tot])
-        if psf_centering:
-            # mask centered on 4 pixel
-            lim = np.pi/2
-            # create a Tip/Tilt combination for each quadrant
-            [Tip, Tilt] = np.meshgrid(np.linspace(-lim, lim, n_tot//2),
-                                      np.linspace(-lim, lim, n_tot//2))
-
-            m[:n_tot//2, :n_tot//2] = Tip * (1 + sx[0]/(n_subap+n_pix_separation/2))*norma + Tilt * (1 - sy[0]/(n_subap+n_pix_separation/2))*norma
-            m[:n_tot//2, -n_tot//2:] = -Tip * (1 - sx[1]/(n_subap+n_pix_separation/2))*norma + Tilt * (1 - sy[1]/(n_subap+n_pix_separation/2))*norma
-            m[-n_tot//2:, -n_tot//2:] = -Tip * (1 - sx[2]/(n_subap+n_pix_separation/2))*norma + -Tilt * (1 + sy[2]/(n_subap+n_pix_separation/2))*norma
-            m[-n_tot//2:, :n_tot//2] = Tip * (1 + sx[3]/(n_subap+n_pix_separation/2))*norma + -Tilt * (1 + sy[3]/(n_subap+n_pix_separation/2))*norma
-
-        else:
-            # mask centered on 1 pixel => different normalization for each Tip/tilt
-            d_pix = (np.pi) / (n_tot)     # size of a pixel in angle
-            lim_p = np.pi/2
-            lim_m = np.pi/2 - 2*d_pix
-
-            # create a Tip/Tilt combination for each quadrant
-            [Tip_1, Tilt_1] = np.meshgrid(np.linspace(-lim_p, lim_p, n_tot//2 + 1),
-                                          np.linspace(-lim_p, lim_p, n_tot//2 + 1))
-            [Tip_2, Tilt_2] = np.meshgrid(np.linspace(-lim_p, lim_p, n_tot//2 + 1), np.linspace(-lim_m, lim_m, n_tot//2 - 1))
-            [Tip_3, Tilt_3] = np.meshgrid(np.linspace(-lim_m, lim_m, n_tot//2 - 1), np.linspace(-lim_m, lim_m, n_tot//2 - 1))
-            [Tip_4, Tilt_4] = np.meshgrid(np.linspace(-lim_m, lim_m, n_tot//2 - 1), np.linspace(-lim_p, lim_p, n_tot//2 + 1))
-
-            m[:n_tot//2 + 1, :n_tot//2+1] = Tip_1 * (1 + sx[0]/(n_subap+n_pix_separation/2))*norma + Tilt_1 * (1 - sy[0]/(n_subap+n_pix_separation/2))*norma
-            m[:n_tot//2 + 1, -n_tot//2+1:] = -Tip_4 * (1 - sx[1]/(n_subap+n_pix_separation/2))*norma + Tilt_4 * (1 - sy[1]/(n_subap+n_pix_separation/2))*norma
-            m[-n_tot//2 + 1:, -n_tot//2 + 1:] = -Tip_3 * (1 - sx[2]/(n_subap+n_pix_separation/2))*norma + -Tilt_3 * (1 + sy[2]/(n_subap+n_pix_separation/2))*norma
-            m[-n_tot//2 + 1:, :n_tot//2 + 1] = Tip_2 * (1 + sx[3]/(n_subap+n_pix_separation/2))*norma + -Tilt_2 * (1 + sy[3]/(n_subap+n_pix_separation/2))*norma
-
-        return -m  # sign convention for backward compatibility
-
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS INITIALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
      
     def initialization(self,telescope):

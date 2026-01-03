@@ -17,7 +17,7 @@ class Source:
                  altitude: float = np.inf,
                  laser_coordinates: list = [0, 0],
                  Na_profile: float = None,
-                 FWHM_spot_up: float = None,
+                 fwhm_spot_up: float = None,
                  display_properties: bool = True,
                  chromatic_shift: list = None):
         """SOURCE
@@ -39,7 +39,7 @@ class Source:
             DESCRIPTION. The default is [0,0].
         Na_profile : float, optional
             DESCRIPTION. The default is None.
-        FWHM_spot_up : float, optional
+        fwhm_spot_up : float, optional
             DESCRIPTION. The default is None.
         display_properties : bool, optional
             DESCRIPTION. The default is True.
@@ -83,7 +83,7 @@ class Source:
         _ altitude              : altitude of the source. Default is inf (NGS)
         _ laser_coordinates     : The coordinates in [m] of the laser launch telescope
         _ Na_profile            : An array of 2 dimensions and n sampling points for the Sodium profile. The first dimension corresponds to the altitude and the second dimention to the sodium profile value.
-        _ FWHM_spot_up          : FWHM of the LGS spot in [arcsec]
+        _ fwhm_spot_up          : FWHM of the LGS spot in [arcsec]
         ************************** EXEMPLE **************************
 
         Create a source object in H band with a magnitude 8 and combine it to the telescope
@@ -129,9 +129,9 @@ class Source:
         self.laser_coordinates = laser_coordinates
         # shift in arcsec to be applied to the atmospheric phase screens (one value for each layer) to simulate a chromatic effect
         self.chromatic_shift = chromatic_shift
-        if Na_profile is not None and FWHM_spot_up is not None:
+        if Na_profile is not None and fwhm_spot_up is not None:
             self.Na_profile = Na_profile
-            self.FWHM_spot_up = FWHM_spot_up
+            self.fwhm_spot_up = fwhm_spot_up
             # consider the altitude weigthed by Na profile
             self.altitude = np.sum(Na_profile[0, :]*Na_profile[1, :])
             self.type = 'LGS'
@@ -206,7 +206,7 @@ class Source:
         if val is not None:
             self._OPD_no_pupil = np.array(val)
 
-            if len(val.shape) > 2:
+            if len(val.shape) > 2 and np.isscalar(self.mask) is False:
                 self.OPD = self._OPD_no_pupil*self.mask[:, :, np.newaxis]
             else:
                 self.OPD = self._OPD_no_pupil*self.mask
@@ -365,7 +365,7 @@ class Source:
         self.prop['coordinates'] = f"{'Coordinates [arcsec,deg]':<25s}|{' ['+str(self.coordinates[0])+','+str(self.coordinates[1])+']':s}"
         # self.prop['binning'] = f"{'Binning':<25s}|{str(self.binning)+'x'+str(self.binning):^9s}"
 
-        return self.prop
+        return #self.prop
 
     def __repr__(self):
         self.properties()

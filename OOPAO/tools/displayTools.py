@@ -106,49 +106,49 @@ def getColorOrder():
 def display_wfs_signals(wfs,signals,returnOutput=False, norma = False):
     
     if wfs.tag == 'pyramid' or wfs.tag == 'bioEdge':
-        A= np.zeros(wfs.validSignal.shape)
+        A= np.zeros(wfs.valid_signal_2D.shape)
         A[:]=np.inf
         # one signal only
         if np.ndim(signals)==1:
-            if wfs.validSignal.sum() == signals.shape:
-                A[np.where(wfs.validSignal==1)]=signals
+            if wfs.valid_signal_2D.sum() == signals.shape:
+                A[np.where(wfs.valid_signal_2D==1)]=signals
             if returnOutput is False:
                 plt.figure()
                 plt.imshow(A)
             out =A
         else:
-            B= np.zeros([wfs.validSignal.shape[0],wfs.validSignal.shape[1],signals.shape[1]])
+            B= np.zeros([wfs.valid_signal_2D.shape[0],wfs.valid_signal_2D.shape[1],signals.shape[1]])
             B[:]=np.inf
-            if wfs.validSignal.shape[0] == wfs.validSignal.shape[1]:
-                B[wfs.validSignal,:]=signals
+            if wfs.valid_signal_2D.shape[0] == wfs.valid_signal_2D.shape[1]:
+                B[wfs.valid_signal_2D,:]=signals
                 out = displayMap(B,axis=2,returnOutput=True)
             else:
                 for i in range(signals.shape[1]):
-                    A[np.where(wfs.validSignal==1)]=signals[:,i]
+                    A[np.where(wfs.valid_signal_2D==1)]=signals[:,i]
                     if norma:
                         A/= np.max(np.abs(signals[:,i]))
                     B[:,:,i] = A
                 out = displayMap(B,axis=2,returnOutput=True)
     if wfs.tag == 'shackHartmann':
-        A= np.zeros(wfs.valid_slopes_maps.shape)
+        A= np.zeros(wfs.valid_signal_2D.shape)
         A[:]=np.inf
         # one signal only
         if np.ndim(signals)==1:
-            if wfs.valid_slopes_maps.sum() == signals.shape:
-                A[np.where(wfs.valid_slopes_maps==1)]=signals
+            if wfs.valid_signal_2D.sum() == signals.shape:
+                A[np.where(wfs.valid_signal_2D==1)]=signals
             if returnOutput is False:
                 plt.figure()
                 plt.imshow(A)
             out =A
         else:
-            B= np.zeros([wfs.valid_slopes_maps.shape[0],wfs.valid_slopes_maps.shape[1],signals.shape[1]])
+            B= np.zeros([wfs.valid_signal_2D.shape[0],wfs.valid_signal_2D.shape[1],signals.shape[1]])
             B[:]=np.inf
-            if wfs.valid_slopes_maps.shape[0] == wfs.valid_slopes_maps.shape[1]:
-                B[wfs.valid_slopes_maps,:]=signals
+            if wfs.valid_signal_2D.shape[0] == wfs.valid_signal_2D.shape[1]:
+                B[wfs.valid_signal_2D,:]=signals
                 out = displayMap(B,returnOutput=True)
             else:
                 for i in range(signals.shape[1]):
-                    A[np.where(wfs.valid_slopes_maps==1)]=signals[:,i]
+                    A[np.where(wfs.valid_signal_2D==1)]=signals[:,i]
                     if norma:
                         A/= np.max(np.abs(signals[:,i]))
                     B[:,:,i] = A

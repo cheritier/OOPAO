@@ -555,13 +555,12 @@ class Telescope:
         if obj.tag == 'atmosphere':
 
             self.isPaired = False
-            self.src.resetOPD()
+            self.src.reset()
             obj.asterism = None
 
         if obj.tag == 'spatialFilter':
             self.spatialFilter = None
             print('Telescope and Spatial Filter separated!')
-    # <\JM @ SpaceODT>
 
     def print_optical_path(self):
         if self.optical_path is not None:

@@ -117,7 +117,7 @@ def estimateMisRegistration(nameFolder,
     for i in range(n_mis_reg):
         misRegEstBuffer_ref[i] = getattr(misRegistrationZeroPoint, epsilonMisRegistration_field[i])
 
-    scalingFactor_values = [np.ones(basis.modes.shape[1])]
+    scalingFactor_values = [np.ones(np.atleast_2d(basis.modes).shape[1])]
 
     if previous_estimate is None:
         misRegistration_values = [np.zeros(n_mis_reg)]
