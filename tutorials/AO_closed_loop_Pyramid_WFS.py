@@ -71,7 +71,7 @@ tel = Telescope(resolution           = 6*n_subaperture,                         
 from OOPAO.Source import Source
 
 # create the Natural Guide Star object
-ngs = Source(optBand     = 'I',           # Optical band (see photometry.py)
+ngs = Source(optBand     = 'Na',           # Optical band (see photometry.py)
              magnitude   = 8,             # Source Magnitude
              coordinates = [0,0])         # Source coordinated [arcsec,deg]
 
@@ -280,7 +280,7 @@ wfs = Pyramid(nSubap            = n_subaperture,                # number of suba
               binning           = 1,                            # binning factor (applied only on the )
               n_pix_separation  = 2,                            # number of pixel separating the different pupils
               n_pix_edge        = 1,                            # number of pixel on the edges of the pupils
-              postProcessing    = 'slopesMaps_incidence_flux')  # slopesMap_incidence_flux, fullFrame_incidence_flux (see documentation)
+              postProcessing    = 'fullFrame_incidence_flux')  # slopesMap_incidence_flux, fullFrame_incidence_flux (see documentation)
 
 
 #  display the Pyramid pupils
@@ -303,7 +303,31 @@ plt.figure()
 plt.imshow(wfs.focal_plane_camera.frame)
 
 
-#%% Useful Pyhramid methods an properties
+
+
+#%% Adjust the flux considering number of photons per subap.
+
+n_photons_per_subap = 1000
+
+surface_telescope = tel.pixelArea* tel.pixelSize*tel.pixelSize
+
+if wfs.postProcessing[:10] == 'slopesMaps':    
+    n_valid_subap = np.sum(wfs.validSignal)/2
+else:
+    n_valid_subap = np.sum(wfs.validSignal)/4
+
+ngs.nPhoton = n_photons_per_subap / tel.samplingTime / (surface_telescope/n_valid_subap)       # nPhoton = # photons per s per m2
+
+ngs*tel*wfs
+
+print(wfs.cam.frame.sum()/n_valid_subap)
+
+# check the values of the pixels, should be n_photons_per_subap/4 (4 faces Pyramid)
+plt.figure()
+plt.imshow(wfs.cam.frame)
+
+
+#%% Useful Pyramid methods an properties
 
 # shift the Pyramid pupils on the detector
 wfs.apply_shift_wfs(sx = [6,6,6,6], sy= [4,4,4,4])
@@ -373,7 +397,7 @@ plt.imshow(wfs__.focal_plane_camera.frame)
 
 # user-defined valid pixels
 
-valid_map = wfs.validI4Q
+valid_map = wfs_.validI4Q
 wfs___ = Pyramid(nSubap            = n_subaperture,                # number of subaperture = number of pixel accros the pupil diameter
               telescope         = tel,                          # telescope object
               lightRatio        = 0.5,                          # flux threshold to select valid sub-subaperture
@@ -441,7 +465,7 @@ calib_modal = InteractionMatrix(ngs            = ngs,
                                 wfs            = wfs,   
                                 M2C            = M2C_modal, # M2C matrix used 
                                 stroke         = stroke,    # stroke for the push/pull in M2C units
-                                nMeasurements  = 8,        # number of simultaneous measurements
+                                nMeasurements  = 12,        # number of simultaneous measurements
                                 noise          = 'off',     # disable wfs.cam noise 
                                 display        = True,      # display the time using tqdm
                                 single_pass    = True)      # only push to compute the interaction matrix instead of push-pull

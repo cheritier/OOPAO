@@ -31,19 +31,7 @@ tel = Telescope(resolution           = 6*n_subaperture,                         
                 samplingTime         = 1/1000,                                   # Sampling time in [s] of the AO loop
                 centralObstruction   = 0.1,                                      # Central obstruction in [%] of a diameter 
                 display_optical_path = False,                                    # Flag to display optical path
-                fov                  = 10 )                                     # field of view in [arcsec]. If set to 0 (default) this speeds up the computation of the phase screens but is uncompatible with off-axis targets
-
-# # Apply spiders to the telescope pupil
-# thickness_spider    = 0.05                                                       # thickness of the spiders in m
-# angle               = [45, 135, 225, 315]                                        # angle in degrees for each spider
-# offset_Y            = [-0.2, -0.2, 0.2, 0.2]                                     # shift offsets for each spider
-# offset_X            = None
-
-# tel.apply_spiders(angle, thickness_spider, offset_X=offset_X, offset_Y=offset_Y)
-
-# # display current pupil
-# plt.figure()
-# plt.imshow(tel.pupil)
+                fov                  = 0 )                                     # field of view in [arcsec]. If set to 0 (default) this speeds up the computation of the phase screens but is uncompatible with off-axis targets
 
 #%% -----------------------     NGS   ----------------------------------
 from OOPAO.Source import Source
@@ -59,7 +47,7 @@ ngs*tel
 # create the Scientific Target object located at 10 arcsec from the  ngs
 src = Source(optBand     = 'K',           # Optical band (see photometry.py)
              magnitude   = 8,              # Source Magnitude
-             coordinates = [2,0])        # Source coordinated [arcsec,deg]
+             coordinates = [0,0])        # Source coordinated [arcsec,deg]
 
 # combine the SRC to the telescope using '*'
 src*tel
@@ -87,16 +75,6 @@ atm = Atmosphere(telescope     = tel,                               # Telescope
                  windSpeed     = [10   ,12   ,11   ,15    ,20    ], # Wind Speed in [m]
                  windDirection = [0    ,72   ,144  ,216   ,288   ], # Wind Direction in [degrees]
                  altitude      = [0    ,1000 ,5000 ,10000 ,12000 ]) # Altitude Layers in [m]
-
-
-# atm = Atmosphere(telescope     = tel,                               # Telescope                              
-#                  r0            = 0.15,                              # Fried Parameter [m]
-#                  L0            = 25,                                # Outer Scale [m]
-#                  fractionalR0  = [1   ], # Cn2 Profile
-#                  windSpeed     = [10    ], # Wind Speed in [m]
-#                  windDirection = [0   ], # Wind Direction in [degrees]
-#                  altitude      = [50000 ]) # Altitude Layers in [m]
-
 # initialize atmosphere with current Telescope
 atm.initializeAtmosphere(tel)
 
@@ -151,46 +129,6 @@ plt.xlabel('Angular separation [arcsec]')
 plt.ylabel('Angular separation [arcsec]')
 plt.title('Pixel size: '+str(np.round(cam_binned.pixel_size_arcsec,3))+'"')
 
-#%%         PROPAGATE THE LIGHT THROUGH THE ATMOSPHERE
-# The Telescope and Atmosphere can be combined using the '+' operator (Propagation through the atmosphere): 
-tel+atm # This operations makes that the tel.OPD is automatically over-written by the value of atm.OPD when atm.OPD is updated. 
-
-# It is possible to print the optical path: 
-tel.print_optical_path()
-
-# computation of a PSF on the detector using the '*' operator
-atm*ngs*tel*cam*cam_binned
-
-plt.figure()
-plt.imshow(cam.frame,extent=[-cam.fov_arcsec/2,cam.fov_arcsec/2,-cam.fov_arcsec/2,cam.fov_arcsec/2])
-plt.xlabel('Angular separation [arcsec]')
-plt.ylabel('Angular separation [arcsec]')
-plt.title('Pixel size: '+str(np.round(cam.pixel_size_arcsec,3))+'"')
-
-plt.figure()
-plt.imshow(cam_binned.frame,extent=[-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2,-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2])
-plt.xlabel('Angular separation [arcsec]')
-plt.ylabel('Angular separation [arcsec]')
-plt.title('Pixel size: '+str(np.round(cam_binned.pixel_size_arcsec,3))+'"')
-
-# The Telescope and Atmosphere can be separated using the '-' operator (Free space propagation) 
-tel-atm
-tel.print_optical_path()
-
-# computation of a PSF on the detector using the '*' operator
-ngs*tel*cam*cam_binned
-
-plt.figure()
-plt.imshow(cam.frame,extent=[-cam.fov_arcsec/2,cam.fov_arcsec/2,-cam.fov_arcsec/2,cam.fov_arcsec/2])
-plt.xlabel('Angular separation [arcsec]')
-plt.ylabel('Angular separation [arcsec]')
-plt.title('Pixel size: '+str(np.round(cam.pixel_size_arcsec,3))+'"')
-
-plt.figure()
-plt.imshow(cam_binned.frame,extent=[-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2,-cam_binned.fov_arcsec/2,cam_binned.fov_arcsec/2])
-plt.xlabel('Angular separation [arcsec]')
-plt.ylabel('Angular separation [arcsec]')
-plt.title('Pixel size: '+str(np.round(cam_binned.pixel_size_arcsec,3))+'"')
 
 #%% -----------------------     DEFORMABLE MIRROR   ----------------------------------
 from OOPAO.DeformableMirror import DeformableMirror
@@ -227,8 +165,7 @@ plt.title('DM Actuator Coordinates')
 from OOPAO.ShackHartmann import ShackHartmann
 
 # make sure tel and atm are separated to initialize the PWFS
-tel.isPaired = False
-tel.resetOPD()
+ngs**tel
 
 wfs = ShackHartmann(nSubap      = n_subaperture,
                     telescope   = tel,
@@ -287,7 +224,7 @@ Case where the initial mis-registration is quite small (Closed Loop) => USE A MI
 # modal basis considered
 index_modes = [20]
 basis =  emptyClass()
-basis.modes         = M2C_KL[:,index_modes]
+basis.modes         = M2C_KL[:,np.squeeze(index_modes)]
 basis.extra = ''
 dm.coefs = basis.modes
 ngs**tel*dm
@@ -311,7 +248,6 @@ Sprint = SPRINT(obj,basis, recompute_sensitivity=True, dm_input = dm,mis_registr
 
 #%%
 from OOPAO.mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
-
 
 m_input = MisRegistration()
 m_input.shiftX = dm.pitch/2
@@ -345,6 +281,7 @@ from OOPAO.tools.displayTools import interactive_show,display_wfs_signals
 
 a = display_wfs_signals(wfs, input_wfs_signals,returnOutput=True)
 b = display_wfs_signals(wfs, Sprint.calib_last.D,returnOutput=True)
+b = display_wfs_signals(wfs, Sprint.calib_0.D,returnOutput=True)
 
 a[np.isinf(a)] = 0
 b[np.isinf(b)] = 0

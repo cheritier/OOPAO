@@ -51,7 +51,7 @@ tel = Telescope(resolution           = 6*n_subaperture,                         
                 samplingTime         = 1/1000,                                   # Sampling time in [s] of the AO loop
                 centralObstruction   = 0.1,                                      # Central obstruction in [%] of a diameter 
                 display_optical_path = False,                                    # Flag to display optical path
-                fov                  = 2 )                                     # field of view in [arcsec]. If set to 0 (default) this speeds up the computation of the phase screens but is uncompatible with off-axis targets
+                fov                  = 0 )                                     # field of view in [arcsec]. If set to 0 (default) this speeds up the computation of the phase screens but is uncompatible with off-axis targets
 
 # # Apply spiders to the telescope pupil
 # thickness_spider    = 0.05                                                       # thickness of the spiders in m
@@ -79,7 +79,7 @@ ngs*tel
 # create the Scientific Target object located at 10 arcsec from the  ngs
 src = Source(optBand     = 'K',           # Optical band (see photometry.py)
              magnitude   = 8,              # Source Magnitude
-             coordinates = [1,0])        # Source coordinated [arcsec,deg]
+             coordinates = [0,0])        # Source coordinated [arcsec,deg]
 
 # combine the SRC to the telescope using '*'
 src*tel
@@ -269,13 +269,30 @@ plt.title('DM Actuator Coordinates')
 from OOPAO.ShackHartmann import ShackHartmann
 
 # make sure that the ngs is propagated to the wfs
-ngs*tel
+ngs**tel
 
 # shannon/2 sampled Shack-Hartmann spots
 wfs = ShackHartmann(nSubap = n_subaperture,
                     telescope = tel,
                     lightRatio = 0.5,
-                    shannon_sampling = False)
+                    shannon_sampling = True,is_geometric=False)
+
+
+# propagate the light to the Wave-Front Sensor
+ngs**tel*wfs
+
+plt.close('all')
+plt.figure()
+plt.imshow(wfs.cam.frame)
+plt.title('WFS Camera Frame')
+
+plt.figure()
+plt.imshow(wfs.signal_2D)
+plt.title('WFS Signal')
+
+plt.figure()
+plt.imshow(wfs.reference_signal_2D)
+plt.title('WFS Signal')
 #%% variant of ShackHartmann spot sampling
 
 # shannon sampled Shack-Hartmann spots
@@ -345,18 +362,23 @@ displayMap(cube_spots,axis=0)
 # apply a weighting map on the center of gravity with a gaussian function with 4x4 pixels FWHM (in WFS pixel scale unit)
 wfs.set_weighted_centroiding_map(is_lgs = False,
                                  is_gaussian = True,
-                                 fwhm_factor = [4,4])
+                                 fwhm_factor = [2,2])
 # display the weighting map applied
 plt.figure()
 plt.imshow(wfs.weighting_map[0])
 
 #%%
-
+plt.close('all')
 # switch to a gerometric Shack-Hartmann (=gradient computation, no optical propagation, no noise)
 wfs.is_geometric = True
 ngs**atm*tel*wfs
 plt.figure()
 plt.imshow(wfs.signal_2D)
+plt.title('WFS Signal - Geometric')
+plt.colorbar()
+
+plt.figure()
+plt.imshow(wfs.reference_signal_2D)
 plt.title('WFS Signal - Geometric')
 plt.colorbar()
 
@@ -366,6 +388,11 @@ ngs**atm*tel*wfs
 plt.figure()
 plt.imshow(wfs.signal_2D)
 plt.title('WFS Signal - Diffractive')
+plt.colorbar()
+
+plt.figure()
+plt.imshow(wfs.reference_signal_2D)
+plt.title('WFS Signal - Geometric')
 plt.colorbar()
 
 #%% -----------------------     Modal Basis - Zernike  ----------------------------------
@@ -401,6 +428,14 @@ dm.coefs = M2C_KL[:,:10]
 ngs**tel*dm
 # show the first 10 KL modes applied on the DM
 displayMap(tel.OPD)
+#%%
+# apply the 10 first KL modes
+dm.coefs = M2C_KL[:,10]*1e-9
+# propagate through the DM
+ngs**tel*dm*wfs
+# show the first 10 KL modes applied on the DM
+plt.figure()
+plt.imshow(wfs.reference_signal_2D)
 #%% -----------------------     Calibration: Interaction Matrix  ----------------------------------
 
 # amplitude of the modes in m
@@ -444,7 +479,7 @@ src_cam.psf_sampling = 4  # sampling of the PSF
 src_cam.integrationTime = tel.samplingTime # exposure time for the PSF
 
 # put the scientific target off-axis to simulate anisoplanetism (set to  [0,0] to remove anisoplanetism)
-src.coordinates = [1,0]
+src.coordinates = [0,0]
 
 # WFS path
 ngs_cam = Detector(tel.resolution*2)
@@ -464,6 +499,7 @@ from OOPAO.tools.tools import strehlMeter
 plt.close('all')
 # These are the calibration data used to close the loop
 calib_CL = calib_modal
+
 M2C_CL = M2C_modal
 reconstructor = M2C_CL@calib_CL.M 
 

@@ -137,27 +137,63 @@ plt.title('DM Actuator Coordinates')
 
 
 #%% -----------------------     Bi-O Edge WFS   ----------------------------------
-from OOPAO.BioEdge import BioEdge
+from OOPAO.BioEdge_2 import BioEdge
 
 # make sure that the ngs is propagated to the wfs
 ngs**tel
 
 wfs = BioEdge(nSubap                = n_subaperture,\
-              telescope             = tel,\
-              modulation            = 0,\
-              grey_width            = 2,\
-              lightRatio            = 0.01,\
-              n_pix_separation      = 0,\
-              psfCentering          = False,\
+              telescope             = tel,
+              modulation            = 0,
+              grey_width            = 3,
+              grey_length           = False,
+              lightRatio            = 0.01,
+              n_pix_separation      = 0,
               postProcessing        = 'fullFrame_incidence_flux')
 
-#%%
-    
+wfs.focal_plane_camera.resolution = wfs.resolution
+
+plt.close('all')
 plt.figure()
 for i in range(4):
     plt.subplot(1,4,i+1)
     plt.imshow(np.abs(wfs.mask[i]))
     plt.title('Bi-O Edge Mask - Channel '+str(i+1))
+
+plt.figure()
+plt.plot((np.abs(wfs.mask[0])**2)[wfs.resolution//2,:],'-o')
+plt.plot((np.abs(wfs.mask[1])**2)[wfs.resolution//2,:],'-o')
+
+plt.figure()
+plt.plot(wfs.gray_gradient)
+
+#%%
+    
+wfs*wfs.focal_plane_camera
+plt.figure()
+plt.imshow(wfs.cam.frame)
+
+plt.figure()
+plt.imshow(wfs.focal_plane_camera.frame + 1e8*(np.abs(wfs.mask[0]) + np.abs(wfs.mask[1])))
+#%% Useful BioEdge methods an properties
+
+# shift the BioEdge pupils on the detector
+wfs.apply_shift_wfs(sx = [-20*4*n_subaperture/2,0,0,0], sy= [0]*4)
+plt.figure()
+plt.imshow(wfs.cam.frame)
+# re-initialize (sx=0 and sy=0)
+wfs.apply_shift_wfs()
+plt.figure()
+plt.imshow(wfs.cam.frame)
+
+
+# grab a Pyramid quadrant
+plt.figure()
+plt.imshow(wfs.grabFullQuadrant(n=1))  # full quadrant of the detector
+
+plt.figure()
+plt.imshow(wfs.grabQuadrant(n=1))  # quadrant used to compute the slopes-maps
+
 
 #%% -----------------------     Modal Basis - Zernike  ----------------------------------
 # from OOPAO.Zernike import Zernike
@@ -184,7 +220,7 @@ from OOPAO.calibration.compute_KL_modal_basis import compute_KL_basis
 M2C_KL = compute_KL_basis(tel,
                           atm,
                           dm,
-                          lim = 0) # inversion stability criterion
+                          lim = 0,n_batch=4) # inversion stability criterion
 
 # apply the 10 first KL modes
 dm.coefs = M2C_KL[:,:10]
@@ -200,7 +236,7 @@ stroke=1e-9
 M2C_zonal = np.eye(dm.nValidAct)
 
 # modal Interaction Matrix for 300 modes
-M2C_modal = M2C_KL[:,:300]
+M2C_modal = M2C_KL[:,:350]
 
 # swap to geometric WFS for the calibration
 ngs**tel*wfs # make sure that the proper source is propagated to the WFS
@@ -217,14 +253,11 @@ calib_modal = InteractionMatrix(ngs            = ngs,
                                 display        = True,      # display the time using tqdm
                                 single_pass    = True)      # only push to compute the interaction matrix instead of push-pull
 
-
+#%%
 plt.figure()
-plt.plot(np.std(calib_modal.D,axis=0))
-plt.xlabel('Mode Number')
-plt.ylabel('WFS slopes STD')
+plt.plot(np.std(calib_modal.D*stroke*wfs.nSignal/4,axis=0))
 
-# switch back to diffractive WFS
-wfs.is_geometric = False
+
 
 #%% Define instrument and WFS path detectors
 from OOPAO.Detector import Detector

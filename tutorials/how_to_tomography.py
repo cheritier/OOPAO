@@ -12,19 +12,6 @@ from OOPAO.tools.tools import crop
 import tomoAO
 from OOPAO.tools.displayTools import cl_plot, displayMap
 
-#%% ### Asterism ###
-
-from OOPAO.Source import Source
-
-from OOPAO.Asterism import Asterism
-
-n_lgs = 4
-lgs_zenith = [20]*n_lgs
-lgs_azimuth = np.linspace(0,360,n_lgs,endpoint=False)
-lgs_asterism = Asterism([Source(optBand='Na', magnitude=0, coordinates=[lgs_zenith[kLgs], lgs_azimuth[kLgs]], altitude=90e3) for kLgs in range(n_lgs)])
-
-# sensing wavelength of the WFS
-sensing_wavelength  = lgs_asterism.src[0].wavelength
 
 #%% ### Telescope ###
 
@@ -37,15 +24,47 @@ tel = Telescope(diameter          = 8.0,   # diameter [m]
                samplingTime       = 0.001, # sampling time [s]
                fov                = 40)    # FOV of telescope [arcsec]
 
-# telescope fov needs to be in accordance with the asterism used
-assert tel.fov >= 2*lgs_zenith[0]
-
-lgs_asterism*tel
 plt.figure()
 plt.imshow(tel.pupil)
 plt.title("Telescope pupil",fontsize=16,pad=10)
 plt.colorbar()
 plt.show()
+#%% ### Asterism ###
+
+from OOPAO.Source import Source
+
+from OOPAO.Asterism import Asterism
+
+n_lgs = 4
+lgs_zenith = [1]*n_lgs
+lgs_azimuth = np.linspace(0,360,n_lgs,endpoint=False)
+lgs_altitude = np.inf # lower altitude to simulate LGS extended spots
+lgs_is_extended = False
+
+if lgs_is_extended:
+    n_Na = 21 # number of points to model the Na Profile
+    lgs_Na_profile = np.vstack([np.linspace(lgs_altitude-5000,lgs_altitude+5000,n_Na),np.ones(n_Na)/n_Na]) # [altitude coordinates, Na Profile]
+    fwhm_spot = 1. # spots FWHM arcsec
+    # case with extension of the LGS spots (Cone effect + spots elongation included)
+    lgs_asterism = Asterism([Source(optBand='Na',
+                                    magnitude=0,
+                                    coordinates=[lgs_zenith[kLgs], lgs_azimuth[kLgs]],
+                                    altitude=lgs_altitude,
+                                    Na_profile=lgs_Na_profile,
+                                    fwhm_spot_up=fwhm_spot,
+                                    laser_coordinates=[tel.D/2 * np.cos(np.deg2rad(lgs_azimuth[kLgs])),tel.D/2 * np.sin(np.deg2rad(lgs_azimuth[kLgs])) ]) for kLgs in range(n_lgs)])
+else:
+    # Case with LGS treated as point sources (Cone effect included)
+    lgs_asterism = Asterism([Source(optBand='Na',magnitude=0, coordinates=[lgs_zenith[kLgs], lgs_azimuth[kLgs]], altitude=lgs_altitude) for kLgs in range(n_lgs)])
+    
+# sensing wavelength of the WFS
+sensing_wavelength  = lgs_asterism.src[0].wavelength
+
+# telescope fov needs to be in accordance with the asterism used
+assert tel.fov >= 2*lgs_zenith[0]
+
+lgs_asterism*tel
+
 
 
 #%%
@@ -59,26 +78,40 @@ atm = Atmosphere(telescope=tel,  # Telescope
                   windSpeed=[10,15,13],  # Wind Speed in [m]
                   windDirection=[0,90,120],  # Wind Direction in [degrees]
                   altitude=[0,2000,10000]) # Altitude Layers in [m]
+
+atm = Atmosphere(telescope=tel,  # Telescope
+                  r0=r0,  # Fried Parameter [m]
+                  L0=25,  # Outer Scale [m]
+                  fractionalR0=[1],  # Cn2 Profile
+                  windSpeed=[10],  # Wind Speed in [m]
+                  windDirection=[0],  # Wind Direction in [degrees]
+                  altitude=[0]) # Altitude Layers in [m]
 atm.initializeAtmosphere(telescope=tel)
 
 atm.display_atm_layers()
-plt.show()
 
 #%%
 
-lgs_asterism*tel
+lgs_asterism**tel
 
 # diffractive SH WFS (is_geometric = False), with Nyquist sampled spots
 wfs = ShackHartmann(telescope          = tel,
                       nSubap             = n_subaperture,
                       lightRatio         = 0.5,
                       is_geometric       = False,
-                      shannon_sampling   = True,
-                      threshold_cog      = 0.01,n_pixel_per_subaperture=16)
+                      shannon_sampling   = False,
+                      threshold_cog      = 0.01,
+                      n_pixel_per_subaperture=6)
 
+#%%
+lgs_asterism**tel*wfs
+displayMap(wfs.cam.frame,axis=0)
 assert wfs.is_geometric == False
 
-lgs_asterism*tel
+displayMap(wfs.reference_signal_2D,axis=0)
+#%%
+
+lgs_asterism**tel
 
 # geometric SH WFS (is_geometric = True)
 wfs_geom = ShackHartmann(telescope     = tel,
@@ -126,6 +159,9 @@ ngs = Source(optBand="Na",        # Optical band (see photometry.py)
 # Define a scientific source:
 science = Source(optBand='H', magnitude=0)
 
+ngs*tel
+science*tel
+
 #%% ### Tomography ###
 # Dictionary to be filled with parameters necessary for the tomographic reconstructor
 config_vars = {}
@@ -157,7 +193,7 @@ from tomoAO.Reconstruction.reconClassType import tomoReconstructor
 
 inital_time = time.time()
 
-rec = tomoReconstructor(aoSys=aoSys,                  # AO system object (as created before)
+rec = tomoReconstructor(aoSys=aoSys,                  # AO system object (as crea:ted before)
                         alpha=10,                     # constant used to compute the noise covariance
                         os=config_vars["os"],         # oversampling factor (used to compute the reconstruction grid)
                         indexation="xxyy",            # related with slopes ordering (in oopao they are xxyy)
@@ -176,32 +212,16 @@ plt.imshow(reconstructor)
 plt.title("Spatio-angular reconstructor",fontsize=14,pad=10)
 plt.colorbar()
 plt.show()
-#%% Calibration of the SH WFS units to adapt to LGS gains, sampling, etc.
+#%% Calibration of the SH WFS units to adapt to LGS gains, sampling, etc WITH tomographic reconstructor
 
-lgs_asterism**tel*wfs
+lgs_asterism**tel*wfs*wfs_geom
+
 
 wfs.set_slopes_units(tomographic_reconstructor = dm.modes@reconstructor, src = lgs_asterism)
+wfs_geom.set_slopes_units(tomographic_reconstructor = dm.modes@reconstructor, src = lgs_asterism)
 
 print(wfs.slopes_units)
-
-
-#%%
-
-tmp = atm.OPD.copy()
-#%%
-# plt.imshow(atm.OPD)
-plt.close('all')
-atm.generateNewPhaseScreen(10000)
-atm.update(tmp)
-
-ngs**atm
-plt.figure()
-plt.imshow(ngs.OPD)
-
-ngs**atm
-
-plt.figure()
-plt.imshow(ngs.OPD)
+print(wfs_geom.slopes_units)
 
 #%% Test tomographic reconstruction:
 plt.close('all')
@@ -215,112 +235,75 @@ wfs_signal_geo = np.hstack(wfs_geom.signal)
 # apply the correction and show the residuals
 dm.coefs = -reconstructor@wfs_signal
 science ** atm *tel*dm
-plt.figure(),plt.imshow(science.OPD),plt.title('Residual - diffractive SHWFS')
+plt.figure(),plt.imshow(science.OPD)
+plt.title('Diffractive SHWFS - Residual WFE: ' +str(np.round(1e9*np.std(science.OPD[science.mask]),2)) + ' nm')
 
 # apply the correction and show the residuals
 dm.coefs = -reconstructor@wfs_signal_geo
 science ** atm *tel*dm
-plt.figure(),plt.imshow(science.OPD),plt.title('Residual - geometric SHWFS')
-
-  
+plt.figure(),plt.imshow(science.OPD)
+plt.title('Geometric SHWFS - Residual WFE: ' +str(np.round(1e9*np.std(science.OPD[science.mask]),2)) + ' nm')
 
 #%%
-
-config_vars["nLoop"] = 200
-config_vars["gainCL"] = 0.5
-config_vars["loop_mode"] = "closed"
-
-from OOPAO.Detector import Detector
-science_cam = Detector(tel.resolution*4)
-science_cam.psf_sampling = 4
-science_cam.integrationTime = tel.samplingTime*1
-
-
-ngs_cam = Detector(tel.resolution*2)
-ngs_cam.psf_sampling = 4
-ngs_cam.integrationTime = tel.samplingTime
-
-nLoop = config_vars["nLoop"]
-
-# allocate memory to save data
-SR                      = np.zeros(nLoop)
-total                   = np.zeros(nLoop)
-residual                = np.zeros(nLoop)
-wfsSignal               = np.arange(0,wfs.nSignal*lgs_asterism.n_source)*0
-
-# loop parameters
-gainCL                  = config_vars["gainCL"]
-
-atm.generateNewPhaseScreen(10)
-# Save reference frame
-science**tel*dm*science_cam
-ref_frame_cropped = crop(science_cam.frame,size=32,axis=0)
-
-plt.imshow(ref_frame_cropped)
-plt.title("DL reference frame (science)", fontsize=14,pad=10)
+displayMap(wfs_geom.signal_2D,axis=0)
 plt.colorbar()
-plt.show()
 
-science_cam.reference_frame = science_cam.frame.copy()
-
+displayMap(wfs.signal_2D,axis=0)
+plt.colorbar()
+#%%
 # Interaction matrix using a zonal approach and the geometric SH, with a stroke equal to calib_src.wavelength/2/np.pi
 # This matrix is necessary for the pseudo-open loop reconstruction
 
-if config_vars["loop_mode"] == 'closed':
+calib_src = Source('Na', 0)
+calib_src**tel*wfs_geom
 
-    calib_src = Source('Na', 0)
-    calib_src**tel*wfs_geom
+dm_eye = np.eye(dm.nValidAct)
+imat = np.zeros((wfs_geom.nValidSubaperture*2, dm.nValidAct))
 
-    dm_eye = np.eye(dm.nValidAct)
-    imat = np.zeros((wfs_geom.nValidSubaperture*2, dm.nValidAct))
+for i_act in tqdm(range(dm.nValidAct)):
 
-    for i_act in tqdm(range(dm.nValidAct)):
+    dm.coefs = dm_eye[:, i_act]*calib_src.wavelength/2/np.pi
+    calib_src**tel*dm*wfs_geom
 
-        dm.coefs = dm_eye[:, i_act]*calib_src.wavelength/2/np.pi
-        calib_src**tel*dm*wfs_geom
+    wfsSignal = np.hstack(wfs_geom.signal)
 
-        wfsSignal = np.hstack(wfs_geom.signal)
+    imat[:, i_act] = wfsSignal
 
-        imat[:, i_act] = wfsSignal
-
-    imat = imat*2*np.pi/calib_src.wavelength
-    imat = np.vstack([imat]*n_lgs)
+imat = imat*2*np.pi/calib_src.wavelength
+imat = np.vstack([imat]*n_lgs)
 
 plt.imshow(imat)
 plt.title("Interaction matrix", fontsize=14,pad=10)
 plt.colorbar()
 plt.show()
-#%%
-
-#%% Define instrument and WFS path detectors
-from OOPAO.Detector import Detector
-# instrument path
-science_cam = Detector(tel.resolution*2)
-science_cam.psf_sampling = 4  # sampling of the PSF
-science_cam.integrationTime = tel.samplingTime # exposure time for the PSF
-
-# WFS path
-ngs_cam = Detector(tel.resolution*2)
-ngs_cam.psf_sampling = 4
-ngs_cam.integrationTime = tel.samplingTime
-
-ngs**tel*ngs_cam
-ngs_psf_ref = ngs_cam.frame.copy()
-
-science**tel*science_cam
-
-science_psf_ref = science_cam.frame.copy()
 
 
 #%%
 from OOPAO.tools.tools import strehlMeter
-
 plt.close('all')
-# You can update the the atmosphere parameter on the fly
-# atm.r0 = 0.15
 dm.coefs=0
+
 # To make sure to always replay the same turbulence, generate a new phase screen for the atmosphere and combine it with the Telescope
 atm.generateNewPhaseScreen(seed=10)
+
+from OOPAO.Detector import Detector
+# science detector
+science_cam = Detector(tel.resolution*4)
+science_cam.psf_sampling = 4
+science_cam.integrationTime = tel.samplingTime*1
+
+science**tel*science_cam
+science_psf_ref = science_cam.frame.copy()
+
+# NGS detector
+ngs_cam = Detector(tel.resolution*2)
+ngs_cam.psf_sampling = 4
+ngs_cam.integrationTime = tel.samplingTime
+
+# Save reference frame
+ngs**tel*ngs_cam
+ngs_psf_ref = ngs_cam.frame.copy()
+
 
 # propagate both sources
 lgs_asterism**atm*tel
@@ -328,47 +311,47 @@ ngs**atm*tel*ngs_cam
 science**atm*tel*science_cam
 
 # loop parameters
-nLoop = 500  # number of iterations
-gainCL = 0.4  # integrator gain
+n_loop = 500  # number of iterations
+gain_cl = 0.4  # integrator gain
 wfs.cam.photonNoise = False  # enable photon noise on the WFS camera
 display = True  # enable the display
 frame_delay = 1  # number of frame delay
 
 # variables used to to save closed-loop data data
-SR_ngs = np.zeros(nLoop)
-SR_science = np.zeros(nLoop)
+SR_ngs = np.zeros(n_loop)
+SR_science = np.zeros(n_loop)
 
-wfe_atmosphere = np.zeros(nLoop)
-wfe_residual_science = np.zeros(nLoop)
-wfe_residual_NGS = np.zeros(nLoop)
+wfe_atmosphere = np.zeros(n_loop)
+wfe_residual_science = np.zeros(n_loop)
+wfe_residual_NGS = np.zeros(n_loop)
 wfsSignal = np.arange(0, wfs.nSignal*lgs_asterism.n_source)*0  # buffer to simulate the loop delay
 
 # configure the display pannel
 plot_obj = cl_plot(list_fig=[atm.OPD,  # list of data for the different subplots
-                             tel.OPD,
-                             tel.OPD,
-                             np.hstack(wfs.cam.frame),
-                             [dm.coordinates[:, 0], np.flip(dm.coordinates[:, 1]), dm.coefs],
-                             [[0, 0], [0, 0], [0, 0]],
-                             np.log10(ngs_cam.frame),
-                             np.log10(science_cam.frame)],
-                   type_fig=['imshow',  # type of figure for the different subplots
-                             'imshow',
-                             'imshow',
-                             'imshow',
-                             'scatter',
-                             'plot',
-                             'imshow',
-                             'imshow'],
-                   list_title=['Turbulence [nm]',  # list of title for the different subplots
-                               'NGS residual [m]',
-                               'science residual [m]',
-                               'wfs Detector',
-                               'DM Commands',
-                               None,
-                               None,
-                               None],
-                   list_legend=[None,  # list of legend labels for the subplots
+                              ngs.OPD,
+                              science.OPD,
+                              np.block([[wfs.cam.frame[0,:,:],wfs.cam.frame[1,:,:]],[wfs.cam.frame[2,:,:],wfs.cam.frame[3,:,:]]]),
+                              [dm.coordinates[:, 0], np.flip(dm.coordinates[:, 1]), dm.coefs],
+                              [[0, 0], [0, 0], [0, 0]],
+                              np.log10(ngs_cam.frame),
+                              np.log10(science_cam.frame)],
+                    type_fig=['imshow',  # type of figure for the different subplots
+                              'imshow',
+                              'imshow',
+                              'imshow',
+                              'scatter',
+                              'plot',
+                              'imshow',
+                              'imshow'],
+                    list_title=['Turbulence [nm]',  # list of title for the different subplots
+                                'NGS residual [m]',
+                                'science residual [m]',
+                                'wfs Detector',
+                                'DM Commands',
+                                None,
+                                None,
+                                None],
+                    list_legend=[None,  # list of legend labels for the subplots
                                 None,
                                 None,
                                 None,
@@ -376,16 +359,16 @@ plot_obj = cl_plot(list_fig=[atm.OPD,  # list of data for the different subplots
                                 ['science@'+str(science.coordinates[0])+'"', 'NGS@'+str(ngs.coordinates[0])+'"'],
                                 None,
                                 None],
-                   list_label=[None,  # list of axis labels for the subplots
-                               None,
-                               None,
-                               None,
-                               None,
-                               ['Time', 'WFE [nm]'],
-                               ['NGS PSF@' + str(ngs.coordinates[0]) + '" -- FOV: ' + str(np.round(ngs_cam.fov_arcsec, 2)) + '"', ''],
-                               ['science PSF@' + str(science.coordinates[0]) + '" -- FOV: ' + str(np.round(science_cam.fov_arcsec, 2)) + '"', '']],
-                   n_subplot=[4, 2],
-                   list_display_axis=[None,  # list of the subplot for which axis are displayed
+                    list_label=[None,  # list of axis labels for the subplots
+                                None,
+                                None,
+                                None,
+                                None,
+                                ['Time', 'WFE [nm]'],
+                                ['NGS PSF@' + str(ngs.coordinates[0]) + '" -- FOV: ' + str(np.round(ngs_cam.fov_arcsec, 2)) + '"', ''],
+                                ['science PSF@' + str(science.coordinates[0]) + '" -- FOV: ' + str(np.round(science_cam.fov_arcsec, 2)) + '"', '']],
+                    n_subplot=[4, 2],
+                    list_display_axis=[None,  # list of the subplot for which axis are displayed
                                       None,
                                       None,
                                       None,
@@ -393,12 +376,12 @@ plot_obj = cl_plot(list_fig=[atm.OPD,  # list of data for the different subplots
                                       True,
                                       None,
                                       None],
-                   list_ratio=[[0.95, 0.95, 0.1],
-                               [1, 1, 1, 1]],
-                   s=20)  # size of the scatter markers
+                    list_ratio=[[0.95, 0.95, 0.1],
+                                [1, 1, 1, 1]],
+                    s=20)  # size of the scatter markers
 
 
-for i in range(nLoop):
+for i in range(n_loop):
     a = time.time()
     # update phase screens => overwrite tel.OPD and consequently tel.science.phase
     atm.update()
@@ -432,8 +415,8 @@ for i in range(nLoop):
         wfsSignal = wfsSignal-imat@dm.coefs
 
 
-    # apply the commands on the DM
-    dm.coefs = (1-gainCL)*dm.coefs - gainCL * (reconstructor@wfsSignal)
+    # apply the commands on the DM (POLC)
+    dm.coefs = (1-gain_cl)*dm.coefs - gain_cl * (reconstructor@wfsSignal)
 
     # store the slopes after computing the commands <=> 2 frames delay
     if frame_delay == 2:
@@ -447,27 +430,27 @@ for i in range(nLoop):
         science_PSF = np.log10(np.abs(science_cam.frame))
         # update range for PSF images
         plot_obj.list_lim = [None,
-                             None,
-                             None,
-                             None,
-                             None,
-                             None,
-                             [NGS_PSF.max()-6, NGS_PSF.max()],
-                             [science_PSF.max()-6, science_PSF.max()]]
+                              None,
+                              None,
+                              None,
+                              None,
+                              None,
+                              [NGS_PSF.max()-6, NGS_PSF.max()],
+                              [science_PSF.max()-6, science_PSF.max()]]
         # update title
         plot_obj.list_title = ['Turbulence '+str(np.round(wfe_atmosphere[i]))+'[nm]',
-                               'NGS residual '+str(np.round(wfe_residual_NGS[i]))+'[nm]',
-                               'science residual '+str(np.round(wfe_residual_science[i]))+'[nm]',
-                               'wfs Detector',
-                               'DM Commands',
-                               None,
-                               None,
-                               None]
+                                'NGS residual '+str(np.round(wfe_residual_NGS[i]))+'[nm]',
+                                'science residual '+str(np.round(wfe_residual_science[i]))+'[nm]',
+                                'wfs Detector',
+                                'DM Commands',
+                                None,
+                                None,
+                                None]
 
         cl_plot(list_fig=[1e9*atm.OPD,
                           1e9*OPD_NGS,
                           1e9*OPD_science,
-                          np.hstack(wfs.cam.frame),
+                          np.block([[wfs.cam.frame[0,:,:],wfs.cam.frame[1,:,:]],[wfs.cam.frame[2,:,:],wfs.cam.frame[3,:,:]]]),
                           dm.coefs,
                           [np.arange(i+1), wfe_residual_science[:i+1], wfe_residual_NGS[:i+1]],
                           NGS_PSF,
@@ -477,7 +460,7 @@ for i in range(nLoop):
         if plot_obj.keep_going is False:
             break
     print('-----------------------------------')
-    print('Loop'+str(i) + '/' + str(nLoop))
+    print('Loop'+str(i) + '/' + str(n_loop))
     print('NGS: Strehl ratio [%] : ', np.round(SR_ngs[i],1), ' WFE [nm] : ', np.round(wfe_residual_NGS[i],2))
     print('science: Strehl ratio [%] : ', np.round(SR_science[i],1), ' WFE [nm] : ', np.round(wfe_residual_science[i],2))
 
@@ -486,20 +469,20 @@ for i in range(nLoop):
 #%%
 plt.figure()
 
-plt.plot(residual,label='Residuals')
-plt.plot(total,label="Total")
+plt.plot(wfe_residual_NGS,label='Residuals')
+plt.plot(wfe_atmosphere,label="Total")
 plt.title('Residuals',fontsize=14,pad=10)
 plt.ylabel('Residual [nm rms]',fontsize=12,labelpad=10)
 plt.legend(fontsize=12)
 plt.grid()
 plt.show()
 
-plt.hist(residual[10:],label=r"Residual: $\mu$ = {:.1f} $\pm$ {:.1f}".format(np.mean(residual[10:]),np.std(residual[10:])))
+plt.hist(wfe_residual_NGS[10:],label=r"Residual: $\mu$ = {:.1f} $\pm$ {:.1f}".format(np.mean(wfe_residual_NGS[10:]),np.std(wfe_residual_NGS[10:])))
 plt.title("Residuals",fontsize=14,pad=10)
 plt.legend(fontsize=12)
 plt.show()
 
-plt.plot(SR)
+plt.plot(SR_ngs)
 plt.title("Strehl ratio",fontsize=14,pad=10)
 plt.grid()
 plt.show()

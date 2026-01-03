@@ -60,53 +60,6 @@ ngs = Source(optBand     = 'I',           # Optical band (see photometry.py)
              magnitude   = 8,             # Source Magnitude
              coordinates = [0,0])         # Source coordinated [arcsec,deg]
 
-# create the Scientific Target object located at 10 arcsec from the  ngs
-src = Source(optBand     = 'K',           # Optical band (see photometry.py)
-             magnitude   = 8,              # Source Magnitude
-             coordinates = [0,0])        # Source coordinated [arcsec,deg]
-
-# combine the NGS to the telescope using '*'
-src*tel
-
-# check that the ngs and tel.src objects are the same
-tel.src.print_properties()
-
-# compute PSF 
-tel.computePSF(zeroPaddingFactor = 6)
-plt.figure()
-plt.imshow(np.log10(np.abs(tel.PSF)),extent = [tel.xPSF_arcsec[0],tel.xPSF_arcsec[1],tel.xPSF_arcsec[0],tel.xPSF_arcsec[1]])
-plt.clim([-1,4])
-plt.xlabel('[Arcsec]')
-plt.ylabel('[Arcsec]')
-plt.colorbar()
-
-#%% -----------------------     ATMOSPHERE   ----------------------------------
-from OOPAO.Atmosphere import Atmosphere
-           
-# create the Atmosphere object
-atm = Atmosphere(telescope     = tel,                               # Telescope                              
-                 r0            = 0.15,                              # Fried Parameter [m]
-                 L0            = 25,                                # Outer Scale [m]
-                 fractionalR0  = [0.45 ,0.1  ,0.1  ,0.25  ,0.1   ], # Cn2 Profile
-                 windSpeed     = [10   ,12   ,11   ,15    ,20    ], # Wind Speed in [m]
-                 windDirection = [0    ,72   ,144  ,216   ,288   ], # Wind Direction in [degrees]
-                 altitude      = [0    ,1000 ,5000 ,10000 ,12000 ]) # Altitude Layers in [m]
-
-# initialize atmosphere with current Telescope
-atm.initializeAtmosphere(tel)
-
-# The phase screen can be updated using atm.update method (Temporal sampling given by tel.samplingTime)
-atm.update()
-
-# display the atm.OPD = resulting OPD 
-plt.figure()
-plt.imshow(atm.OPD*1e9)
-plt.title('OPD Turbulence [nm]')
-plt.colorbar()
-# display the atmosphere layers
-
-atm.display_atm_layers()
-
 
 
 #%% -----------------------     DEFORMABLE MIRROR   ----------------------------------
@@ -131,24 +84,9 @@ plt.plot(dm.coordinates[:,0],dm.coordinates[:,1],'rx')
 plt.xlabel('[m]')
 plt.ylabel('[m]')
 plt.title('DM Actuator Coordinates')
-#%%
+#%% -----------------------     ATMOSPHERE   ----------------------------------
 
-from OOPAO.calibration.compute_KL_modal_basis import compute_KL_basis
-
-M2C = compute_KL_basis(tel, atm, dm,lim=0)
-
-tel.resetOPD()
-dm.coefs = M2C  
-ngs**tel*dm
-KL_DM = tel.OPD.reshape(tel.resolution**2,M2C.shape[1])
-covmat = KL_DM.T@KL_DM
-projector = np.diag(1/np.diag(covmat))@KL_DM.T
-
-
-
-#%%
-
-
+ngs*tel
 # create the Atmosphere object
 atm=Atmosphere(telescope     = tel,\
                r0            = 0.15,\
@@ -160,9 +98,17 @@ atm=Atmosphere(telescope     = tel,\
                # initialize atmosphere
 atm.initializeAtmosphere(tel)
 
+#%%
 
+from OOPAO.calibration.compute_KL_modal_basis import compute_KL_basis
 
+M2C = compute_KL_basis(tel, atm, dm,lim=0)
 
+dm.coefs = M2C  
+ngs**tel*dm
+KL_DM = tel.OPD.reshape(tel.resolution**2,M2C.shape[1])
+covmat = KL_DM.T@KL_DM
+projector = np.diag(1/np.diag(covmat))@KL_DM.T
 
 #%% 1-- PERFECT WFS (See comment to do it with simulated WFS)
 
@@ -174,7 +120,6 @@ mod_coeffs_res  = np.zeros([N,M2C.shape[1],3])
 for i_g in range(2):
     atm.generateNewPhaseScreen(10)
 
-    tel+atm
     phase_res           = np.zeros(tel.resolution**2)
     phase_corr          = np.zeros(tel.resolution**2)
     phase_wfs_delayed   = np.zeros(tel.resolution**2)
@@ -185,8 +130,9 @@ for i_g in range(2):
     for i in range(N):
         print(str(i)+'/'+str(N))
         atm.update()
+        ngs**atm*tel
         
-        phase_turb = np.reshape(atm.OPD, tel.resolution**2)
+        phase_turb = np.reshape(ngs.OPD, tel.resolution**2)
                 
         mod_coeffs_turb[i,:,i_g] = projector@phase_turb
         
