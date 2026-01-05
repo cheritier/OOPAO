@@ -58,3 +58,12 @@ for i in OOPAO_path:
     l.append(len(i))
 path = OOPAO_path[np.argmin(l)]
 np.save(path+'/precision_oopao', 64)
+
+show_message = True
+message = '''Significant changes were done to the OOPAO repository, the Telescope class is no longer the "master" class and the Source is now carrying the EM-field info.'''
+    
+from OOPAO.tools.tools import warning
+
+warning(message)
+
+
