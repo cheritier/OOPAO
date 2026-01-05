@@ -36,9 +36,9 @@ from OOPAO.Source import Source
 from OOPAO.Asterism import Asterism
 
 n_lgs = 4
-lgs_zenith = [1]*n_lgs
+lgs_zenith = [10]*n_lgs
 lgs_azimuth = np.linspace(0,360,n_lgs,endpoint=False)
-lgs_altitude = np.inf # lower altitude to simulate LGS extended spots
+lgs_altitude = 90e3 #np.inf # lower altitude to simulate LGS extended spots
 lgs_is_extended = False
 
 if lgs_is_extended:
@@ -79,13 +79,13 @@ atm = Atmosphere(telescope=tel,  # Telescope
                   windDirection=[0,90,120],  # Wind Direction in [degrees]
                   altitude=[0,2000,10000]) # Altitude Layers in [m]
 
-atm = Atmosphere(telescope=tel,  # Telescope
-                  r0=r0,  # Fried Parameter [m]
-                  L0=25,  # Outer Scale [m]
-                  fractionalR0=[1],  # Cn2 Profile
-                  windSpeed=[10],  # Wind Speed in [m]
-                  windDirection=[0],  # Wind Direction in [degrees]
-                  altitude=[0]) # Altitude Layers in [m]
+# atm = Atmosphere(telescope=tel,  # Telescope
+#                   r0=r0,  # Fried Parameter [m]
+#                   L0=25,  # Outer Scale [m]
+#                   fractionalR0=[1],  # Cn2 Profile
+#                   windSpeed=[10],  # Wind Speed in [m]
+#                   windDirection=[0],  # Wind Direction in [degrees]
+#                   altitude=[0]) # Altitude Layers in [m]
 atm.initializeAtmosphere(telescope=tel)
 
 atm.display_atm_layers()
@@ -385,8 +385,9 @@ for i in range(n_loop):
     a = time.time()
     # update phase screens => overwrite tel.OPD and consequently tel.science.phase
     atm.update()
+    ngs**atm*tel
     # save the wave-front error of the incoming turbulence within the pupil
-    wfe_atmosphere[i] = np.std(tel.OPD[np.where(tel.pupil > 0)])*1e9
+    wfe_atmosphere[i] = np.std(ngs.OPD[np.where(tel.pupil > 0)])*1e9
     # propagate light from the ngs through the atmosphere, telescope, DM to the wfs and ngs camera
     ngs**atm*tel*dm*ngs_cam
     lgs_asterism**atm*tel*dm*wfs
@@ -477,11 +478,8 @@ plt.legend(fontsize=12)
 plt.grid()
 plt.show()
 
-plt.hist(wfe_residual_NGS[10:],label=r"Residual: $\mu$ = {:.1f} $\pm$ {:.1f}".format(np.mean(wfe_residual_NGS[10:]),np.std(wfe_residual_NGS[10:])))
-plt.title("Residuals",fontsize=14,pad=10)
-plt.legend(fontsize=12)
-plt.show()
 
+plt.figure()
 plt.plot(SR_ngs)
 plt.title("Strehl ratio",fontsize=14,pad=10)
 plt.grid()
