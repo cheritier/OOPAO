@@ -219,7 +219,7 @@ from OOPAO.calibration.compute_KL_modal_basis import compute_KL_basis
 M2C_KL = compute_KL_basis(tel,
                           atm,
                           dm,
-                          lim = 0,n_batch=4) # inversion stability criterion
+                          lim = 0) # inversion stability criterion
 
 # apply the 10 first KL modes
 dm.coefs = M2C_KL[:,:10]

@@ -19,7 +19,7 @@ tel = Telescope(resolution           = 200,                          # resolutio
                 samplingTime         = 1/1000,                                   # Sampling time in [s] of the AO loop
                 centralObstruction   = 0.1,                                      # Central obstruction in [%] of a diameter 
                 display_optical_path = False,                                    # Flag to display optical path
-                fov                  = 30 )                                     # field of view in [arcsec]. If set to 0 (default) this speeds up the computation of the phase screens but is uncompatible with off-axis targets
+                fov                  = 20 )                                     # field of view in [arcsec]. If set to 0 (default) this speeds up the computation of the phase screens but is uncompatible with off-axis targets
 
 from OOPAO.Source import Source
 ngs = Source(optBand   = 'I', magnitude = 0)               
@@ -35,7 +35,7 @@ fov = conversion_constant*ngs.wavelength/tel.D *tel.resolution/2
 src_obj = []
 n_source = 5
 
-x_science = np.linspace(-10,10,n_source,endpoint=True)
+x_science = np.linspace(-6,6,n_source,endpoint=True)
 for i in range(len(x_science)):
     for j in range(len(x_science)):
         r  = np.sqrt(x_science[i]**2 + x_science[j]**2)
