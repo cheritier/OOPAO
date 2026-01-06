@@ -29,6 +29,7 @@ class SPRINT:
         print('Setting up SPRINT..')
         # modal basis considered
         self.basis = basis
+        self.basis.modes = np.squeeze(self.basis.modes)
         self.n_mis_reg = n_mis_reg
         self.recompute_sensitivity = recompute_sensitivity
         if ind_mis_reg is None:

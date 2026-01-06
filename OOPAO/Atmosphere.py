@@ -428,6 +428,8 @@ class Atmosphere:
         else:
             self.is_user_defined_opd = True
             self.user_defined_opd = OPD
+        if self.telescope.isPaired:
+            self.telescope.src**self*self.telescope
         return
 
     def relay(self, src):
@@ -611,7 +613,7 @@ class Atmosphere:
             setattr(self, 'layer_'+str(i_layer+1), tmp_layer)
             OPD_support = self.fill_OPD_support(tmp_layer, OPD_support, i_layer)
         if self.telescope.isPaired:
-            self*self.telescope
+            self.telescope.src**self*self.telescope
 
     def print_atm_at_wavelength(self, wavelength):
         r0_wvl = self.r0*((wavelength/self.wavelength)**(6/5))

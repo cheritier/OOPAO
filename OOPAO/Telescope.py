@@ -208,7 +208,10 @@ class Telescope:
             src.mask = self.pupil.copy()
             if src.OPD is None:
                 src.OPD_no_pupil = np.zeros(self.pupil.shape)
-            src.OPD = (src.OPD_no_pupil)*src.mask
+            if np.ndim(src.OPD) == 2:
+                src.OPD = (src.OPD_no_pupil)*src.mask
+            else:
+                src.OPD_no_pupil = np.zeros(self.pupil.shape)
             src.var = np.var(src.phase[np.where(self.pupil == 1)])
             src.fluxMap = self.pupilReflectivity * src.nPhoton * self.samplingTime * (self.D / self.resolution) ** 2
         return
@@ -487,16 +490,15 @@ class Telescope:
         if self.isInitialized:
             warning('A new pupil is now considered, its reflectivity is considered to be uniform. Assign the proper reflectivity map to tel.pupilReflectivity if required.')
 
-    # <JM @ SpaceODT> Updating tel OPD updates the src OPD for backwards compatibility
     @property
     def OPD(self):
+        if xp.ndim(self.src.OPD) == 2:
+            self.mean_removed_OPD = (self.src.OPD - xp.mean(self.src.OPD[xp.where(self.pupil == 1)]))*self.pupil
         return self.src.OPD
 
     @OPD.setter
     def OPD(self, val):
         self.src.OPD = val
-        if xp.ndim(self.OPD) == 2:
-            self.mean_removed_OPD = (self.OPD - xp.mean(self.OPD[xp.where(self.pupil == 1)]))*self.pupil
 
     @property
     def OPD_no_pupil(self):
@@ -532,6 +534,7 @@ class Telescope:
                 for i_obj in range(len(obj)):
                     self*obj[i_obj]
         else:
+            self.relay(self.src)
             obj.relay(self.src)
         return self
     # <JM @ SpaceODT> This is no longer needed as the atmosphere behaves as its own entity now.
@@ -540,7 +543,8 @@ class Telescope:
 
     def __add__(self, obj):
         if obj.tag == 'atmosphere':
-            obj*self
+            self.isPaired = True
+            self.src*obj*self
             self.atm = obj
             if self.isPetalFree:
                 self.removePetalling()
@@ -553,7 +557,6 @@ class Telescope:
     # Separating from an atmosphere object
     def __sub__(self, obj):
         if obj.tag == 'atmosphere':
-
             self.isPaired = False
             self.src.reset()
             obj.asterism = None

@@ -262,7 +262,7 @@ def estimateMisRegistration(nameFolder,
                 dm_tmp = applyMisRegistration(tel,misRegistration_out,param, wfs = wfs_mis_registrated,print_dm_properties=False,floating_precision=dm_0.floating_precision,dm_input=dm_input)
             
                 # temporary interaction matrix
-                calib_tmp =  InteractionMatrix(ngs,tel,dm_tmp,wfs,basis.modes,stroke,phaseOffset=0,nMeasurements=1,invert=False,print_time=False)
+                calib_tmp =  InteractionMatrix(ngs,tel,dm_tmp,wfs,np.squeeze(basis.modes),stroke,phaseOffset=0,nMeasurements=1,invert=False,print_time=False)
                 # erase dm_tmp to free memory
                 del dm_tmp
             else:

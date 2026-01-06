@@ -127,7 +127,7 @@ def computeMetaSensitivityMatrix(nameFolder,
                 hdu = pfits.open(name_0+'_volontary_error')                
 
         except:
-            calib_0 = InteractionMatrix(ngs, tel, dm_0, wfs, basis.modes ,stroke, phaseOffset=0, nMeasurements=1,invert=False,print_time=False)
+            calib_0 = InteractionMatrix(ngs, tel, dm_0, wfs, np.squeeze(basis.modes) ,stroke, phaseOffset=0, nMeasurements=1,invert=False,print_time=False)
             
             # save output in fits file
             if save_sensitivity_matrices:
@@ -162,7 +162,7 @@ def computeMetaSensitivityMatrix(nameFolder,
                 # compute new deformable mirror
                 dm_tmp      = applyMisRegistration(tel,misRegistration_tmp,param, wfs = wfs_mis_registrated,print_dm_properties=False, floating_precision=dm_0.floating_precision, dm_input = dm_input)
                 # compute the interaction matrix for the positive mis-registration
-                calib_tmp_p = InteractionMatrix(ngs,  tel, dm_tmp, wfs, basis.modes, stroke, phaseOffset=0, nMeasurements=1,invert=False,print_time=False)
+                calib_tmp_p = InteractionMatrix(ngs,  tel, dm_tmp, wfs, np.squeeze(basis.modes), stroke, phaseOffset=0, nMeasurements=1,invert=False,print_time=False)
                 del dm_tmp
 
             # save output in fits file
@@ -197,7 +197,7 @@ def computeMetaSensitivityMatrix(nameFolder,
                 # compute new deformable mirror
                 dm_tmp      = applyMisRegistration(tel,misRegistration_tmp,param, wfs = wfs_mis_registrated,print_dm_properties=False, floating_precision=dm_0.floating_precision, dm_input = dm_input)
                 # compute the interaction matrix for the negative mis-registration
-                calib_tmp_n = InteractionMatrix(ngs,  tel, dm_tmp, wfs, basis.modes, stroke, phaseOffset=0, nMeasurements=1,invert=False,print_time=False)
+                calib_tmp_n = InteractionMatrix(ngs,  tel, dm_tmp, wfs, np.squeeze(basis.modes), stroke, phaseOffset=0, nMeasurements=1,invert=False,print_time=False)
                 del dm_tmp
 
             # save output in fits file
