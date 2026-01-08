@@ -149,7 +149,7 @@ src_psf_ref = src_cam.frame.copy()
 #%%
 
 
-atm.initializeAtmosphere(tel)
+# atm.initializeAtmosphere(tel)
 
 
 # initialize Telescope DM commands

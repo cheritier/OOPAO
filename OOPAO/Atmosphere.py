@@ -153,7 +153,7 @@ class Atmosphere:
         self.windDirection = windDirection     # wind direction in degrees
         self.n_extra_pixel = 2                 # number of extra pixel to generate the phase screens
         self.telescope = telescope         # associated telescope object
-        self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5)  # computation of equivalent wind speed, Roddier 1982
+        self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed)**(5/3)))**(3/5)  # computation of equivalent wind speed, Roddier 1982
         self.tau0 = 0.31 * self.r0 / self.V0  # Coherence time of atmosphere, Roddier 1981
         # default value to update phase screens at each iteration
         self.is_user_defined_opd = False
