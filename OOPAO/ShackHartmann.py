@@ -195,6 +195,7 @@ class ShackHartmann:
         self.shannon_sampling = shannon_sampling
         # property to be used for the weighted center of gravity
         self.weighting_map = 1
+
         # conversion of the radians in arcsec
         self.rad2arcsec = 1 / (np.pi / 180 / 3600)
         # original pixel scale assuming a zeropadding factor of 2
@@ -325,6 +326,8 @@ class ShackHartmann:
             if self.is_LGS:
                 self.spot_kernel_elongation_fft = src.spot_kernel_elongation_fft.copy()
                 self.spot_kernel_elongation = src.spot_kernel_elongation.copy()
+            if np.isscalar(self.weighting_map) is False:
+                self.weighting_map = self.weighting_map_list[i_src]
             self.wfs_measure(phase_in=src.phase, src=src, reference_signal_2D=reference_signal_2D[i_src])
             signal_2D_list.append(np.squeeze(self.signal_2D))
             signal_list.append(np.squeeze(self.signal))
@@ -561,7 +564,7 @@ class ShackHartmann:
                 self.signal = self.signal_2D[:, self.valid_signal_2D].T
         return
 
-    def set_weighted_centroiding_map(self, is_lgs: bool, is_gaussian: bool, fwhm_factor):
+    def set_weighted_centroiding_map(self, is_lgs: bool, is_gaussian: bool, fwhm_factor,src=None):
         """
         This function allows to compute a 2D map to perform a weighted center of gravity.
         The ShackHartmann property weighting_map is set after the execution of the function
@@ -590,26 +593,36 @@ class ShackHartmann:
         None.
 
         """
-        if is_lgs:
-            print('The weighting map is based on the LGS spots kernel')
-            _, _, _, weighting_map = self.get_convolution_spot(fwhm_factor=fwhm_factor, compute_fft_kernel=False, is_gaussian=is_gaussian)
-            # bin the resulting image to the right pixel scale
-            weighting_map = bin_ndarray(weighting_map,
-                                        [weighting_map.shape[0],
-                                         weighting_map.shape[1]//self.binning_pixel_scale,
-                                         weighting_map.shape[1]//self.binning_pixel_scale], operation='sum')
-            # crop the resulting spots to the right number of pixels
-            n_crop = (weighting_map.shape[1] - self.n_pix_subap)//2
-            if n_crop > 0:
-                weighting_map = weighting_map[:, n_crop:-n_crop, n_crop:-n_crop]
-        else:
-            if np.isscalar(fwhm_factor):
-                fwhm_factor = [fwhm_factor, fwhm_factor]
-            print('The weighting map is a centerd gaussian 2D function with a FWHM of ' + str(fwhm_factor) + ' px')
-            weighting_map = np.tile(gaussian_2D(resolution=self.n_pix_subap, fwhm=fwhm_factor), [self.nValidSubaperture, 1, 1])
-        warning('A new weighting map is now considered.')
-        self.weighting_map = weighting_map
-        self.set_slopes_units()
+        if src is None:
+            src = self.src
+        weighting_map_list = []            
+        if src.tag == 'asterism':
+            for i_src in src.src:
+                self.set_weighted_centroiding_map(is_lgs=is_lgs, is_gaussian=is_gaussian, fwhm_factor=fwhm_factor, src = i_src)
+                weighting_map_list.append(self.weighting_map)
+        else:            
+            if is_lgs:
+                print('The weighting map is based on the LGS spots kernel')
+                _, _, _, weighting_map = self.get_convolution_spot(fwhm_factor=fwhm_factor, compute_fft_kernel=False, is_gaussian=is_gaussian,src=src)
+                # bin the resulting image to the right pixel scale
+                weighting_map = bin_ndarray(weighting_map,
+                                            [weighting_map.shape[0],
+                                             weighting_map.shape[1]//self.binning_pixel_scale,
+                                             weighting_map.shape[1]//self.binning_pixel_scale], operation='sum')
+                # crop the resulting spots to the right number of pixels
+                n_crop = (weighting_map.shape[1] - self.n_pix_subap)//2
+                if n_crop > 0:
+                    weighting_map = weighting_map[:, n_crop:-n_crop, n_crop:-n_crop]
+            else:
+                if np.isscalar(fwhm_factor):
+                    fwhm_factor = [fwhm_factor, fwhm_factor]
+                print('The weighting map is a centerd gaussian 2D function with a FWHM of ' + str(fwhm_factor) + ' px')
+                weighting_map = np.tile(gaussian_2D(resolution=self.n_pix_subap, fwhm=fwhm_factor), [self.nValidSubaperture, 1, 1])
+            warning('A new weighting map is now considered.')
+            self.weighting_map = weighting_map
+            weighting_map_list.append(self.weighting_map)
+        self.weighting_map_list = weighting_map_list
+        # self.set_slopes_units()
         return
 
     def set_slopes_units(self, src=None, tomographic_reconstructor=None):
