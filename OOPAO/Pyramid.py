@@ -978,6 +978,15 @@ class Pyramid:
         self.pyramidSignal = val
 
     @property
+    def validSignal(self):
+        return self._validSignal
+
+    @validSignal.setter
+    def validSignal(self, val):
+        self._validSignal = val
+        self.valid_signal_2D = val
+
+    @property
     def resolution(self):
         return self._resolution
 
