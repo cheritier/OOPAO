@@ -27,7 +27,8 @@ class Detector:
                  photonNoise: bool = False,
                  backgroundNoise: bool = False,
                  backgroundFlux: float = None,
-                 backgroundMap: float = None):
+                 backgroundMap: float = None,
+                 log_scale:bool = False):
         '''
         The Detector allows to simulate the effects ot a real detector (noise, quantification...).
 
@@ -88,6 +89,9 @@ class Detector:
         backgroundFlux : float, optional
             Background 2D map to consider to be substracted to each frame.
             The default is None.
+        log_scale : bool, optional
+            flag to enable the log10 scale of the detector frames.
+            The default is False.
 
         -------
         None.
@@ -111,6 +115,7 @@ class Detector:
         self.backgroundNoise = backgroundNoise
         self.backgroundFlux = backgroundFlux
         self.backgroundMap = backgroundMap
+        self.log_scale = log_scale
         if self.resolution is not None:
             self.frame = np.zeros([self.resolution, self.resolution])
         else:
@@ -299,6 +304,8 @@ class Detector:
         if self.bits is not None:
             frame = self.digitalization(frame)
 
+        if self.log_scale:
+            frame = np.log10(frame)
         frame = frame.astype(self.output_precision)
 
         # Remove the dark fromthe detector
