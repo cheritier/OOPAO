@@ -270,9 +270,9 @@ class DeformableMirror:
             self.D = telescope.D
         else:
             if telescope.src.tag == 'asterism':
-                self.oversampling_factor = np.max((np.asarray(self.telescope.src.coordinates)[:, 0]/(self.resolution/2)))
+                self.oversampling_factor = np.max((np.asarray(self.telescope.src.coordinates)[:, 0]/(self.telescope.resolution/2)))
             else:
-                self.oversampling_factor = self.telescope.src.coordinates[0]/(self.resolution/2)
+                self.oversampling_factor = self.telescope.src.coordinates[0]/(self.telescope.resolution/2)
             self.altitude_layer = self.buildLayer(self.telescope, altitude)
             # Resolution of the DM influence Functions
             self.resolution = self.altitude_layer.resolution
