@@ -359,27 +359,20 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = 
         mpl.rcParams['ytick.color'] = COLOR
         line_comm = ['Stop']
         col_comm = ['r','b','b']
-        
         for i in range(1):
             setattr(plt_obj,'ax_0_'+str(i+1), plt.subplot(gs[n_sp_y-1,:]))            
             sp_tmp =getattr(plt_obj,'ax_0_'+str(i+1)) 
-            
             annot = sp_tmp.annotate(line_comm[i],color ='k', fontsize=15, xy=(0.5,0.5), xytext=(0.5,0.5),bbox=dict(boxstyle="round", fc=col_comm[i]))
             setattr(plt_obj,'annot_'+str(i+1), annot)
-        
             plt.axis('off')
-        
-
         count = -1
         for i in range(n_sp):
             for j in range(n_sp):
                 if count < n_im-1:
                     count+=1
-
                     # print(count)
                     setattr(plt_obj,'ax_'+str(count), plt.subplot(gs[i,j]))
                     sp_tmp =getattr(plt_obj,'ax_'+str(count))            
-
                     setattr(plt_obj,'type_fig_'+str(count),type_fig[count])
            # IMSHOW
                     if type_fig[count] == 'imshow':
@@ -390,26 +383,20 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = 
                             setattr(plt_obj,'im_'+str(count),sp_tmp.imshow(data_tmp))                                    
                         im_tmp =getattr(plt_obj,'im_'+str(count))
                         plt.colorbar(im_tmp)
-      
            # PLOT     
                     if type_fig[count] == 'plot':
                         data_tmp = list_fig[count]
-                        if len(data_tmp)==3:
-                            if list_legend[count] is None:
-                                line_tmp, = sp_tmp.plot(data_tmp[0],data_tmp[1],'-',)      
-                                line_tmp_2, = sp_tmp.plot(data_tmp[0],data_tmp[2],'-')                            
-                            else:
-                                line_tmp, = sp_tmp.plot(data_tmp[0],data_tmp[1],'-',label = list_legend[count][0])      
-                                line_tmp_2, = sp_tmp.plot(data_tmp[0],data_tmp[2],'-',label = list_legend[count][1])
-                            setattr(plt_obj,'im_'+str(count)+'_2',line_tmp_2)
-                            
-                        if len(data_tmp)==2:
-                            line_tmp, = sp_tmp.plot(data_tmp[0],data_tmp[1],'-')      
-                        if len(data_tmp)==1:
+                        if len(data_tmp)>1:
+                            for i_data in range(len(data_tmp)-1):
+                                if list_legend[count] is None:
+                                    line_tmp, = sp_tmp.plot(data_tmp[0],data_tmp[i_data+1],'-o',)      
+                                else:
+                                    line_tmp, = sp_tmp.plot(data_tmp[0],data_tmp[i_data+1],'-o',label = list_legend[count][0])      
+                                setattr(plt_obj,'im_'+str(count)+'_'+str(i_data+1),line_tmp)
+                        else:
                             line_tmp, = sp_tmp.plot(data_tmp,'-o')         
                         setattr(plt_obj,'im_'+str(count),line_tmp)
                         plt.legend(labelcolor='k')
-                            
            # SCATTER
                     if type_fig[count] == 'scatter':
                         data_tmp = list_fig[count]
@@ -460,27 +447,19 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = 
                         ax_tmp.set_title(plt_obj.list_title[count])
                     if getattr(plt_obj,'type_fig_'+str(count)) == 'imshow':                            
                         im_tmp =getattr(plt_obj,'im_'+str(count))
-
                         im_tmp.set_data(data)
                         if plt_obj.list_lim[count] is None:
                             im_tmp.set_clim(vmin=data.min(),vmax=data.max())
                         else:
                             im_tmp.set_clim(vmin=plt_obj.list_lim[count][0],vmax=plt_obj.list_lim[count][1])
-     
 
                     if getattr(plt_obj,'type_fig_'+str(count)) == 'plot':
-                        
-                        if len(data)==3:
-                            im_tmp =getattr(plt_obj,'im_'+str(count))
-                            im_tmp_2 =getattr(plt_obj,'im_'+str(count)+'_2')
-
-                            im_tmp.set_xdata(data[0])
-                            im_tmp.set_ydata(data[1])
-                            im_tmp_2.set_xdata(data[0])                            
-                            im_tmp_2.set_ydata(data[2])
-
+                        if len(data)>1:
+                            for i_data in range(len(data)-1):                                
+                                im_tmp =getattr(plt_obj,'im_'+str(count)+'_'+str(i_data+1))
+                                im_tmp.set_xdata(data[0])
+                                im_tmp.set_ydata(data[i_data+1])
                             im_tmp.axes.set_xlim([np.min(data[0])-0.1*np.abs(np.min(data[0])),np.max(data[0])+0.1*np.abs(np.max(data[0]))])
-                            
                             min_y = np.min((data[1],data[2]))
                             max_y = np.max((data[1],data[2]))
 
@@ -488,33 +467,17 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = 
                                 im_tmp.axes.set_ylim([min_y-0.1*np.abs(min_y),max_y+0.1*np.abs(max_y)])
                             else:
                                 im_tmp.axes.set_ylim([plt_obj.list_lim[count][0],plt_obj.list_lim[count][1]])    
-                                
-                        if len(data)==2:
-                            im_tmp =getattr(plt_obj,'im_'+str(count))
-                            im_tmp.set_xdata(data[0])
-                            im_tmp.set_ydata(data[1])
-                            im_tmp.axes.set_xlim([np.min(data[0])-0.1*np.abs(np.min(data[0])),np.max(data[0])+0.1*np.abs(np.max(data[0]))])
-
-                            if plt_obj.list_lim[count] is None:
-                                im_tmp.axes.set_ylim([np.min(data[1])-0.1*np.abs(np.min(data[1])),np.max(data[1])+0.1*np.abs(np.max(data[1]))])
-                            else:
-                                im_tmp.axes.set_ylim([plt_obj.list_lim[count][0],plt_obj.list_lim[count][1]])                            
-
-                        if len(data)==1:
+                        else:
                             im_tmp =getattr(plt_obj,'im_'+str(count))
                             im_tmp.set_ydata(data[0])
                             if plt_obj.list_lim[count] is None:
                                 im_tmp.axes.set_ylim([np.min(data[0])-0.1*np.abs(np.min(data[0])),np.max(data[0])+0.1*np.abs(np.max(data[0]))])
                             else:
                                 im_tmp.axes.set_ylim([plt_obj.list_lim[count][0],plt_obj.list_lim[count][1]])
-                                
-                                                
                     if getattr(plt_obj,'type_fig_'+str(count)) == 'scatter':
                         n = mpl.colors.Normalize(vmin = min(data), vmax = max(data))
                         m = mpl.cm.ScalarMappable(norm=n)
-
                         im_tmp = getattr(plt_obj,'im_'+str(count))
-
                         im_tmp.set_facecolors(m.to_rgba(data))
                         im_tmp.set_clim(vmin=min(data), vmax=max(data))
 
