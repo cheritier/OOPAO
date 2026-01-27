@@ -391,7 +391,7 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = 
                                 if list_legend[count] is None:
                                     line_tmp, = sp_tmp.plot(data_tmp[0],data_tmp[i_data+1],'-o',)      
                                 else:
-                                    line_tmp, = sp_tmp.plot(data_tmp[0],data_tmp[i_data+1],'-o',label = list_legend[count][0])      
+                                    line_tmp, = sp_tmp.plot(data_tmp[0],data_tmp[i_data+1],'-o',label = list_legend[count][i_data])      
                                 setattr(plt_obj,'im_'+str(count)+'_'+str(i_data+1),line_tmp)
                         else:
                             line_tmp, = sp_tmp.plot(data_tmp,'-o')         
