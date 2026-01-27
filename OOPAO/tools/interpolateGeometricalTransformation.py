@@ -149,7 +149,7 @@ Created on Tue Mar 16 10:04:46 2021
 """
 
 
-def interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out, shape_out = None, mis_registration = None, order = 1, joblib_prefer = 'threads', joblib_nJobs = 4):
+def interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out, shape_out = None, mis_registration = None, order = 1, joblib_prefer = 'threads', joblib_nJobs = 4,flipud = False,fliplr=False):
     if mis_registration is None:
         mis_registration = MisRegistration()
     nAct,nx, ny = cube_in.shape  
@@ -193,7 +193,11 @@ def interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out, sha
     
     # definition of the function that is run in parallel for each 
     def reconstruction(map_2D):
-        output = globalTransformation(map_2D)  
+        output = globalTransformation(map_2D)
+        if flipud: 
+            output = np.flipud(output)
+        if fliplr:
+            output = np.fliplr(output)
         return output
     
     # print('interpolating... ')    
