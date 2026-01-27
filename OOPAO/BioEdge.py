@@ -37,7 +37,8 @@ class BioEdge:
                  grey_width: float = 0,
                  grey_length: bool = False,
                  delta_theta: float = 0.,
-                 user_modulation_path: list = None):
+                 user_modulation_path: list = None,
+                 quadrants_numbering: list = [0, 1, 2, 3]):
         """ Bi-O Edge
         A Bi-O object consists in defining 4 2D phase mask located at the focal plane of the telescope to perform the Fourier Filtering of the EM-Field.
         By default the Bi-O edge detector is considered to be noise-free (for calibration purposes). These properties can be switched on and off on the fly (see properties)
@@ -213,6 +214,8 @@ class BioEdge:
         self.psfCentering = True
         # binning factor for the detector
         self.binning = binning
+        # list used for the quadrants ordering
+        self.quadrants_numbering = quadrants_numbering
         # user defined modulation path
         self.user_modulation_path = user_modulation_path
         self.joblib_prefer_masks = 'threads'
@@ -221,6 +224,7 @@ class BioEdge:
         self.n_pix_separation = n_pix_separation
         self.sx = [0, 0, 0, 0]
         self.sy = [0, 0, 0, 0]
+        print(self.sx)
         if n_pix_edge is None:
             self.n_pix_edge = self.n_pix_separation//2
         else:
@@ -354,21 +358,36 @@ class BioEdge:
         B = np.sqrt(1-A**2)
         C = np.copy(A.T)
         D = np.copy(B.T)
-        if len(self.sx) == 4 and len(self.sy) == 4:
-            A_TT = self.sx[0]*Tip*norma + self.sy[0]*Tilt*norma
-            B_TT = self.sx[1]*Tip*norma + self.sy[1]*Tilt*norma
-            C_TT = self.sx[2]*Tip*norma + self.sy[2]*Tilt*norma
-            D_TT = self.sx[3]*Tip*norma + self.sy[3]*Tilt*norma
-
-            A = A*np.exp(1j*A_TT)
-            B = B*np.exp(1j*B_TT)
-            C = C*np.exp(1j*C_TT)
-            D = D*np.exp(1j*D_TT)
-
-            self.mask = [A, B, C, D]
-            self.mask_TT = [A_TT, B_TT, C_TT, D_TT]
+        if len(sx) == 4 and len(sy) == 4:
+            A_TT = -sx[3]*Tip*norma + sy[3]*Tilt*norma
+            B_TT = -sx[2]*Tip*norma + sy[2]*Tilt*norma
+            C_TT = -sx[1]*Tip*norma + sy[1]*Tilt*norma
+            D_TT = -sx[0]*Tip*norma + sy[0]*Tilt*norma
         else:
-            self.mask = [A, B, C, D]
+            A_TT = 0
+            B_TT = 0
+            C_TT = 0
+            D_TT = 0
+        
+        mask_TT_ = [A_TT, B_TT, C_TT, D_TT]
+        mask_0 = [A, B, C, D]
+        
+        mask_ =[mask_0[self.quadrants_numbering[0]],
+                mask_0[self.quadrants_numbering[1]],
+                mask_0[self.quadrants_numbering[2]],
+                mask_0[self.quadrants_numbering[3]]]
+        
+        # mask_TT_ =[mask_TT_0[self.quadrants_numbering[0]],
+        #            mask_TT_0[self.quadrants_numbering[1]],
+        #            mask_TT_0[self.quadrants_numbering[2]],
+        #            mask_TT_0[self.quadrants_numbering[3]]]
+        self.mask = []
+        self.mask_TT = []
+        
+        for i_m in range(4):
+            self.mask.append(mask_[i_m]*np.exp(1j*mask_TT_[i_m]))
+            self.mask_TT.append(mask_TT_[i_m])
+
         # convert for GPU
         self.mask = self.convert_for_gpu(self.mask)
         # Save a copy of the initial mask
@@ -405,8 +424,8 @@ class BioEdge:
                 [shift_y.append(i_y*factor) for i_y in sy]
             else:
                 raise OopaoError('Wrong size for sx and/or sy, a list of 4 values is expected.')
-        if np.max(np.abs(shift_x)) > self.n_pix_edge or np.max(np.abs(shift_y)) > self.n_pix_edge:
-            warning('The Pyramid pupils have been shifted outside of the detector!' +
+        if np.max(np.abs(shift_x)/factor) > self.n_pix_edge or np.max(np.abs(shift_y)/factor) > self.n_pix_edge:
+            warning('The Bi-O Edge pupils have been shifted outside of the detector!' +
                     'Wrapping of the signal is currently occuring!!')
         self.mask_computation(sx=sx, sy=sy)
         self.sx = np.asarray(shift_x)/factor
@@ -431,8 +450,7 @@ class BioEdge:
         self.src**self.telescope
         if self.userValidSignal is None:
             if self.lightRatio == 0:
-                self.cam.frame = np.ones(
-                    [self.cam.resolution, self.cam.resolution])
+                self.cam.frame = np.ones([self.cam.resolution*2, self.cam.resolution*2])
             else:
                 print('The valid pixel are selected on flux considerations')
                 # set the modulation to a large value
@@ -828,9 +846,9 @@ class BioEdge:
         n_pixels = centerPixel
         if cameraFrame is None:
             cameraFrame = self.cam.frame
-        if n == 3:
-            quadrant = cameraFrame[centerPixel:(centerPixel+n_pixels), centerPixel:(centerPixel+n_pixels)]
         if n == 4:
+            quadrant = cameraFrame[centerPixel:(centerPixel+n_pixels), centerPixel:(centerPixel+n_pixels)]
+        if n == 3:
             quadrant = cameraFrame[centerPixel:(centerPixel+n_pixels), centerPixel-n_pixels:(centerPixel)]
         if n == 1:
             quadrant = cameraFrame[centerPixel-n_pixels:(+centerPixel), centerPixel-n_pixels:(centerPixel)]
@@ -840,12 +858,14 @@ class BioEdge:
 
     def grabFullQuadrant(self, n, cameraFrame=None):
 
-        n_tot = self.cam.resolution
         if cameraFrame is None:
             cameraFrame = self.cam.frame.copy()
-        if n == 3:
-            quadrant = cameraFrame[:n_tot//2, :n_tot//2]
+        
+        n_tot = cameraFrame.shape[0]
+
         if n == 4:
+            quadrant = cameraFrame[:n_tot//2, :n_tot//2]
+        if n == 3:
             quadrant = cameraFrame[:n_tot//2, -n_tot//2:]
         if n == 1:
             quadrant = cameraFrame[-n_tot//2:, -n_tot//2:]
@@ -934,6 +954,15 @@ class BioEdge:
         self._delta_Tilt = val
         if self.isCalibrated:
             self.modulation = self.modulation
+
+    @property
+    def validSignal(self):
+        return self._validSignal
+
+    @validSignal.setter
+    def validSignal(self, val):
+        self._validSignal = val
+        self.valid_signal_2D = val
 
     @property
     def modulation(self):
@@ -1054,7 +1083,7 @@ class BioEdge:
         n_char = len(max(self.prop.values(), key=len))
         for i in range(len(self.prop.values())):
             str_prop += list(self.prop.values())[i] + '\n'
-        title = f'\n{" Pyramid WFS ":-^{n_char}}\n'
+        title = f'\n{" Bi-O Edge WFS ":-^{n_char}}\n'
         end_line = f'{"":-^{n_char}}\n'
         table = title + str_prop + end_line
         return table
