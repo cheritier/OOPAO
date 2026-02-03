@@ -413,7 +413,7 @@ class ShackHartmann:
             src.phase = phase_in
         if np.mean(self.current_nPhoton) != src.nPhoton:
             print('Updating the flux of the SHWFS object')
-            self.initialize_flux()
+            self.initialize_flux(input_flux_map=src.fluxMap.T)
         if self.isInitialized:
             if self.wavelength_calibration != self.telescope.src.wavelength:
                 raise OopaoError('A change in wavelength was detected in the WFS object \n' +
@@ -429,7 +429,7 @@ class ShackHartmann:
                 # compute spot intensity
                 if src.phase_filtered is None:
                     phase = src.phase
-                    self.initialize_flux()
+                    self.initialize_flux(input_flux_map=src.fluxMap.T)
                 else:
                     phase = src.phase_filtered
                     self.initialize_flux(((src.amplitude_filtered)**2).T*src.fluxMap.T)
