@@ -360,7 +360,8 @@ cube_spots = wfs.split_raw_data()
 displayMap(cube_spots,axis=0)
 
 # apply a weighting map on the center of gravity with a gaussian function with 4x4 pixels FWHM (in WFS pixel scale unit)
-wfs.set_weighted_centroiding_map(is_lgs = False,
+wfs.set_weighted_centroiding_map(src = ngs, 
+                                 is_lgs = False,
                                  is_gaussian = True,
                                  fwhm_factor = [2,2])
 # display the weighting map applied
