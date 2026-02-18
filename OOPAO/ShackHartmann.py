@@ -302,7 +302,7 @@ class ShackHartmann:
             # initialize the weithing map for the CoG computation
             self.sh_data['src_'+str(i_src)].weighting_map = 1
             # store the number of signal
-            self.nSignal += self.sh_data['src_'+str(i_src)].nSignal
+            self.nSignal += 2 * self.sh_data['src_'+str(i_src)].nValidSubaperture
             # compute the LGS kernels if required
             if src.type == "LGS" and self.is_geometric is False:
                 self.is_LGS = True
@@ -340,7 +340,6 @@ class ShackHartmann:
         sh_data.valid_signal_2D = np.concatenate((sh_data.valid_subapertures, sh_data.valid_subapertures))
         # number of valid lenslet
         sh_data.nValidSubaperture = int(np.sum(sh_data.valid_subapertures))
-        sh_data.nSignal = 2*sh_data.nValidSubaperture
         # required to compute LGS kernels
         sh_data.valid_subapertures_1D = sh_data.valid_subapertures_1D.copy()
         sh_data.valid_signal_2D = sh_data.valid_signal_2D.copy()
@@ -419,7 +418,7 @@ class ShackHartmann:
     def wfs_integrate(self, src, sh_data):
         # propagate to detector to add noise and detector effects
         self*self.cam
-        self.maps_intensity = self.split_raw_data(src=src, sh_data=sh_data)
+        self.maps_intensity = self.split_raw_data(sh_data=sh_data)
         # compute the centroid on valid subaperture
         self.centroid_lenslets = self.centroid(self.maps_intensity*sh_data.weighting_map, self.threshold_cog)
         # discard nan and inf values
@@ -578,7 +577,7 @@ class ShackHartmann:
                     self.maps_intensity[i, :, :, :] = m[i][2]
                 # fill up camera frame if requested (default is False)
                 if self.get_raw_data_multi is True:
-                    self.compute_raw_data_multi(intensity=self.maps_intensity, src=src)
+                    self.compute_raw_data_multi(intensity=self.maps_intensity)
         else:
             # Geometric SH with single WF
             if np.ndim(src.phase) == 2:
@@ -651,6 +650,7 @@ class ShackHartmann:
                 weighting_map = np.tile(gaussian_2D(resolution=self.n_pix_subap, fwhm=fwhm_factor), [sh_data.nValidSubaperture, 1, 1])
             warning('A new weighting map is now considered.')
             sh_data.weighting_map = weighting_map
+            self.weighting_map = weighting_map
         return
 
     def set_slopes_units(self, src=None, tomographic_reconstructor=None):
@@ -733,7 +733,7 @@ class ShackHartmann:
                           ind_x*self.n_pix_subap//self.binning_factor:(ind_x+1)*self.n_pix_subap//self.binning_factor,
                           ind_y*self.n_pix_subap//self.binning_factor:(ind_y+1)*self.n_pix_subap//self.binning_factor] = intensity
 
-    def merge_data_cube(self, cube, src, sh_data):
+    def merge_data_cube(self, cube, sh_data):
         # save current raw data
         tmp_raw_data = self.raw_data.copy()
 
@@ -748,7 +748,7 @@ class ShackHartmann:
         self.raw_data = tmp_raw_data.copy()
         return output_raw_data
 
-    def split_raw_data(self, src, sh_data=None, input_frame=None):
+    def split_raw_data(self, sh_data=None, input_frame=None):
         if sh_data is None:
             sh_data = self.sh_data['src_0']
         if input_frame is None:
@@ -766,7 +766,7 @@ class ShackHartmann:
         maps_intensity = maps_intensity[sh_data.valid_subapertures_1D, :, :]
         return maps_intensity
 
-    def compute_raw_data_multi(self, intensity, src, sh_data):
+    def compute_raw_data_multi(self, intensity, sh_data):
         self.ind_frame = np.zeros(intensity.shape[0], dtype=(int))
         index_x = np.tile(self.index_x[sh_data.valid_subapertures_1D], self.phase_buffer.shape[0])
         index_y = np.tile(self.index_y[sh_data.valid_subapertures_1D], self.phase_buffer.shape[0])
