@@ -150,4 +150,4 @@ OOPAO/M4_model/*.fits
 *.cpython-37.pyc
 
 # numpy files
-%.npy
+*.npy
