@@ -29,6 +29,9 @@ class FieldTransformer:
         Parameters
         ----------
 
+        src
+        OOPAO source object: Asterism or Source
+
         shift_x : list
         List containing the shits in the direction x for each guide star considered in units of pixels
         Sub-pixel shifts are possible (0.5, 0.25 or other)
@@ -51,12 +54,12 @@ class FieldTransformer:
 
         ************************** EXEMPLE **************************
 
-        shift = Shift(shift_x,shift_y,rotation_angle)
+        ft = FieldTransformer(shift_x,shift_y,rotation_angle)
 
-        ast**atm*tel*shift
+        ast**atm*tel*ft
 
         --> EM field is propagated from ast --> atm --> tel, and then the EM field from each guide star of the asterism
-        is properly shifted and/rotated according to the given shift_x, shift_y and rotation_angle given as input.
+        is properly geometrically transformed (shifted, rotated, etc.) according to the given parameters
 
         """
         if src.tag == 'source':
