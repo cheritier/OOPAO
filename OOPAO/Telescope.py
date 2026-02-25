@@ -20,7 +20,7 @@ from OOPAO.tools.tools import set_binning, warning, OopaoError
 
 class Telescope:
 
-    def __init__(self, resolution: float,
+    def __init__(self, resolution: int,
                  diameter: float,
                  samplingTime: float = 0.001,
                  centralObstruction: float = 0.,
