@@ -517,11 +517,11 @@ class BioEdge:
         # em field corresponding to phase_in
         if np.ndim(self.telescope.OPD) == 2:
             if self.modulation == 0:
-                em_field = 0.5*self.maskAmplitude*np.exp(1j*(phase_in))
+                em_field = np.sqrt(0.5)*self.maskAmplitude*np.exp(1j*(phase_in))
             else:
-                em_field = 0.5*self.maskAmplitude*np.exp(1j*(self.convert_for_gpu(self.telescope.src.phase)+phase_in))
+                em_field = np.sqrt(0.5)*self.maskAmplitude*np.exp(1j*(self.convert_for_gpu(self.telescope.src.phase)+phase_in))
         else:
-            em_field = 0.5*self.maskAmplitude*np.exp(1j*phase_in)
+            em_field = np.sqrt(0.5)*self.maskAmplitude*np.exp(1j*phase_in)
         n = (self.resolution-self.telescope.resolution)//2
         # zero-padding for the FFT computation
         support[n:-n, n:-n] = em_field
