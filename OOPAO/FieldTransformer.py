@@ -6,6 +6,7 @@ Created on February 2026
 """
 
 # imports
+import numpy as np
 from OOPAO.tools.interpolateGeometricalTransformation import interpolate_image
 from OOPAO.tools.tools import OopaoError
 
@@ -18,7 +19,8 @@ class FieldTransformer:
                  rotation_angle=None,
                  anamorphosisAngle=None,
                  tangentialScaling=None,
-                 radialScaling=None):
+                 radialScaling=None,
+                 remove_edge_effects:bool=True):
         """
         FieldTransformer object allows to perform a geometrical transformation to the Electromagnetic field (EMF),
         i.e., both phase and amplitude.
@@ -52,6 +54,10 @@ class FieldTransformer:
         radialScaling: list
         List containing the radial scaling for each guide star considered
 
+        remove_edge_effects: bool
+        boolean variable. If True, we remove "edge artifacts" occurring due to sub-pixel shifts after the EM field
+        transformation. This avoids unintended gradients near the pupil borders (whether in amplitude or phase)
+
         ************************** EXEMPLE **************************
 
         ft = FieldTransformer(shift_x,shift_y,rotation_angle)
@@ -78,6 +84,7 @@ class FieldTransformer:
         self.anamorphosisAngle = anamorphosisAngle
         self.tangentialScaling = tangentialScaling
         self.radialScaling = radialScaling
+        self.remove_edge_effects = remove_edge_effects
         # initialize values
         for i_param in parameters:
             tmp_param = getattr(self, i_param)
@@ -124,6 +131,9 @@ class FieldTransformer:
                                             shape_out=None,
                                             order=1)
 
+            # pupil mask containing only the pixels fully illuminated (no "gray" pixels)
+            pupil_mask = src.fluxMap == np.max(src.fluxMap)
+
             # shift the EM OPD and phase
             # by updating the OPD, the phase (and OPD_no_pupil) will be also updated accordingly automatically
             src.OPD = interpolate_image(image_in=src.OPD.copy(),
@@ -138,6 +148,12 @@ class FieldTransformer:
                                         radialScaling=self.radialScaling[src.ast_idx],
                                         shape_out=None,
                                         order=1)
+
+            # removing possible "edge artifacts" due to sub-pixel shifts after the EM field transformation
+            # this allows removing "gray" zones near the pupil borders or central obstruction
+            if self.remove_edge_effects:
+                src.fluxMap *= pupil_mask
+                src.OPD *= pupil_mask
 
     def properties(self) -> dict:
         self.prop = dict()
