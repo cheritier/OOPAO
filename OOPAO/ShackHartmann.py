@@ -21,7 +21,7 @@ except ImportError or ModuleNotFoundError:
 
 
 class ShackHartmann:
-    def __init__(self, nSubap: float,
+    def __init__(self, nSubap: int,
                  telescope,
                  lightRatio: float,
                  threshold_cog: float = 0.01,
@@ -299,6 +299,8 @@ class ShackHartmann:
             self.initialize_flux(src=src, sh_data=self.sh_data['src_'+str(i_src)])
             # set the valid lenslets accordingly
             self.set_valid_subaperture(src=src, sh_data=self.sh_data['src_'+str(i_src)])
+            # Set the pupil masks for each SH (needed for the geometric SH implementation with EM field transform)
+            self.sh_data['src_' + str(i_src)].pupil_mask = src.fluxMap == np.max(src.fluxMap)
             # initialize the weithing map for the CoG computation
             self.sh_data['src_'+str(i_src)].weighting_map = 1
             # store the number of signal
@@ -581,7 +583,7 @@ class ShackHartmann:
         else:
             # Geometric SH with single WF
             if np.ndim(src.phase) == 2:
-                self.signal_2D = self.lenslet_propagation_geometric(src.phase)*sh_data.valid_signal_2D/self.slopes_units
+                self.signal_2D = self.lenslet_propagation_geometric(src.phase,sh_data.pupil_mask)*sh_data.valid_signal_2D/self.slopes_units
                 self.signal = self.signal_2D[sh_data.valid_signal_2D]
             # Geometric SH with multiple WFS
             else:
@@ -589,7 +591,7 @@ class ShackHartmann:
 
                 def compute_geometric_signals():
                     Q = Parallel(n_jobs=1, prefer='processes')(
-                        delayed(self.lenslet_propagation_geometric)(i) for i in self.phase_buffer)
+                        delayed(self.lenslet_propagation_geometric)(arr=i, pupil_mask=sh_data.pupil_mask) for i in self.phase_buffer)
                     return Q
                 maps = compute_geometric_signals()
                 self.signal_2D = np.asarray(maps)/self.slopes_units
@@ -779,19 +781,19 @@ class ShackHartmann:
         joblib_fill_raw_data()
         return
 
-    def gradient_2D(self, arr):
-        arr[~self.telescope.pupil] = np.nan
-        res_x = (np.gradient(arr, axis=0, edge_order=1)/self.telescope.pixelSize) * self.telescope.pupil
+    def gradient_2D(self, arr, pupil_mask):
+        arr[~pupil_mask] = np.nan
+        res_x = (np.gradient(arr, axis=0, edge_order=1)/self.telescope.pixelSize) * pupil_mask
         res_x = np.nan_to_num(res_x)
-        res_y = (np.gradient(arr, axis=1, edge_order=1)/self.telescope.pixelSize) * self.telescope.pupil
+        res_y = (np.gradient(arr, axis=1, edge_order=1)/self.telescope.pixelSize) * pupil_mask
         res_y = np.nan_to_num(res_y)
         return res_x, res_y
 
-    def lenslet_propagation_geometric(self, arr):
-        [SLx, SLy] = self.gradient_2D(arr)
+    def lenslet_propagation_geometric(self, arr, pupil_mask):
+        [SLx, SLy] = self.gradient_2D(arr, pupil_mask)
         sy = bin_ndarray(ndarray=SLx, new_shape=(self.nSubap, self.nSubap), operation="mean", ignore_zeros=True)
         sx = bin_ndarray(ndarray=SLy, new_shape=(self.nSubap, self.nSubap), operation="mean", ignore_zeros=True)
-        self.lighted_subap = np.concatenate((sx.astype(bool), sy.astype(bool)))
+        # self.lighted_subap = np.concatenate((sx.astype(bool), sy.astype(bool)))
         return np.concatenate((sx, sy))
 
     def convolve_direct(self, A_in, B_in):
