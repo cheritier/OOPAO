@@ -628,11 +628,10 @@ class ShackHartmann:
 
         """
         if src.tag == 'asterism':
-            for i_src, src in enumerate(src.src):
-                self.set_weighted_centroiding_map(is_lgs=is_lgs, is_gaussian=is_gaussian, fwhm_factor=fwhm_factor, src=src, sh_data=self.sh_data['src_'+str(i_src)])
+            for i_src, src_ast in enumerate(src.src):
+                self.set_weighted_centroiding_map(is_lgs=is_lgs, is_gaussian=is_gaussian, fwhm_factor=fwhm_factor, src=src_ast, sh_data=self.sh_data['src_'+str(i_src)])
                 print('Re-calibrating the reference signal with the nex weighting map')
-                self.initialize_wfs()
-                self.set_slopes_units(src=src)
+            self.initialize_wfs()
         else:
             if sh_data is None:
                 sh_data = self.sh_data['src_0']
@@ -659,7 +658,6 @@ class ShackHartmann:
             if self.src.tag == 'source':
                 print('Re-calibrating the reference signal with the nex weighting map')
                 self.initialize_wfs()
-                self.set_slopes_units(src=src)
         return
 
     def set_slopes_units(self, src=None, tomographic_reconstructor=None,dm =None):
