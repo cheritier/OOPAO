@@ -217,8 +217,8 @@ plt.show()
 lgs_asterism**tel*wfs*wfs_geom
 
 
-wfs.set_slopes_units(tomographic_reconstructor = dm.modes@reconstructor, src = lgs_asterism)
-wfs_geom.set_slopes_units(tomographic_reconstructor = dm.modes@reconstructor, src = lgs_asterism)
+wfs.set_slopes_units(tomographic_reconstructor = reconstructor, src = lgs_asterism,dm = dm)
+wfs_geom.set_slopes_units(tomographic_reconstructor = reconstructor, src = lgs_asterism,dm=dm)
 
 print(wfs.slopes_units)
 print(wfs_geom.slopes_units)
