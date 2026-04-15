@@ -17,7 +17,7 @@ except ImportError or ModuleNotFoundError:
 from joblib import Parallel, delayed
 from .MisRegistration import MisRegistration
 from .tools.interpolateGeometricalTransformation import interpolate_cube
-from .tools.tools import emptyClass, pol2cart, print_, OopaoError
+from .tools.tools import emptyClass, pol2cart, print_, OopaoError, warning
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from .tools.displayTools import makeSquareAxes
@@ -40,7 +40,8 @@ class DeformableMirror:
                  altitude: float = None,
                  flip=False,
                  flip_lr=False,
-                 sign=1):
+                 sign=1,
+                 std_in: float = None):
         """DEFORMABLE MIRROR
         A Deformable Mirror object consists in defining the 2D maps of influence functions of the actuators.
         By default, the actuator grid is cartesian in a Fried Geometry with respect to the nSubap parameter.
@@ -103,7 +104,9 @@ class DeformableMirror:
             If set to 32, uses float32 precision to save memory. The default is 64.
         altitude : float, optional
             Altitude to which the DM is conjugated. The default is None and corresponds to a DM conjugated to the ground.
-
+        std_in : float, optional
+            Standard deviation of the input wavefront. The default is None.
+                If specified, the valid actuators are selected based on the standard deviation of their influence function within the pupil. 
         Returns
         -------
         None.
@@ -201,6 +204,7 @@ class DeformableMirror:
         self.sign = sign
         self.M4_param = M4_param
         self.rad2arcsec = (180./np.pi)*3600
+        self.std_in = std_in
         if M4_param is not None:
             if M4_param['isM4']:
                 from .M4_model.make_M4_influenceFunctions import makeM4influenceFunctions
@@ -309,12 +313,23 @@ class DeformableMirror:
             self.xIF0 = np.reshape(X, [self.nAct**2])
             self.yIF0 = np.reshape(Y, [self.nAct**2])
 
-            # select valid actuators (central and outer obstruction)
+            #  valid actuators selection
             r = np.sqrt(self.xIF0**2 + self.yIF0**2)
-            validActInner = r > (telescope.centralObstruction*self.D/2-0.5*self.pitch)
-            validActOuter = r <= (self.D/2+0.7533*self.pitch)
-
-            self.validAct = validActInner*validActOuter
+            # Method 2 is triggered only if std_in is defined by the user
+            self._use_method_2 = self.std_in is not None
+            
+            if self._use_method_2:
+                self.validAct = np.ones_like(r, dtype=bool)
+            else:
+                # Method 1: Strict geometry
+                D_phys = getattr(telescope, 'initial_D', self.D)
+                # select valid actuators (central and outer obstruction)
+                r = np.sqrt(self.xIF0**2 + self.yIF0**2)
+                validActInner = r > (telescope.centralObstruction*D_phys/2-0.5*self.pitch)
+                validActOuter = r <= (D_phys/2+0.7533*self.pitch)
+                # Application
+                self.validAct = validActInner*validActOuter
+                
             self.nValidAct = sum(self.validAct)
 
         # If the coordinates are specified
@@ -371,7 +386,36 @@ class DeformableMirror:
                     return Q
                 self.modes = np.squeeze(np.moveaxis(
                     np.asarray(joblib_construction()), 0, -1))
-
+                    
+                     # Method 2 application
+                if getattr(self, '_use_method_2', False):
+                    print_('Filtering valid actuators based on pupil influence functions std...', print_dm_properties)
+                    
+                    # Ensure pupil mask is 1D
+                    pupil_mask_1d = np.reshape(telescope.pupilLogical, [-1])
+                    
+                    # Calculate std only within the illuminated pupil
+                    IF_STD = np.std(np.squeeze(self.modes[pupil_mask_1d, :]), axis=0)
+                    
+                    # Apply the user-defined threshold criterion
+                    std_threshold = self.std_in 
+                    valid_idx = np.where(IF_STD > std_threshold * np.max(IF_STD))[0]
+                    
+                    # Update properties
+                    self.modes = self.modes[:, valid_idx]
+                    self.nValidAct = len(valid_idx)
+                    self.nIF = self.nValidAct
+                    
+                    # Update global validAct mask
+                    original_valid_indices = np.where(self.validAct)[0]
+                    final_valid_indices = original_valid_indices[valid_idx]
+                    self.validAct = np.zeros_like(self.validAct, dtype=bool)
+                    self.validAct[final_valid_indices] = True
+                    
+                    # Update coordinates
+                    self.xIF = self.xIF[valid_idx]
+                    self.yIF = self.yIF[valid_idx]
+                    self.coordinates = self.coordinates[valid_idx, :]
             else:
                 print_('Loading the 2D zonal modes...', print_dm_properties)
                 self.modes = modes
