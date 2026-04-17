@@ -298,8 +298,8 @@ class BioEdge:
 
         # Prepare the Tip Tilt for the modulation -- normalized to apply the modulation in terms of lambda/D
         [self.Tip, self.Tilt] = np.meshgrid(np.linspace(-np.pi, np.pi, self.telescope.resolution), np.linspace(-np.pi, np.pi, self.telescope.resolution))
-        self.Tilt *= self.telescope.pupil
-        self.Tip *= self.telescope.pupil
+        self.Tilt *= self.telescope.pupil * self.telescope.resolution/self.telescope.initial_resolution
+        self.Tip *= self.telescope.pupil * self.telescope.resolution/self.telescope.initial_resolution
 
         # compute the phasor to center the PSF on 4 pixels
         [xx, yy] = np.meshgrid(np.linspace(0, self.resolution-1, self.resolution), np.linspace(0, self.resolution-1, self.resolution))
@@ -341,7 +341,7 @@ class BioEdge:
                                   np.linspace(-lim, lim, n_tot, endpoint=False))
         BW = np.zeros([self.resolution])
         BW[0:self.resolution//2] = 1.
-        r = int(np.round(self.zeroPaddingFactor*self.grey_width))
+        r = int(np.round(self.zeroPaddingFactor*self.grey_width*self.telescope.resolution/self.telescope.initial_resolution))
         if self.grey_width != 0:
             self.gray_gradient = np.hstack([np.linspace(1, 0.5, r, endpoint=True),
                                             np.linspace(0.5, 0, r, endpoint=True)])
@@ -368,22 +368,14 @@ class BioEdge:
             B_TT = 0
             C_TT = 0
             D_TT = 0
-        
         mask_TT_ = [A_TT, B_TT, C_TT, D_TT]
         mask_0 = [A, B, C, D]
-        
-        mask_ =[mask_0[self.quadrants_numbering[0]],
-                mask_0[self.quadrants_numbering[1]],
-                mask_0[self.quadrants_numbering[2]],
-                mask_0[self.quadrants_numbering[3]]]
-        
-        # mask_TT_ =[mask_TT_0[self.quadrants_numbering[0]],
-        #            mask_TT_0[self.quadrants_numbering[1]],
-        #            mask_TT_0[self.quadrants_numbering[2]],
-        #            mask_TT_0[self.quadrants_numbering[3]]]
+        mask_ = [mask_0[self.quadrants_numbering[0]],
+                 mask_0[self.quadrants_numbering[1]],
+                 mask_0[self.quadrants_numbering[2]],
+                 mask_0[self.quadrants_numbering[3]]]
         self.mask = []
         self.mask_TT = []
-        
         for i_m in range(4):
             self.mask.append(mask_[i_m]*np.exp(1j*mask_TT_[i_m]))
             self.mask_TT.append(mask_TT_[i_m])
@@ -860,7 +852,6 @@ class BioEdge:
 
         if cameraFrame is None:
             cameraFrame = self.cam.frame.copy()
-        
         n_tot = cameraFrame.shape[0]
 
         if n == 4:

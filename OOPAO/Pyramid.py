@@ -244,6 +244,8 @@ class Pyramid:
         self.old_mask = old_mask
         # user defined modulation path
         self.user_modulation_path = user_modulation_path
+        # user defined modulation length
+        self.modulation_length = 2*np.pi
         # Separation ratio of the PWFS pupils (Diameter/Distance Center to Center) -- DEPRECATED -> use n_pix_separation instead)
         self.pupilSeparationRatio = pupilSeparationRatio
         self.weight_vector = None
@@ -330,8 +332,9 @@ class Pyramid:
 
         # Prepare the Tip Tilt for the modulation -- normalized to apply the modulation in terms of lambda/D
         [self.Tip, self.Tilt] = np.meshgrid(np.linspace(-np.pi, np.pi, self.telescope.resolution), np.linspace(-np.pi, np.pi, self.telescope.resolution))
-        self.Tilt *= self.telescope.pupil
-        self.Tip *= self.telescope.pupil
+        # truncate with the pupil and scale the TT to account for eventual padding of the pupil
+        self.Tilt *= self.telescope.pupil * self.telescope.resolution/self.telescope.initial_resolution
+        self.Tip *= self.telescope.pupil * self.telescope.resolution/self.telescope.initial_resolution
 
         # compute the phasor to center the PSF on 4 pixels
         [xx, yy] = np.meshgrid(np.linspace(0, self.resolution-1, self.resolution), np.linspace(0, self.resolution-1, self.resolution))
@@ -1113,7 +1116,7 @@ class Pyramid:
                 self.nTheta = len(self.user_modulation_path)
             else:
                 # define the modulation points
-                perimeter = np.pi*2*self._modulation
+                perimeter = self.modulation_length*self._modulation
                 if self.nTheta_user_defined is None:
                     self.nTheta = 4 * int((self.extraModulationFactor+np.ceil(perimeter/4)))
                 else:
