@@ -14,7 +14,6 @@ try:
     xp = np  # for now
 except ImportError or ModuleNotFoundError:
     xp = np
-
 from OOPAO.tools.tools import set_binning, warning, OopaoError
 
 
@@ -161,6 +160,7 @@ class Telescope:
         self.resolution = resolution                   # Resolution of the telescope
         self.D = diameter                     # Diameter in m
         self.initial_D = diameter                     # Diameter in m
+        self.initial_resolution = resolution                     # Diameter in m
         self.pixelSize = self.D/self.resolution       # size of the pixels in m
         self.centralObstruction = centralObstruction           # central obstruction
         self.fov = fov                          # Field of View in arcsec converted in radian
@@ -277,7 +277,6 @@ class Telescope:
             theta = xp.squeeze(xp.asarray(self.src.coordinates))[1]
             x_max = (xp.abs(r * xp.cos(np.deg2rad(theta))))
             y_max = (xp.abs(r * xp.sin(np.deg2rad(theta))))
-
         pixel_scale = self.rad2arcsec*(input_source[0].wavelength/self.D)/zeroPaddingFactor  # in arcsec
         maximum_fov = pixel_scale*img_resolution/2
         n_extra = np.abs(np.floor((maximum_fov - max(x_max, y_max))/pixel_scale) - img_resolution//2)
@@ -317,9 +316,6 @@ class Telescope:
             # shift in pixel of the PSF
             delta_x = int(factor*np.floor(np.abs(x_shift)/pixel_scale)*np.sign(x_shift))
             delta_y = int(factor*np.floor(np.abs(y_shift)/pixel_scale)*np.sign(y_shift))
-
-            delta_Tilt = (np.abs(x_shift) % pixel_scale)*np.sign(x_shift)
-            delta_Tip = (np.abs(y_shift) % pixel_scale)*np.sign(y_shift)
 
             delta_Tilt = x_shift - delta_x*pixel_scale
             delta_Tip = y_shift - delta_y*pixel_scale
