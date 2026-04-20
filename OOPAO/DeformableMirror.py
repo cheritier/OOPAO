@@ -41,7 +41,7 @@ class DeformableMirror:
                  flip=False,
                  flip_lr=False,
                  sign=1,
-                 std_in: float = None):
+                 actuator_selection=None):
         """DEFORMABLE MIRROR
         A Deformable Mirror object consists in defining the 2D maps of influence functions of the actuators.
         By default, the actuator grid is cartesian in a Fried Geometry with respect to the nSubap parameter.
@@ -104,9 +104,11 @@ class DeformableMirror:
             If set to 32, uses float32 precision to save memory. The default is 64.
         altitude : float, optional
             Altitude to which the DM is conjugated. The default is None and corresponds to a DM conjugated to the ground.
-        std_in : float, optional
-            Standard deviation of the input wavefront. The default is None.
-                If specified, the valid actuators are selected based on the standard deviation of their influence function within the pupil. 
+        actuator_selection : optional
+            Selection of the valid actuator: 
+                - if actuator_selection is a scalar => selected based on the standard deviation of their influence function within the pupil. 
+                - if actuator_selection is a vector of length two [r_inner,r_outer] => the actuators are selected based on their coordinates r to be part of the r_inner<r<r_outer.
+                - if None (default), r_inner is computed based on the telescope central obstruction and r_outer on the telescope diameter.
         Returns
         -------
         None.
@@ -204,7 +206,7 @@ class DeformableMirror:
         self.sign = sign
         self.M4_param = M4_param
         self.rad2arcsec = (180./np.pi)*3600
-        self.std_in = std_in
+        self.actuator_selection = actuator_selection
         if M4_param is not None:
             if M4_param['isM4']:
                 from .M4_model.make_M4_influenceFunctions import makeM4influenceFunctions
@@ -315,21 +317,22 @@ class DeformableMirror:
 
             #  valid actuators selection
             r = np.sqrt(self.xIF0**2 + self.yIF0**2)
-            # Method 2 is triggered only if std_in is defined by the user
-            self._use_method_2 = self.std_in is not None
-            
-            if self._use_method_2:
+
+            # default actuator selection
+            if self.actuator_selection is None:
+                r_in = (telescope.centralObstruction*telescope.initial_D/2-0.5*self.pitch)
+                r_out = (telescope.initial_D/2+0.7533*self.pitch)
+                self.actuator_selection = [r_in, r_out]
+            if np.isscalar(self.actuator_selection):
+                # Selection based on energy of the actuators in the pupil (after IF computation)
                 self.validAct = np.ones_like(r, dtype=bool)
             else:
-                # Method 1: Strict geometry
-                D_phys = getattr(telescope, 'initial_D', self.D)
-                # select valid actuators (central and outer obstruction)
-                r = np.sqrt(self.xIF0**2 + self.yIF0**2)
-                validActInner = r > (telescope.centralObstruction*D_phys/2-0.5*self.pitch)
-                validActOuter = r <= (D_phys/2+0.7533*self.pitch)
-                # Application
+                if len(self.actuator_selection) != 2:
+                    raise OopaoError('actuator_selection must be either a scalar or a vector of length 2 to specify the inner and outer radius.')
+                # Selection based on inner and outer radius
+                validActInner = r >= self.actuator_selection[0]
+                validActOuter = r <= self.actuator_selection[1]
                 self.validAct = validActInner*validActOuter
-                
             self.nValidAct = sum(self.validAct)
 
         # If the coordinates are specified
@@ -387,35 +390,22 @@ class DeformableMirror:
                 self.modes = np.squeeze(np.moveaxis(
                     np.asarray(joblib_construction()), 0, -1))
                     
-                     # Method 2 application
-                if getattr(self, '_use_method_2', False):
-                    print_('Filtering valid actuators based on pupil influence functions std...', print_dm_properties)
-                    
-                    # Ensure pupil mask is 1D
-                    pupil_mask_1d = np.reshape(telescope.pupilLogical, [-1])
-                    
-                    # Calculate std only within the illuminated pupil
-                    IF_STD = np.std(np.squeeze(self.modes[pupil_mask_1d, :]), axis=0)
-                    
-                    # Apply the user-defined threshold criterion
-                    std_threshold = self.std_in 
-                    valid_idx = np.where(IF_STD > std_threshold * np.max(IF_STD))[0]
-                    
-                    # Update properties
-                    self.modes = self.modes[:, valid_idx]
-                    self.nValidAct = len(valid_idx)
-                    self.nIF = self.nValidAct
-                    
-                    # Update global validAct mask
-                    original_valid_indices = np.where(self.validAct)[0]
-                    final_valid_indices = original_valid_indices[valid_idx]
-                    self.validAct = np.zeros_like(self.validAct, dtype=bool)
-                    self.validAct[final_valid_indices] = True
-                    
-                    # Update coordinates
-                    self.xIF = self.xIF[valid_idx]
-                    self.yIF = self.yIF[valid_idx]
-                    self.coordinates = self.coordinates[valid_idx, :]
+                if np.isscalar(self.actuator_selection):
+                        print_('Filtering valid actuators based on pupil influence functions std...', print_dm_properties)
+                        # Calculate std only within the illuminated pupil
+                        IF_STD = np.std(np.squeeze(self.modes[np.where(telescope.pupil.flatten()==1), :]), axis=0)
+                        self.validAct = np.where(IF_STD > self.actuator_selection * np.max(IF_STD))[0]
+
+                        # Update properties
+                        self.modes = self.modes[:, self.validAct]
+                        self.nValidAct = len(self.validAct)
+                        self.nIF = self.nValidAct
+
+                        # Update coordinates
+                        self.xIF = self.xIF[self.validAct]
+                        self.yIF = self.yIF[self.validAct]
+                        self.coordinates = self.coordinates[self.validAct, :]
+
             else:
                 print_('Loading the 2D zonal modes...', print_dm_properties)
                 self.modes = modes
@@ -623,22 +613,22 @@ class DeformableMirror:
         ax = plt.subplot(gs[0, 0])
         if input_opd is None:
             input_opd = np.reshape(np.sum(self.modes**5, axis=1), [self.resolution, self.resolution])
-        ax.imshow(input_opd, extent=[-self.D/2, self.D/2, -self.D/2, self.D/2])
-        center = self.D/2
+        ax.imshow(input_opd, extent=[-self.telescope.D/2, self.telescope.D/2, -self.telescope.D/2, self.telescope.D/2])
+        center = self.telescope.D/2
         [x_tel, y_tel] = pol2cart(self.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
         cm = plt.get_cmap('gist_rainbow')
         col = []
         for i_source in range(len(list_src)):
             col.append(cm(1.*i_source/len(list_src)))
-            [x_c, y_c] = pol2cart(self.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+            [x_c, y_c] = pol2cart(self.telescope.initial_D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
             if self.altitude is None:
                 h = list_src[i_source].altitude
             else:
                 h = list_src[i_source].altitude-self.altitude
             if xp.isinf(h):
-                r = self.D/2
+                r = self.telescope.initial_D/2
             else:
-                r = (h/list_src[i_source].altitude)*self.D/2
+                r = (h/list_src[i_source].altitude)*self.telescope.initial_D/2
             [x_cone, y_cone] = pol2cart(r, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
             if self.altitude is None:
                 [x_z, y_z] = [0, 0]

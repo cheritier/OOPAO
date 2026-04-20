@@ -154,7 +154,11 @@ class Asterism:
     def __mul__(self, obj):
         # Propagation function.
         if obj is not None:
-            obj.relay(self)
+            if isinstance(obj, list):
+                for i in range(len(obj)):
+                    self*obj[i]
+            else:
+                obj.relay(self)
         return self
 
     def reset(self):

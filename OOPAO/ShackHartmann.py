@@ -326,8 +326,8 @@ class ShackHartmann:
         for i in range(self.nSubap):
             tmp_flux_v_split = np.vsplit(tmp_flux_h_split[i], self.nSubap)
             sh_data.cube_flux[i * self.nSubap:(i + 1) * self.nSubap,
-                                  self.center_init - self.n_pix_subap_init // 2:self.center_init + self.n_pix_subap_init // 2,
-                                  self.center_init - self.n_pix_subap_init // 2:self.center_init + self.n_pix_subap_init // 2] = np.asarray(tmp_flux_v_split)
+                              self.center_init - self.n_pix_subap_init // 2:self.center_init + self.n_pix_subap_init // 2,
+                              self.center_init - self.n_pix_subap_init // 2:self.center_init + self.n_pix_subap_init // 2] = np.asarray(tmp_flux_v_split)
         # required to compute the valid subapertures
         sh_data.photon_per_subaperture = np.apply_over_axes(np.sum, sh_data.cube_flux, [1, 2])
         sh_data.current_nPhoton = src.nPhoton
@@ -583,7 +583,7 @@ class ShackHartmann:
         else:
             # Geometric SH with single WF
             if np.ndim(src.phase) == 2:
-                self.signal_2D = self.lenslet_propagation_geometric(src.phase,sh_data.pupil_mask)*sh_data.valid_signal_2D/self.slopes_units
+                self.signal_2D = self.lenslet_propagation_geometric(src.phase, sh_data.pupil_mask)*sh_data.valid_signal_2D/self.slopes_units
                 self.signal = self.signal_2D[sh_data.valid_signal_2D]
             # Geometric SH with multiple WFS
             else:
@@ -660,12 +660,13 @@ class ShackHartmann:
                 self.initialize_wfs()
         return
 
-    def set_slopes_units(self, src=None, tomographic_reconstructor=None,dm =None):
+    def set_slopes_units(self, src=None, tomographic_reconstructor=None, dm=None):
         if src is None:
             src = self.src
         print('Calibrating the slopes units')
         [self.Tip, self.Tilt] = np.meshgrid(np.linspace(-np.pi, np.pi, self.telescope.resolution, endpoint=False),
                                             np.linspace(-np.pi, np.pi, self.telescope.resolution, endpoint=False))
+
         readoutNoise = np.copy(self.cam.readoutNoise)
         photonNoise = np.copy(self.cam.photonNoise)
         self.cam.photonNoise = 0
@@ -676,17 +677,6 @@ class ShackHartmann:
             src**self.telescope*TT_in*self.em_field_transform
             self.relay(src)
             self.slopes_units = np.mean(self.signal)
-            
-            # if self.is_geometric is False:
-            #     self.slopes_units = np.mean(self.signal)
-            # else:
-                
-            #     if self.src.tag == 'source':
-            #         # case single source
-            #         self.slopes_units = np.mean(self.signal) #_2D[self.lighted_subap*src.sh_data.valid_signal_2D])
-            #     else:
-            #         # case asterism
-            #         self.slopes_units = np.mean(self.signal) #_2D[:, self.lighted_subap*src.sh_data.valid_signal_2D])
         else:
             if src.type != 'asterism':
                 raise OopaoError('Only asterisms objects can be used to calibrate the SH WFS with a tomographic reconsctrutor')
@@ -924,22 +914,22 @@ class ShackHartmann:
 
         return np.asarray(shift_x_buffer), np.asarray(shift_y_buffer), np.asarray(spot_kernel_elongation_fft), np.asarray(spot_kernel_elongation)
 
-    def get_valid_actuators(self):
-        n_elements = 2 * self.nSubap + 1  # Linear number of lenslet+actuator
-        valid_lenslet_actuator = np.zeros((n_elements, n_elements), dtype=int)
-        index = np.arange(1, n_elements, 2)  # Lenslet index
-        # valid_lenslet_actuator[np.ix_(index, index)] = src.valid_subapertures
-        valid_lenslet_actuator[np.ix_(index, index)] = src.valid_subapertures
-        for x_lenslet in index:
-            for y_lenslet in index:
-                if valid_lenslet_actuator[x_lenslet, y_lenslet] == 1:
-                    x_actuator_indices = [x_lenslet - 1, x_lenslet - 1, x_lenslet + 1, x_lenslet + 1]
-                    y_actuator_indices = [y_lenslet - 1, y_lenslet + 1, y_lenslet + 1, y_lenslet - 1]
-                    for x_act, y_act in zip(x_actuator_indices, y_actuator_indices):
-                        valid_lenslet_actuator[x_act, y_act] = 1
-        index = np.arange(0, n_elements, 2)
-        val = valid_lenslet_actuator[np.ix_(index, index)].astype(bool)
-        return val
+    # def get_valid_actuators(self):
+    #     n_elements = 2 * self.nSubap + 1  # Linear number of lenslet+actuator
+    #     valid_lenslet_actuator = np.zeros((n_elements, n_elements), dtype=int)
+    #     index = np.arange(1, n_elements, 2)  # Lenslet index
+    #     # valid_lenslet_actuator[np.ix_(index, index)] = src.valid_subapertures
+    #     valid_lenslet_actuator[np.ix_(index, index)] = src.valid_subapertures
+    #     for x_lenslet in index:
+    #         for y_lenslet in index:
+    #             if valid_lenslet_actuator[x_lenslet, y_lenslet] == 1:
+    #                 x_actuator_indices = [x_lenslet - 1, x_lenslet - 1, x_lenslet + 1, x_lenslet + 1]
+    #                 y_actuator_indices = [y_lenslet - 1, y_lenslet + 1, y_lenslet + 1, y_lenslet - 1]
+    #                 for x_act, y_act in zip(x_actuator_indices, y_actuator_indices):
+    #                     valid_lenslet_actuator[x_act, y_act] = 1
+    #     index = np.arange(0, n_elements, 2)
+    #     val = valid_lenslet_actuator[np.ix_(index, index)].astype(bool)
+    #     return val
 
     @property
     def is_geometric(self):
