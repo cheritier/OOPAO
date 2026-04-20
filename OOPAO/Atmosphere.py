@@ -847,7 +847,7 @@ class Atmosphere:
 
     @elevation.setter
     def elevation(self, val):
-        self.sampling_checked = True
+     
         val = float(val)
         if val < 5.0: 
             warning("Very low elevation (< 5 deg). Clamping to 5 deg.")
@@ -867,7 +867,7 @@ class Atmosphere:
                 self.initializeAtmosphere(self.telescope, compute_covariance=self.compute_covariance)
             else:
                 raise OopaoError("Warning: Atmosphere not yet linked to a telescope. Call initializeAtmosphere() manually.")
-        self.update_rytov_variance()
+        
     
 
     # for backward compatibility
