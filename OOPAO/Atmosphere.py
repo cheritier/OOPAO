@@ -35,13 +35,7 @@ class Atmosphere:
                  altitude: list,
                  src=None,
                  param=None,
-                 mode: float = 2, 
-                 elevation: float = 90.0, 
-                 angular_spectrum_propagation: bool = False,
-                 geometric_phase_backup: bool = False,
-                 unwrap_diffractive_phase = False,
-                 rytov_var: float = None, 
-                 rytov_wvl: float = 500e-9):
+                 mode: float = 2):
         """ ATMOSPHERE.
         An Atmosphere is made of one or several layer of turbulence that follow the Van Karmann statistics.
         Each layer is considered to be independant to the other ones and has its own properties (direction, speed, etc.)
@@ -57,7 +51,7 @@ class Atmosphere:
             The telescope object to which the Atmosphere is associated.
             This object carries the phase, flux, pupil information and sampling time as well as the type of source (NGS/LGS, source/asterism).
         r0 : float
-            the Fried Parameter in m, at 500 nm and at the eleavation defined by the user.
+            the Fried Parameter in m, at 500 nm.
         L0 : float
             Outer scale parameter.
         windSpeed : list
@@ -79,9 +73,6 @@ class Atmosphere:
         asterism : Asterism, optional
             If the system contains multiple source, an astrism should be input to the atmosphere object.
             The default is None.
-        elevation : float, optional 
-            Elevation of the site in degrees. This is used to compute the effective r0 and the altitude of the layers in zenith.
-            The default is 90 deg (i.e. zenith).
 
         Raises
         ------
@@ -113,9 +104,6 @@ class Atmosphere:
         _ atm.nLayer                                : number of turbulence layers
         _ atm.seeingArcsec                          : seeing in arcsec at 500 nm
         _ atm.layer_X                               : access the child object corresponding to the layer X where X starts at 0
-        _ atm.elevation                             : elevation of the site in degrees. This is used to compute the effective r0 and the altitude of the layers in zenith.
-        _ atm.angular_spectrum_propagation          : if True, the propagation is computed using a diffractive propagation of the wavefront through the layers. If False, only the geometric phase is computed.
-        _ atm.geometric_phase_backup                : if True, the geometric phase is kept as a backup and can be used to compare the effect of the scintillation on the final phase.
 
         The main properties of the object can be displayed using :
             atm.print_properties()
@@ -124,7 +112,6 @@ class Atmosphere:
             _ atm.r0
             _ atm.windSpeed
             _ atm.windDirection
-            _ atm.elevation
         ************************** FUNCTIONS **************************
 
         _ atm.update()                              : update the OPD of the atmosphere for each layer according to the time step defined by tel.samplingTime
@@ -152,17 +139,13 @@ class Atmosphere:
         else:
             self.precision_complex = xp.complex128
         self.hasNotBeenInitialized = True
-        # Elevation initialization
-        self.__updating_r0 = False # Protection to go faster when the r0 is updated without re-generating the phase screens
-        self.altitude = altitude # altitude of the atmospheric layers
-        self.wavelength = 500*1e-9 # Wavelengt used to define the properties of the atmosphere
-        self._elevation = max(5.0, float(elevation))
-        el_rad = np.radians(self._elevation)
-        self.altitude_zenith = [h * np.sin(el_rad) for h in self.altitude]
+        # Wavelengt used to define the properties of the atmosphere
+        self.wavelength = 500*1e-9
         self.r0_def = 0.15  # Default Fried Parameter in m at 500 nm to build covariance matrices once and scale them later
         self.r0 = r0  # User input Fried Parameter in m at 500 nm
         self.rad2arcsec = (180. / np.pi) * 3600
         self.fractionalR0 = fractionalR0      # Fractional Cn2 profile in percentage
+        self.altitude = altitude  # altitude of the atmospheric layers
         self.cn2 = (self.r0**(-5. / 3) / (0.423 * (2*np.pi/self.wavelength)**2))/np.max([1, np.max(self.altitude)])  # Cn2 m^(-2/3)
         self.L0 = L0                # Outer Scale in m
         self.nLayer = len(fractionalR0)     # number of layer
@@ -744,19 +727,17 @@ class Atmosphere:
     @r0.setter
     def r0(self, val):
         self._r0 = val
-        el_rad = np.radians(self.elevation) 
-        self.r0_zenith = val * (np.sin(el_rad))**(-3/5)  # r0 at zenith
         if self.hasNotBeenInitialized is False:
             print('Updating the Atmosphere covariance matrices...')
             self.seeingArcsec = self.rad2arcsec*(self.wavelength/val)
-            self.cn2 = (self._r0**(-5. / 3) / (0.423 * (2*np.pi/self.wavelength)**2))/np.max([1, np.max(self.altitude)])  # Cn2 m^(-2/3)
+            self.cn2 = (self.r0**(-5. / 3) / (0.423 * (2*np.pi/self.wavelength)**2))/np.max([1, np.max(self.altitude)])  # Cn2 m^(-2/3)
             if self.compute_covariance:
                 for i_layer in range(self.nLayer):
                     tmp_layer = getattr(self, 'layer_'+str(i_layer+1))
-                    tmp_layer.ZZt_r0 = tmp_layer.ZZt*(self.r0_def/self._r0)**(5/3)
-                    tmp_layer.ZXt_r0 = tmp_layer.ZXt*(self.r0_def/self._r0)**(5/3)
-                    tmp_layer.XXt_r0 = tmp_layer.XXt*(self.r0_def/self._r0)**(5/3)
-                    tmp_layer.ZZt_inv_r0 = tmp_layer.ZZt_inv / ((self.r0_def/self._r0)**(5/3))
+                    tmp_layer.ZZt_r0 = tmp_layer.ZZt*(self.r0_def/self.r0)**(5/3)
+                    tmp_layer.ZXt_r0 = tmp_layer.ZXt*(self.r0_def/self.r0)**(5/3)
+                    tmp_layer.XXt_r0 = tmp_layer.XXt*(self.r0_def/self.r0)**(5/3)
+                    tmp_layer.ZZt_inv_r0 = tmp_layer.ZZt_inv / ((self.r0_def/self.r0)**(5/3))
                     BBt = tmp_layer.XXt_r0 - xp.matmul(tmp_layer.A, tmp_layer.ZXt_r0)
                     tmp_layer.B = xp.linalg.cholesky(BBt).astype(self.precision())
 
@@ -841,34 +822,6 @@ class Atmosphere:
                 print('Updating the fractional R0...BEWARE COMPLETE THE RECOMPUTATION...NOT ONLY V0 and Tau0 !')
                 self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5)  # computation of equivalent wind speed, Roddier 1982
                 self.tau0 = 0.31 * self.r0 / self.V0  # Coherence time of atmosphere, Roddier 1981
-    @property
-    def elevation(self):
-        return self._elevation
-
-    @elevation.setter
-    def elevation(self, val):
-        self.sampling_checked = True
-        val = float(val)
-        if val < 5.0: 
-            warning("Very low elevation (< 5 deg). Clamping to 5 deg.")
-            val = 5.0      
-        if hasattr(self, '_elevation') and val == self._elevation:
-            return # Do nothing if the exact same elevation is requested again      
-        self._elevation = val
-        el_rad = np.radians(val)  
-        airmass = 1.0 / np.sin(el_rad) # Airmass calculation 
-        print(f"--- Atmosphere Configuration : Elev={val:.1f}° ---") 
-        self.altitude = [h_z / np.sin(el_rad) for h_z in self.altitude_zenith]  # Update effective distance of layers 
-        self._r0 = self.r0_zenith * (np.sin(el_rad))**(3/5) # Update effective r0 (3/5 power law)
-        print(f" -> New r0 : {self._r0:.4f} m (Zenith reference: {self.r0_zenith:.4f} m)")
-        if self.hasNotBeenInitialized is False:  # Re-initializationof of the atmosphere 
-            self.hasNotBeenInitialized = True
-            if hasattr(self, 'telescope') and self.telescope is not None:
-                self.initializeAtmosphere(self.telescope, compute_covariance=self.compute_covariance)
-            else:
-                raise OopaoError("Warning: Atmosphere not yet linked to a telescope. Call initializeAtmosphere() manually.")
-        self.update_rytov_variance()
-    
 
     # for backward compatibility
     def print_properties(self):
@@ -898,7 +851,7 @@ class Atmosphere:
         self.prop['delimiter'] = f'\033[00m{"":=^{n_char}}'
         for i in range(len(self.prop.values())):
             str_prop += list(self.prop.values())[i] + '\n'
-        title = f'\n{" Atmosphere @ Elevation = " + str(self._elevation) + "°":-^{n_char}}\n'
+        title = f'\n{" Atmosphere ":-^{n_char}}\n'
         end_line = f'{"":-^{n_char}}\n'
         table = title + str_prop + end_line
         return table
