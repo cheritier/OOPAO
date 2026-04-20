@@ -447,7 +447,7 @@ class Atmosphere:
     def relay(self, src):
         # update the src attached to the atmosphere
         self.src = src
-         # different cases between single and multiple sources
+        # different cases between single and multiple sources
         if src.tag == 'source':
             self.src_list = [src]
             self.asterism = None
@@ -744,7 +744,7 @@ class Atmosphere:
         if self.hasNotBeenInitialized is False:
             print('Updating the Atmosphere covariance matrices...')
             self.seeingArcsec = self.rad2arcsec*(self.wavelength/val)
-            self.cn2 = (self._r0**(-5. / 3) / (0.423 * (2*np.pi/self.wavelength)**2))/np.max([1, np.max(self.altitude)])  # Cn2 m^(-2/3)
+            self.cn2 = (self.r0**(-5. / 3) / (0.423 * (2*np.pi/self.wavelength)**2))/np.max([1, np.max(self.altitude)])  # Cn2 m^(-2/3)
             if self.compute_covariance:
                 for i_layer in range(self.nLayer):
                     tmp_layer = getattr(self, 'layer_'+str(i_layer+1))
