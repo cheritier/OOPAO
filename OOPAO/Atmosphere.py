@@ -36,12 +36,7 @@ class Atmosphere:
                  src=None,
                  param=None,
                  elevation: float = 90.0, 
-                 mode: float = 2,
-                 angular_spectrum_propagation: bool = False,
-                 geometric_phase_backup: bool = False,
-                 unwrap_diffractive_phase = False,
-                 rytov_var: float = None, 
-                 rytov_wvl: float = 500e-9):
+                 mode: float = 2):
         """ ATMOSPHERE.
         An Atmosphere is made of one or several layer of turbulence that follow the Van Karmann statistics.
         Each layer is considered to be independant to the other ones and has its own properties (direction, speed, etc.)
