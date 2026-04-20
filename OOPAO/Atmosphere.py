@@ -747,10 +747,10 @@ class Atmosphere:
             if self.compute_covariance:
                 for i_layer in range(self.nLayer):
                     tmp_layer = getattr(self, 'layer_'+str(i_layer+1))
-                    tmp_layer.ZZt_r0 = tmp_layer.ZZt*(self.r0_def/self._r0)**(5/3)
-                    tmp_layer.ZXt_r0 = tmp_layer.ZXt*(self.r0_def/self._r0)**(5/3)
-                    tmp_layer.XXt_r0 = tmp_layer.XXt*(self.r0_def/self._r0)**(5/3)
-                    tmp_layer.ZZt_inv_r0 = tmp_layer.ZZt_inv / ((self.r0_def/self._r0)**(5/3))
+                    tmp_layer.ZZt_r0 = tmp_layer.ZZt*(self.r0_def/self.r0)**(5/3)
+                    tmp_layer.ZXt_r0 = tmp_layer.ZXt*(self.r0_def/self.r0)**(5/3)
+                    tmp_layer.XXt_r0 = tmp_layer.XXt*(self.r0_def/self.r0)**(5/3)
+                    tmp_layer.ZZt_inv_r0 = tmp_layer.ZZt_inv / ((self.r0_def/self.r0)**(5/3))
                     BBt = tmp_layer.XXt_r0 - xp.matmul(tmp_layer.A, tmp_layer.ZXt_r0)
                     tmp_layer.B = xp.linalg.cholesky(BBt).astype(self.precision())
 
