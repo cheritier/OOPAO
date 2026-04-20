@@ -447,6 +447,7 @@ class Atmosphere:
     def relay(self, src):
         # update the src attached to the atmosphere
         self.src = src
+         # different cases between single and multiple sources
         if src.tag == 'source':
             self.src_list = [src]
             self.asterism = None
