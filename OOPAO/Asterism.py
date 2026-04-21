@@ -140,6 +140,25 @@ class Asterism:
         for src in self.src:
             _OPD_no_pupil.append(src.OPD_no_pupil)
         return np.array(_OPD_no_pupil)
+    
+    @property
+    def scintillation(self):
+        _scintillation = []
+        for src in self.src:
+            _scintillation.append(getattr(src, 'scintillation', None))
+        return np.array(_scintillation, dtype=object)
+
+    @scintillation.setter
+    def scintillation(self, val):
+        for src in self.src:
+            src.scintillation = val[src.ast_idx]
+
+    @property
+    def scintillation_no_pupil(self):
+        _scintillation_no_pupil = []
+        for src in self.src:
+            _scintillation_no_pupil.append(getattr(src, 'scintillation_no_pupil', None))
+        return np.array(_scintillation_no_pupil, dtype=object)
 
     def __pow__(self, obj):
         # Re-propagation function. Same as .* in OOMAO
