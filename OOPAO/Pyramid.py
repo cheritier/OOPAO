@@ -285,7 +285,7 @@ class Pyramid:
         self.cam = Detector(round(nSubap*self.zeroPaddingFactor))
         # WFS focal plane detector object (see Detector class)
         self.focal_plane_camera = Detector(int(
-            (modulation*4+12)*self.zeroPaddingFactor), psf_sampling=self.zeroPaddingFactor)
+            (modulation*4+12)*self.zeroPaddingFactor*self.telescope.resolution/self.telescope.initial_resolution), psf_sampling=self.zeroPaddingFactor*self.telescope.resolution/self.telescope.initial_resolution)
         self.focal_plane_camera.is_focal_plane_camera = True
         # Light ratio for the valid pixels selection
         self.lightRatio = lightRatio
@@ -666,7 +666,7 @@ class Pyramid:
         if phase_in is not None:
             self.src.phase = phase_in
         # mask amplitude for the light propagation
-        self.maskAmplitude = self.convert_for_gpu(np.sqrt(self.src.fluxMap/self.nTheta))
+        self.maskAmplitude = self.convert_for_gpu(np.sqrt((self.src.fluxMap * self.src.scintillation)/self.nTheta))
 
         if self.spatialFilter is not None:
             if np.ndim(phase_in) == 2:

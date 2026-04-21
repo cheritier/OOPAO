@@ -36,7 +36,12 @@ class Atmosphere:
                  src=None,
                  param=None,
                  elevation: float = 90.0, 
-                 mode: float = 2):
+                 mode: float = 2,
+                 angular_spectrum_propagation: bool = False,
+                 geometric_phase_backup: bool = False,
+                 unwrap_diffractive_phase = False,
+                 rytov_var: float = None, 
+                 rytov_wvl: float = 500e-9):
         """ ATMOSPHERE.
         An Atmosphere is made of one or several layer of turbulence that follow the Van Karmann statistics.
         Each layer is considered to be independant to the other ones and has its own properties (direction, speed, etc.)
@@ -45,8 +50,11 @@ class Atmosphere:
         If the source type is an LGS the cone effect is considered using an interpolation.
         NGS and LGS can be combined together in the Asterism object.
         The convention chosen is that all the wavelength-dependant atmosphere parameters are expressed at 500 nm.
-
         The atmosphere is computaded at the elevation defined by the user (by default at zenith) and can be updated on the fly by changing the atm.elevation value.
+        The atmosphere has three propagation modes :
+            1 : geometric propagation only (no scintillation, no diffractive effects) -> atm.angular_spectrum_propagation = False and atm.geometric_phase_backup = False
+            2 : diffractive propagation with scintillation -> atm.angular_spectrum_propagation = True and atm.geometric_phase_backup = False
+            3 : diffractive propagation with scintillation and geometric phase backup -> atm.angular_spectrum_propagation = True and atm.geometric_phase_backup = True
         Parameters
         ----------
         telescope : Telescope
@@ -78,6 +86,17 @@ class Atmosphere:
         elevation : float, optional 
             Elevation of the site in degrees. This is used to compute the effective r0 and the altitude of the layers in zenith.
             The default is 90 deg (i.e. zenith).
+        angular_spectrum_propagation : bool, optional
+            If True, the scintillation is computed using a diffractive propagation of the wavefront through the layers. If False, only the geometric phase is computed.
+            The default is False.
+        geometric_phase_backup : bool, optional
+            If True, the geometric phase is kept as a backup and can be used to compare the effect of the scintillation on the final phase.
+            The default is False.
+        rytov_var : float, optional
+            If not None, the variance of the Rytov fluctuations is set to this value. This allows to simulate specific scintillation conditions.
+            The default is None, in which case the Rytov variance is computed from the Cn2 profile and the wavelength using the formula from Tatarskii (1961).
+        rytov_wvl : float, optional
+            Wavelength at which the Rytov variance is computed in [m]. The default is 500 nm.
 
         Raises
         ------
@@ -110,6 +129,8 @@ class Atmosphere:
         _ atm.seeingArcsec                          : seeing in arcsec at 500 nm
         _ atm.layer_X                               : access the child object corresponding to the layer X where X starts at 0
         _ atm.elevation                             : elevation of the site in degrees. This is used to compute the effective r0 and the altitude of the layers in zenith.
+        _ atm.angular_spectrum_propagation          : if True, the propagation is computed using a diffractive propagation of the wavefront through the layers. If False, only the geometric phase is computed.
+        _ atm.geometric_phase_backup                : if True, the geometric phase is kept as a backup and can be used to compare the effect of the scintillation on the final phase.
 
         The main properties of the object can be displayed using :
             atm.print_properties()
@@ -146,13 +167,15 @@ class Atmosphere:
         else:
             self.precision_complex = xp.complex128
         self.hasNotBeenInitialized = True
-        # Wavelengt used to define the properties of the atmosphere
-        self.wavelength = 500*1e-9
+        # Elevation initialization
         self.__updating_r0 = False # Protection to go faster when the r0 is updated without re-generating the phase screens
+        self.angular_spectrum_propagation = angular_spectrum_propagation
+        self.geometric_phase_backup = geometric_phase_backup
         self.altitude = altitude # altitude of the atmospheric layers
         self.wavelength = 500*1e-9 # Wavelengt used to define the properties of the atmosphere
         self._elevation = max(5.0, float(elevation))
         el_rad = np.radians(self._elevation)
+        self.sampling_checked = False
         self.altitude_zenith = [h * np.sin(el_rad) for h in self.altitude]
         self.r0_def = 0.15  # Default Fried Parameter in m at 500 nm to build covariance matrices once and scale them later
         self.r0 = r0  # User input Fried Parameter in m at 500 nm
@@ -186,7 +209,13 @@ class Atmosphere:
             self.src_list = self.src.src
             self.asterism = self.src
         self.param = param
-
+        #♥ Rytov initialization
+        self.rytov_wvl = float(rytov_wvl)
+        self.update_rytov_variance()
+        if rytov_var is not None:
+            self.update_rytov_variance()
+            self.rytov_var = float(rytov_var)
+        
     def initializeAtmosphere(self, telescope=None, compute_covariance=True):
         if telescope is not None:
             self.telescope = telescope
@@ -456,23 +485,43 @@ class Atmosphere:
             self.asterism = src
         if self.is_user_defined_opd:
             OPD_support = [self.user_defined_opd]*len(self.src_list)
-            warning('User-Defined OPD are only propagated once in the Atmosphere class. Consider using the OPD_map class.')
-        else:
-            # compute the pupil footprint for each layers and each source
-            self.set_pupil_footprint()
-            for src in self.src_list:
-                if src.coordinates[0] > self.fov/2:
-                    raise OopaoError('The source object zenith ('+str(src.coordinates[0])+'") is outside of the telescope fov ('+str(
-                        self.fov//2)+'")! You can:\n - Reduce the zenith of the source \n - Re-initialize the atmosphere object using a telescope with a larger fov')
-                src.through_atm = True
-                src.optical_path.append([self.tag, self])
-            # intialize the OPD support
-            OPD_support = self.initialize_OPD_support()
-            # fill the support for each layer
+            warning('User-Defined OPD are only propagated once in the Atmosphere class.')
+            self.set_OPD(OPD_support)
+            self.is_user_defined_opd = False
+            return
+        # compute the pupil footprint
+        self.set_pupil_footprint()
+        for src in self.src_list:
+            if src.coordinates[0] > self.fov/2:
+                raise OopaoError(f'Source zenith ({src.coordinates[0]}") outside of fov!')
+            src.through_atm = True
+            src.optical_path.append([self.tag, self])
+        # geometric baseline
+        needs_geometric = (not getattr(self, 'angular_spectrum_propagation', False)) or \
+                          getattr(self, 'geometric_phase_backup', False) or \
+                          getattr(self, 'unwrap_diffractive_phase', False)
+        OPD_support = self.initialize_OPD_support()
+        if needs_geometric:
             for i_layer in range(self.nLayer):
                 tmp_layer = getattr(self, 'layer_' + str(i_layer + 1))
                 OPD_support = self.fill_OPD_support(tmp_layer, OPD_support, i_layer)
-        self.set_OPD(OPD_support)
+        # diffractive propagation
+        if getattr(self, 'angular_spectrum_propagation', False):
+            self.check_fresnel_sampling()
+            # sort layers by altitude (top to bottom)
+            layers_data = [{'layer': getattr(self, 'layer_'+str(i+1)), 'idx': i, 'alt': getattr(self, 'layer_'+str(i+1)).altitude} for i in range(self.nLayer)]
+            layers_sorted = sorted(layers_data, key=lambda x: x['alt'], reverse=True)
+            scintillation_support = self.initialize_scintillation_support()
+            for k, item in enumerate(layers_sorted):
+                dist = item['alt'] - layers_sorted[k+1]['alt'] if k < len(layers_sorted)-1 else item['alt']
+                scintillation_support = self.fill_scintillation_support(item['layer'], scintillation_support, dist, item['idx'])
+            # extract maps and apply setters
+            self.set_scintillation_support(scintillation_support, OPD_support)
+        else:
+            # apply standard geometric maps if scintillation is disabled
+            intensity_support = [xp.ones((self.telescope.resolution, self.telescope.resolution), dtype=self.precision()) for _ in self.src_list]
+            self.set_scintillation(intensity_support)
+            self.set_OPD(OPD_support)
         self.is_user_defined_opd = False
         return
 
@@ -522,6 +571,79 @@ class Atmosphere:
             src.OPD_no_pupil = OPD_support[i]
             src.OPD = src.OPD_no_pupil*src.mask
         self.OPD = np.squeeze(np.array(OPD_support))
+        return
+    
+    def set_scintillation(self, scintillation_support): 
+        for i, src in enumerate(self.src_list):
+            src.scintillation_no_pupil = scintillation_support[i]
+            src.scintillation = src.scintillation_no_pupil*src.mask
+        self.scintillation_map = xp.squeeze(xp.array(scintillation_support))
+        return
+    
+    def initialize_scintillation_support(self):
+        scintillation_support = []
+        for i in range(len(self.src_list)):
+            scintillation_support.append(xp.ones([self.telescope.resolution, self.telescope.resolution], dtype=self.precision_complex))
+        return scintillation_support
+
+    def fill_scintillation_support(self, tmp_layer, scintillation_support, distance, i_layer):
+        n_pix = self.telescope.resolution
+        pxl_scale = getattr(self.telescope, 'pixelSize', self.telescope.D / self.telescope.resolution)
+        # extract the geometric OPD for this layer only
+        temp_zeros = [xp.zeros((n_pix, n_pix), dtype=self.precision()) for _ in range(len(self.src_list))]
+        layer_opd = self.fill_OPD_support(tmp_layer, temp_zeros, i_layer)
+        for i_src, src in enumerate(self.src_list):
+            wvl = src.wavelength
+            # apply phase screen
+            phi = layer_opd[i_src] * (2 * xp.pi / wvl)
+            scintillation_support[i_src] = scintillation_support[i_src] * xp.exp(1j * phi)
+            # propagate using angular spectrum
+            if distance > 1e-6:
+                scintillation_support[i_src] = self.ASM(
+                    scintillation_support[i_src], wvl, pxl_scale, pxl_scale, distance)
+        return scintillation_support
+
+    def set_scintillation_support(self, scintillation_support, OPD_support):
+        intensity_support = []
+        for i, src in enumerate(self.src_list):
+            E_field = scintillation_support[i]
+            wvl = src.wavelength
+            # Extract intensity
+            intensity = xp.abs(E_field)**2
+            intensity_support.append(intensity)
+            # --- Phase Extraction Routing ---
+            if getattr(self, 'geometric_phase_backup', False):
+                # Case 1: Pure geometric OPD (OPD_support is already populated)
+                pass 
+            elif getattr(self, 'unwrap_diffractive_phase', False):
+                # Case 2: Hybrid geometric guide + diffractive perturbation
+                # Convert geometric OPD to phase [rad]
+                phi_geo = OPD_support[i] * (2 * xp.pi / wvl)
+                
+                # Extract the wrapped diffractive residual (delta)
+                delta = xp.angle(E_field * xp.exp(-1j * phi_geo))
+                
+                # Safety check: warn if the residual itself wraps inside the pupil
+                pupil_mask = self.telescope.pupil > 0 # Ensure boolean masking
+                delta_pupil = delta[pupil_mask]
+                
+                if delta_pupil.size > 0: # Safeguard
+                    min_delta = xp.min(delta_pupil)
+                    max_delta = xp.max(delta_pupil)
+                    C = max_delta - min_delta
+                    if C > 1.9 * xp.pi: 
+                        warning(f"Diffractive residual wrapped inside the pupil! (C = {C:.2f} rad). Scintillation is too strong for perfect unwrapping.")
+                
+                # Combine guide and residual, then convert back to OPD [m]
+                final_phase = phi_geo + delta
+                OPD_support[i] = final_phase * (wvl / (2 * xp.pi))
+            else:
+                # Case 3: Standard ASM phase 
+                final_phase = xp.angle(E_field)
+                OPD_support[i] = final_phase * (wvl / (2 * xp.pi))
+        # Route to the final setters
+        self.set_scintillation(intensity_support)
+        self.set_OPD(OPD_support)
         return
 
     def get_covariance_matrices(self, layer):
@@ -732,12 +854,103 @@ class Atmosphere:
             ax.legend(loc='upper left')
             makeSquareAxes(plt.gca())
 
+    def update_rytov_variance(self):
+        if not hasattr(self, 'nLayer') or not hasattr(self, '_fractionalR0') or not hasattr(self, 'altitude'):
+            return
+        if not hasattr(self, 'rytov_wvl'):
+            self.rytov_wvl = 500e-9    
+        k_target = 2 * xp.pi / self.rytov_wvl
+        r0_target_wvl = self.r0 * (self.rytov_wvl / self.wavelength)**(6/5)
+        total_cn2_integral = (r0_target_wvl**(-5/3)) / (0.423 * k_target**2)
+        current_rytov = 0.0
+        for i in range(self.nLayer):
+            if self.altitude[i] > 1e-3: 
+                current_rytov += (total_cn2_integral * self.fractionalR0[i]) * (self.altitude[i]**(5/6))
+        self._rytov_var = current_rytov * 2.2524 * (k_target**(7/6))
+        if getattr(self, 'angular_spectrum_propagation', False):
+            if self._rytov_var > 0.3 and not getattr(self, '_saturation_warned', False):
+                warning(f"Atmospheric conditions degraded. Rytov variance ({self._rytov_var:.2f}) exceeds 0.3 limit! "
+                        "Entering saturation regime.")
+                self._saturation_warned = True 
+            elif self._rytov_var <= 0.3:
+                self._saturation_warned = False 
+
+    def ASM(self, input_field, wavelength, input_pitch, output_pitch, distance):
+        if distance == 0:
+            return input_field  
+        N = input_field.shape[0]
+        k = 2 * xp.pi / wavelength
+        # spatial frequency grids
+        delta_f = 1.0 / (N * input_pitch)
+        vals = xp.arange(-N/2, N/2, dtype=input_field.real.dtype) * delta_f
+        fx, fy = xp.meshgrid(vals, vals, copy=False)
+        f_sq = fx**2 + fy**2
+        # spatial grids
+        vals_r = xp.arange(-N/2, N/2, dtype=input_field.real.dtype) * input_pitch
+        x, y = xp.meshgrid(vals_r, vals_r, copy=False)
+        r_sq = x**2 + y**2
+        m = output_pitch / input_pitch
+        # input chirp
+        if m != 1.0:
+            phase_1 = xp.exp(1j * k/2 * (1-m)/distance * r_sq)
+        else:
+            phase_1 = 1.0  
+        # transfer kernel
+        phase_2 = xp.exp(-1j * xp.pi * wavelength * distance / m * f_sq)
+        # output chirp
+        if m != 1.0:
+            vals_out = xp.arange(-N/2, N/2, dtype=input_field.real.dtype) * output_pitch
+            x_out, y_out = xp.meshgrid(vals_out, vals_out, copy=False)
+            r_out_sq = x_out**2 + y_out**2
+            phase_3 = xp.exp(1j * k/2 * (m-1)/(m*distance) * r_out_sq)
+        else:
+            phase_3 = 1.0
+        # fft operations
+        field_freq = xp.fft.fft2(xp.fft.ifftshift(input_field * phase_1))
+        field_filtered = xp.fft.ifftshift(xp.fft.fftshift(field_freq) * phase_2)
+        field_out = xp.fft.fftshift(xp.fft.ifft2(field_filtered))
+        return field_out * phase_3 / m
+    
+    def check_fresnel_sampling(self):
+        """
+        Internal verification of the telescope grid for Fresnel propagation.
+        Issues warnings if the grid is prone to aliasing or violates ASM limits.
+        """
+        if not getattr(self, 'scintillation', False) or getattr(self, 'sampling_checked', False):
+            return
+        D_tel_phys = getattr(self.telescope, 'initial_D', self.telescope.D)
+        N_current = self.telescope.resolution
+        delta = getattr(self.telescope, 'pixelSize', self.telescope.D / N_current)
+        alts = sorted(self.altitude + [0.0], reverse=True)
+        max_step = max([alts[i] - alts[i+1] for i in range(len(alts)-1)]) if len(alts) > 1 else 0
+        z_max = max(self.altitude) if self.altitude else 0
+        for src in self.src_list:
+            wvl = src.wavelength
+            r0_wvl = self._r0 * (wvl / self.wavelength)**(6/5)
+            # Coy's spread (bilateral support)
+            D_turb = 4.0 * (wvl * z_max) / r0_wvl
+            D_total = D_tel_phys + 2.0 * D_turb
+            delta_req = min(r0_wvl / 4.0, (wvl * z_max) / D_total)
+            # Strict ASM anti-aliasing (N >= D_tot/delta + lambda*z/delta^2)
+            N_min_physique = (D_total / delta) + (wvl * z_max) / (delta**2)
+            z_asm = (N_current * delta**2) / wvl
+            if delta > delta_req:
+                warning(f"Fresnel [wvl={wvl*1e9:.0f}nm] - Pixel scale ({delta*1000:.1f} mm) too large! Limit is {delta_req*1000:.1f} mm.")
+            if N_current < N_min_physique:
+                N_min_int = int(np.ceil(N_min_physique))
+                warning(f"Fresnel Aliasing [wvl={wvl*1e9:.0f}nm] - Grid N={N_current} too small (Physics requires N >= {N_min_int}).")
+                warning(f"-> Action required: Pad your telescope to the next multiple of your WFS res_factor >= {N_min_int}.")
+            if max_step > z_asm:
+                warning(f"Fresnel ASM Limit [wvl={wvl*1e9:.0f}nm] - Distance between layers ({max_step/1000:.1f} km) > limit ({z_asm/1000:.1f} km).")
+        self.sampling_checked = True
+
     @property
     def r0(self):
         return self._r0
 
     @r0.setter
     def r0(self, val):
+        self.sampling_checked = False
         self._r0 = val
         el_rad = np.radians(self.elevation) 
         self.r0_zenith = val * (np.sin(el_rad))**(-3/5)  # r0 at zenith
@@ -754,6 +967,7 @@ class Atmosphere:
                     tmp_layer.ZZt_inv_r0 = tmp_layer.ZZt_inv / ((self.r0_def/self.r0)**(5/3))
                     BBt = tmp_layer.XXt_r0 - xp.matmul(tmp_layer.A, tmp_layer.ZXt_r0)
                     tmp_layer.B = xp.linalg.cholesky(BBt).astype(self.precision())
+        self.update_rytov_variance()
 
     @property
     def L0(self):
@@ -836,6 +1050,7 @@ class Atmosphere:
                 print('Updating the fractional R0...BEWARE COMPLETE THE RECOMPUTATION...NOT ONLY V0 and Tau0 !')
                 self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5)  # computation of equivalent wind speed, Roddier 1982
                 self.tau0 = 0.31 * self.r0 / self.V0  # Coherence time of atmosphere, Roddier 1981
+        self.update_rytov_variance()
 
     @property
     def elevation(self):
@@ -843,7 +1058,7 @@ class Atmosphere:
 
     @elevation.setter
     def elevation(self, val):
-     
+        self.sampling_checked = True
         val = float(val)
         if val < 5.0: 
             warning("Very low elevation (< 5 deg). Clamping to 5 deg.")
@@ -863,8 +1078,55 @@ class Atmosphere:
                 self.initializeAtmosphere(self.telescope, compute_covariance=self.compute_covariance)
             else:
                 raise OopaoError("Warning: Atmosphere not yet linked to a telescope. Call initializeAtmosphere() manually.")
-        
+        self.update_rytov_variance()
     
+    @property
+    def rytov_var(self):
+        if not getattr(self, 'angular_spectrum_propagation', False):
+            return 0.0
+        if not hasattr(self, '_rytov_var'):
+            self.update_rytov_variance()
+        return self._rytov_var
+
+    @rytov_var.setter
+    def rytov_var(self, val):
+        if not getattr(self, 'angular_spectrum_propagation', False):
+            warning("Cannot set Rytov variance because atm.angular_spectrum_propagation is False.")
+            return    
+        val = float(val)
+        if val <= 0:
+            return 
+        saturation_threshold = 0.3
+        if val > saturation_threshold:
+            warning(f"Target Rytov variance ({val:.2f}) exceeds the weak fluctuation limit ({saturation_threshold}). "
+                    "The simulation is entering the moderate/strong scintillation regime (saturation). "
+                    "Phase unwrapping and scaling behaviors may become unstable.")
+        self.update_rytov_variance()
+        current = self._rytov_var
+        if current > 0:
+            ratio = val / current
+            print(f"--- Scaling Rytov variance to {val:.4f} (Ratio: {ratio:.3f}) ---")
+            new_r0 = self.r0 * (ratio**(-3/5))
+            self.r0 = new_r0 
+            scale_factor = float(np.sqrt(ratio))
+            
+            for i in range(1, getattr(self, 'nLayer', 3) + 1):
+                layer_name = f'layer_{i}'
+                if hasattr(self, layer_name):
+                    layer_obj = getattr(self, layer_name)
+                    if hasattr(layer_obj, 'OPD') and layer_obj.OPD is not None:
+                        layer_obj.OPD *= scale_factor
+            self.update_rytov_variance()
+        else:
+            warning("Cannot scale Rytov (all layers are at 0m).")
+        
+        if getattr(self, 'angular_spectrum_propagation', False):
+            if self._rytov_var > 0.3 and not getattr(self, '_saturation_warned', False):
+                warning(f"Atmospheric conditions degraded. Rytov variance ({self._rytov_var:.2f}) exceeds 0.3 limit! "
+                        "Entering saturation regime.")
+                self._saturation_warned = True 
+            elif self._rytov_var <= 0.3:
+                self._saturation_warned = False
 
     # for backward compatibility
     def print_properties(self):
