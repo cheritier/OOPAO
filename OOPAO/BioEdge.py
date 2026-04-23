@@ -560,7 +560,7 @@ class BioEdge:
         if phase_in is not None:
             self.src.phase = phase_in
         # mask amplitude for the light propagation
-        self.maskAmplitude = self.convert_for_gpu(np.sqrt(self.src.fluxMap/self.nTheta)*self.telescope.pupilReflectivity)
+        self.maskAmplitude = self.convert_for_gpu(np.sqrt((self.src.fluxMap * self.src.scintillation)/self.nTheta))
 
         if self.spatialFilter is not None:
             if np.ndim(phase_in) == 2:

@@ -70,6 +70,7 @@ class Source:
         The main properties of a Source object are listed here:
         _ src.phase     : 2D map of the phase scaled to the src wavelength corresponding to tel.OPD
         _ src.type      : Ngs or LGS
+        _ src.scintillation : 2D map of the scintillation pattern corresponding to tel.OPD
 
         _ src.nPhoton   : number of photons per m2 per s. if this property is changed after the initialization, the magnitude is automatically updated to the right value.
         _ src.fluxMap   : 2D map of the number of photons per pixel per frame (depends on the loop frequency defined by tel.samplingTime)
@@ -147,6 +148,10 @@ class Source:
         self._OPD_no_pupil = None
         self.phase_filtered = None
         self.amplitude_filtered = None
+        # Variables for scintillation
+        self.var_chi = None
+        self.var_rytov = None
+        self.scintillation = None
         # mask to compute the OPD with pupil.
         # Initally set to 1 so it doesnt do anything until the source is propagated through the telescope.
         self.mask = 1
@@ -181,6 +186,10 @@ class Source:
         self.OPD_no_pupil = None
         self.phase_filtered = None
         self.amplitude_filtered = None
+        self.scintillation = None
+        self.scintillation_no_pupil = None
+        self.var_chi = None
+        self.var_rytov = None
 
     def print_optical_path(self):
         if self.optical_path is not None:
@@ -199,7 +208,7 @@ class Source:
     def OPD(self, val):
         if val is not None:
             self._OPD = np.array(val)
-            self._OPD_no_pupil = np.array(val)
+            # self._OPD_no_pupil = np.array(val)
         else:
             self._OPD = None
             self._OPD_no_pupil = None
@@ -235,6 +244,36 @@ class Source:
     @phase_no_pupil.setter
     def phase_no_pupil(self, val):
         self.OPD_no_pupil = (val * self.wavelength) / (2 * np.pi)
+
+
+    @property
+    def scintillation(self):
+        return self._scintillation
+
+    @scintillation.setter
+    def scintillation(self, val):
+        if val is not None:
+            self._scintillation = np.array(val)
+            # self._scintillation_no_pupil = np.array(val)
+        else:
+            self._scintillation = None
+            self._scintillation_no_pupil = None
+            
+    @property
+    def scintillation_no_pupil(self):
+        return self._scintillation_no_pupil
+
+    @scintillation_no_pupil.setter
+    def scintillation_no_pupil(self, val):
+        if val is not None:
+            self._scintillation_no_pupil = np.array(val)
+            if len(val.shape) > 2 and np.isscalar(self.mask) is False:
+                self.scintillation = self._scintillation_no_pupil * self.mask[:, :, np.newaxis]
+            else:
+                self.scintillation = self._scintillation_no_pupil * self.mask
+        else:
+            self._scintillation_no_pupil = None
+
 
     def photometry(self, arg):
         # photometry object [wavelength, bandwidth, zeroPoint]
@@ -355,6 +394,69 @@ class Source:
         self._nPhoton = self.zeroPoint*10**(-0.4*self._magnitude)
         print('Flux updated, magnitude is %2i and flux is %.2e' % (self._magnitude, self._nPhoton))
         self.__updating_flux = False
+    
+    @property
+    def rytov_variance(self):
+        """
+        Computes the Rytov variance on the fly.
+        """
+        from .tools.tools import compute_rytov_variance
+        return compute_rytov_variance(self.scintillation, self.tel.pupil)
+
+    def get_dsp(self, telescope):
+        """
+        Computes the 1D PSDs (azimuthally averaged) for phase and log-amplitude.
+        Parameters
+        ----------
+        telescope : Telescope
+            The telescope object used to retrieve resolution and pixel size.
+        """
+        from .tools.tools import compute_dsp
+        return compute_dsp(
+            phase=self.phase_no_pupil,
+            scintillation=self.scintillation_no_pupil,
+            resolution=telescope.resolution,
+            pixel_size=telescope.pixelSize, 
+        )
+
+    def get_theoretical_pupil_variance(self, D_tel, L_source, L0, Cn2_input):
+        """
+        Computes the theoretical pupil-averaged log-amplitude variance.
+        Automatically uses the source's wavelength.
+        """
+        from .tools.tools import compute_theoretical_pupil_log_amp_variance
+        return compute_theoretical_pupil_log_amp_variance(
+            wavelength=self.wavelength,
+            D_tel=D_tel,
+            L_source=L_source,
+            L0=L0,
+            Cn2_input=Cn2_input
+        )
+    
+    def get_theoretical_rytov(self, atm):
+        """
+        Computes the theoretical Rytov variance based on atmospheric parameters.
+        """
+        from .tools.tools import compute_theoretical_rytov
+        return compute_theoretical_rytov(
+            wavelength=self.wavelength,
+            r0=atm.r0,
+            altitudes=atm.altitude,
+            fractionalR0=atm.fractionalR0
+        )
+    
+    def get_theoretical_dsp(self, kappa, r0, L0, altitude):
+        """
+        Retrieves the theoretical PSDs for the current source wavelength.
+        """
+        from .tools.tools import compute_theoretical_psd
+        return compute_theoretical_psd(
+            kappa=kappa,
+            wavelength=self.wavelength,
+            r0=r0,
+            L0=L0,
+            altitude=altitude
+        )
 
     # for backward compatibility
     def print_properties(self):
