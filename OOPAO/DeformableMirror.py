@@ -437,7 +437,7 @@ class DeformableMirror:
                 src.OPD_no_pupil = np.zeros([self.resolution, self.resolution])
 
             if self.altitude is not None:
-                dm_OPD = self.get_OPD_altitude(self.src)
+                dm_OPD = self.get_OPD_altitude(src)
             else:
                 dm_OPD = self.OPD
 
@@ -460,7 +460,7 @@ class DeformableMirror:
             center_x = int(y_z) + self.altitude_layer.resolution // 2
             center_y = int(x_z) + self.altitude_layer.resolution // 2
             self.altitude_layer.pupil_footprint = xp.zeros([self.altitude_layer.resolution, self.altitude_layer.resolution], dtype=self.precision())
-            self.altitude_layer.pupil_footprint[center_x - self.resolution // 2:center_x + self.resolution // 2, center_y - self.resolution // 2:center_y + self.resolution // 2] = 1
+            self.altitude_layer.pupil_footprint[center_x - self.telescope.resolution // 2:center_x + self.telescope.resolution // 2, center_y - self.telescope.resolution // 2:center_y + self.telescope.resolution // 2] = 1
         else:
             self.altitude_layer.pupil_footprint = []
             self.altitude_layer.extra_sx = []
@@ -477,7 +477,7 @@ class DeformableMirror:
                 center_y = int(x_z) + self.altitude_layer.resolution // 2
 
                 pupil_footprint = xp.zeros([self.altitude_layer.resolution, self.altitude_layer.resolution], dtype=self.precision())
-                pupil_footprint[center_x - self.resolution // 2:center_x + self.resolution // 2, center_y - self.resolution // 2:center_y + self.resolution // 2] = 1
+                pupil_footprint[center_x - self.telescope.resolution // 2:center_x + self.telescope.resolution // 2, center_y - self.telescope.resolution // 2:center_y + self.telescope.resolution // 2] = 1
                 self.altitude_layer.pupil_footprint.append(pupil_footprint)
                 self.altitude_layer.center_x.append(center_x)
                 self.altitude_layer.center_y.append(center_y)
@@ -528,14 +528,14 @@ class DeformableMirror:
     def get_OPD_altitude(self, src):
         self.set_pupil_footprint()
         if np.ndim(self.OPD) == 2:
-            if self.src.inAsterism:
-                OPD = np.reshape(self.OPD[np.where(self.altitude_layer.pupil_footprint[self.src.ast_idx] == 1)], [self.resolution, self.resolution])
+            if src.inAsterism:
+                OPD = np.reshape(self.OPD[np.where(self.altitude_layer.pupil_footprint[self.src.ast_idx] == 1)], [self.telescope.resolution, self.telescope.resolution])
             else:
-                OPD = np.reshape(self.OPD[np.where(self.altitude_layer.pupil_footprint == 1)], [self.resolution, self.resolution])
+                OPD = np.reshape(self.OPD[np.where(self.altitude_layer.pupil_footprint == 1)], [self.telescope.resolution, self.telescope.resolution])
         else:
-            OPD = np.reshape(self.OPD[self.altitude_layer.center_x[self.src.ast_idx]-self.resolution//2:self.altitude_layer.center_x[self.src.ast_idx]+self.resolution//2,
-                                      self.altitude_layer.center_y[self.src.ast_idx] - self.resolution//2:self.altitude_layer.center_y[self.src.ast_idx]+self.resolution//2, :],
-                                     [self.resolution, self.resolution, self.OPD.shape[2]])
+            OPD = np.reshape(self.OPD[self.altitude_layer.center_x[self.src.ast_idx]-self.telescope.resolution//2:self.altitude_layer.center_x[self.src.ast_idx]+self.telescope.resolution//2,
+                                      self.altitude_layer.center_y[self.src.ast_idx] - self.telescope.resolution//2:self.altitude_layer.center_y[self.src.ast_idx]+self.telescope.resolution//2, :],
+                                     [self.telescope.resolution, self.telescope.resolution, self.OPD.shape[2]])
         if ~np.isinf(src.altitude):
             if np.ndim(self.OPD) == 2:
                 sub_im = np.atleast_3d(OPD)
@@ -549,7 +549,7 @@ class DeformableMirror:
             cube_in = sub_im.T
             pixel_size_in = 1
             pixel_size_out = pixel_size_in*magnification_cone_effect
-            resolution_out = self.resolution
+            resolution_out = self.telescope.resolution
             OPD = np.asarray(np.squeeze(interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out)).T)
 
         return OPD
@@ -613,7 +613,7 @@ class DeformableMirror:
         ax = plt.subplot(gs[0, 0])
         if input_opd is None:
             input_opd = np.reshape(np.sum(self.modes**5, axis=1), [self.resolution, self.resolution])
-        ax.imshow(input_opd, extent=[-self.telescope.D/2, self.telescope.D/2, -self.telescope.D/2, self.telescope.D/2])
+        ax.imshow(input_opd, extent=[-self.D/2, self.D/2, -self.D/2, self.D/2])
         center = self.telescope.D/2
         [x_tel, y_tel] = pol2cart(self.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
         cm = plt.get_cmap('gist_rainbow')
@@ -633,7 +633,7 @@ class DeformableMirror:
             if self.altitude is None:
                 [x_z, y_z] = [0, 0]
             else:
-                [x_z, y_z] = pol2cart(self.altitude*xp.tan((list_src[i_source].coordinates[0])/self.rad2arcsec), xp.deg2rad(list_src[i_source].coordinates[1]))
+                [x_z, y_z] = pol2cart(self.altitude*xp.tan((list_src[i_source].coordinates[0])/self.rad2arcsec), -xp.deg2rad(list_src[i_source].coordinates[1]))
             center = 0
             [x_c, y_c] = pol2cart(self.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
             nm = (list_src[i_source].type) + '@' + str(list_src[i_source].coordinates[0])+'"'
