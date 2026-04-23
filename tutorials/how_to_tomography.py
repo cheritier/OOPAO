@@ -38,8 +38,8 @@ from OOPAO.Asterism import Asterism
 n_lgs = 4
 lgs_zenith = [10]*n_lgs
 lgs_azimuth = np.linspace(0,360,n_lgs,endpoint=False)
-lgs_altitude = 90e3 #np.inf # lower altitude to simulate LGS extended spots
-lgs_is_extended = False
+lgs_altitude = 40e3 #np.inf # lower altitude to simulate LGS extended spots
+lgs_is_extended = True
 
 if lgs_is_extended:
     n_Na = 21 # number of points to model the Na Profile
@@ -101,7 +101,7 @@ wfs = ShackHartmann(telescope          = tel,
                       is_geometric       = False,
                       shannon_sampling   = False,
                       threshold_cog      = 0.01,
-                      n_pixel_per_subaperture=6)
+                      n_pixel_per_subaperture=12,pixel_scale=2)
 
 #%%
 lgs_asterism**tel*wfs
@@ -180,12 +180,13 @@ config_vars["resolution"] = tel.resolution
 # AO system. We give the different AO objects created in OOPAO as input
 aoSys = tomoAO.Simulation.AOSystem(config_vars,
                                    tel=tel,         # telescope
-                                   ngs=ngs,         # natural guide star (giving optimization direction)
+                                   mmse_star=ngs,         # natural guide star (giving optimization direction)
                                    lgsAst=lgs_asterism,  # asterism
-                                   sciSrc=science,   # science source
+                                   sci_src=science,   # science source
                                    atm=atm,         # atmosphere
                                    dm=dm,           # deformable mirror
-                                   wfs=wfs)       # SH WFS
+                                   wfs=wfs,
+                                   filtered_subap_mask = wfs.valid_subapertures)       # SH WFS
 
 #%% ## Spatio-angular Tomographic reconstructor ###
 
@@ -193,11 +194,11 @@ from tomoAO.Reconstruction.reconClassType import tomoReconstructor
 
 inital_time = time.time()
 
-rec = tomoReconstructor(aoSys=aoSys,                  # AO system object (as crea:ted before)
+rec = tomoReconstructor(ao_sys=aoSys,                  # AO system object (as crea:ted before)
                         alpha=10,                     # constant used to compute the noise covariance
                         os=config_vars["os"],         # oversampling factor (used to compute the reconstruction grid)
                         indexation="xxyy",            # related with slopes ordering (in oopao they are xxyy)
-                        remove_TT_F = False,          # wether or not to remove TT from reconstruction
+                        remove_tt_focus = False,          # wether or not to remove TT from reconstruction
                         filter_subapertures = False)  # wether or not to filter SH subapertures (in simulation the
                                                       # valid subapertures are constant, so this is set False
                                                       
@@ -223,7 +224,7 @@ wfs_geom.set_slopes_units(tomographic_reconstructor = reconstructor, src = lgs_a
 print(wfs.slopes_units)
 print(wfs_geom.slopes_units)
 
-#%% Test tomographic reconstruction:
+#% Test tomographic reconstruction:
 plt.close('all')
 
 # propagate to geometric SHWFS 
