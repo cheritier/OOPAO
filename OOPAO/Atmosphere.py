@@ -718,7 +718,7 @@ class Atmosphere:
                         raise OopaoError('The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')
                 else:
                     chromatic_shift = 0
-                [x_z, y_z] = pol2cart(tmp_layer.altitude*xp.tan((list_src[i_source].coordinates[0] + chromatic_shift)/self.rad2arcsec), xp.deg2rad(list_src[i_source].coordinates[1]))
+                [x_z, y_z] = pol2cart(tmp_layer.altitude*xp.tan((list_src[i_source].coordinates[0] + chromatic_shift)/self.rad2arcsec), -xp.deg2rad(list_src[i_source].coordinates[1]))
                 center = 0
                 [x_c, y_c] = pol2cart(tmp_layer.D_fov/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
                 nm = (list_src[i_source].type) + '@' + str(list_src[i_source].coordinates[0])+'"'
