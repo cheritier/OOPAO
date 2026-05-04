@@ -455,13 +455,16 @@ def cl_plot(list_fig,plt_obj= None, type_fig = None,fig_number = 20,n_subplot = 
 
                     if getattr(plt_obj,'type_fig_'+str(count)) == 'plot':
                         if len(data)>1:
+                            min_y = 0
+                            max_y = 0
                             for i_data in range(len(data)-1):                                
                                 im_tmp =getattr(plt_obj,'im_'+str(count)+'_'+str(i_data+1))
                                 im_tmp.set_xdata(data[0])
                                 im_tmp.set_ydata(data[i_data+1])
+                                min_y = np.min((min_y,np.min(data[i_data+1])))
+                                max_y = np.max((max_y,np.max(data[i_data+1])))
                             im_tmp.axes.set_xlim([np.min(data[0])-0.1*np.abs(np.min(data[0])),np.max(data[0])+0.1*np.abs(np.max(data[0]))])
-                            min_y = np.min((data[1],data[2]))
-                            max_y = np.max((data[1],data[2]))
+
 
                             if plt_obj.list_lim[count] is None:
                                 im_tmp.axes.set_ylim([min_y-0.1*np.abs(min_y),max_y+0.1*np.abs(max_y)])
