@@ -177,7 +177,8 @@ plt.imshow(wfs.focal_plane_camera.frame + 1e8*(np.abs(wfs.mask[0]) + np.abs(wfs.
 #%% Useful BioEdge methods an properties
 
 # shift the BioEdge pupils on the detector
-wfs.apply_shift_wfs(sx = [-20*4*n_subaperture/2,0,0,0], sy= [0]*4)
+wfs.apply_shift_wfs(sx = [15,0,0,0], sy= [0]*4)
+ngs**tel*wfs
 plt.figure()
 plt.imshow(wfs.cam.frame)
 # re-initialize (sx=0 and sy=0)

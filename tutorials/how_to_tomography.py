@@ -38,8 +38,8 @@ from OOPAO.Asterism import Asterism
 n_lgs = 4
 lgs_zenith = [10]*n_lgs
 lgs_azimuth = np.linspace(0,360,n_lgs,endpoint=False)
-lgs_altitude = 40e3 #np.inf # lower altitude to simulate LGS extended spots
-lgs_is_extended = True
+lgs_altitude = np.inf # lower altitude to simulate LGS extended spots
+lgs_is_extended = False
 
 if lgs_is_extended:
     n_Na = 21 # number of points to model the Na Profile
@@ -99,9 +99,10 @@ wfs = ShackHartmann(telescope          = tel,
                       nSubap             = n_subaperture,
                       lightRatio         = 0.5,
                       is_geometric       = False,
-                      shannon_sampling   = False,
+                      shannon_sampling   = True,
                       threshold_cog      = 0.01,
-                      n_pixel_per_subaperture=12,pixel_scale=2)
+                      n_pixel_per_subaperture=12,
+                      pixel_scale=None)
 
 #%%
 lgs_asterism**tel*wfs
@@ -146,6 +147,8 @@ plt.colorbar()
 plt.show()
 
 dm.unfiltered_act_mask = unfiltered_act_mask
+
+dm.display_dm()
 
 #%%
 

@@ -431,8 +431,9 @@ plot_obj = cl_plot(list_fig=[atm.OPD,  # list of data for the different subplots
                                [1, 1, 1, 1]],
                    s=20)  # size of the scatter markers
 
-
-use_og_compensation =  True
+use_og_compensation=False
+# iteration at which OG are compensated
+start_og = 30
 
 for i in range(nLoop):
     a = time.time()
@@ -469,6 +470,9 @@ for i in range(nLoop):
     # store the slopes after propagating to the WFS <=> 1 frames delay
     if frame_delay == 1:
         wfsSignal = wfs.signal
+        
+    if i >start_og:
+        use_og_compensation = True
 
     # apply the commands on the DM
     if use_og_compensation:

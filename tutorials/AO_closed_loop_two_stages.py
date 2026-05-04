@@ -237,7 +237,7 @@ stage_2_gain = 0.4 # integrator gain
 stage_2_frame_delay = 2  # number of frame delay
 stage_2_buffer_wfs = stage_2_wfs.signal*0
 
-display = False  # enable the display
+display = True  # enable the display
 
 # variables used to to save closed-loop data data
 SR_ngs_stage_1 = np.zeros(nLoop)
@@ -335,7 +335,7 @@ for i in range(nLoop):
 
         stage_1_wfs.cam._integrated_time = (ratio_temporal-1)* tel.samplingTime
         stage_1_wfs.raw_data = np.sum(np.asarray(stage_1_buffer_wfs_fast_rate),axis=0)
-        stage_1_wfs.wfs_integrate()
+        stage_1_wfs.wfs_integrate(src=stage_1_ngs, sh_data=stage_1_wfs.sh_data['src_0'])
         stage_1_buffer_wfs_fast_rate = []
         
         if stage_1_frame_delay == 1:
