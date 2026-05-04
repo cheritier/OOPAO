@@ -72,14 +72,14 @@ class Asterism:
         for src in self.src:
             _Na_profile.append(src.Na_profile)
         return _Na_profile
-   
+
     @property
     def fwhm_spot_up(self):
         _fwhm_spot_up = []
         for src in self.src:
             _fwhm_spot_up.append(src.fwhm_spot_up)
         return _fwhm_spot_up
-    
+ 
     @property
     def fluxMap(self):
         _fluxMap = []
@@ -140,6 +140,25 @@ class Asterism:
         for src in self.src:
             _OPD_no_pupil.append(src.OPD_no_pupil)
         return np.array(_OPD_no_pupil)
+    
+    @property
+    def scintillation(self):
+        _scintillation = []
+        for src in self.src:
+            _scintillation.append(getattr(src, 'scintillation', None))
+        return np.array(_scintillation, dtype=object)
+
+    @scintillation.setter
+    def scintillation(self, val):
+        for src in self.src:
+            src.scintillation = val[src.ast_idx]
+
+    @property
+    def scintillation_no_pupil(self):
+        _scintillation_no_pupil = []
+        for src in self.src:
+            _scintillation_no_pupil.append(getattr(src, 'scintillation_no_pupil', None))
+        return np.array(_scintillation_no_pupil, dtype=object)
 
     def __pow__(self, obj):
         # Re-propagation function. Same as .* in OOMAO
@@ -204,7 +223,7 @@ class Asterism:
         self.prop['parameters'] = f"{'Source':^8s}|{'Wavelength':^12s}|{'Zenith':^8s}|{'Azimuth':^9s}|{'Altitude':^10s}|{'Magnitude':^11s}|{'Flux':^11s}|"
         self.prop['units'] = f"{'':^8s}|{'[m]':^12s}|{'[arcsec]':^8s}|{'[°]':^9s}|{'[m]':^10s}|{'':^11s}|{'[ph/m²/s]':^11s}|"
         for i in range(self.n_source):
-            if i%2 == 0:
+            if i % 2 == 0:
                 self.prop['layer_%02d'%i] = f"\033[00m{'%3d-%s'%(i+1,self.src[i].type):^8s}|{self.src[i].wavelength:^12.1e}|{self.src[i].coordinates[0]:^8.2f}|{self.src[i].coordinates[1]:^9.2f}|{self.src[i].altitude:^10.2f}|{self.src[i]._magnitude:^11.2f}|{self.src[i]._nPhoton:^11.1e}|"
             else:
                 self.prop['layer_%02d'%i] = f"\033[47m{'%3d-%s'%(i+1,self.src[i].type):^8s}|{self.src[i].wavelength:^12.1e}|{self.src[i].coordinates[0]:^8.2f}|{self.src[i].coordinates[1]:^9.2f}|{self.src[i].altitude:^10.2f}|{self.src[i]._magnitude:^11.2f}|{self.src[i]._nPhoton:^11.1e}|"

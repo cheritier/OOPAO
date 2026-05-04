@@ -212,6 +212,13 @@ class Telescope:
                 src.OPD = (src.OPD_no_pupil)*src.mask
             else:
                 src.OPD_no_pupil = np.zeros(self.pupil.shape)
+            if getattr(src, 'scintillation', None) is None:
+                src.scintillation_no_pupil = np.ones(self.pupil.shape)
+                src.scintillation = (src.scintillation_no_pupil)*src.mask
+            elif np.ndim(src.scintillation) == 2:
+                src.scintillation = (src.scintillation_no_pupil)*src.mask
+            else:
+                src.scintillation_no_pupil = np.ones(self.pupil.shape)
             src.var = np.var(src.phase[np.where(self.pupil == 1)])
             src.fluxMap = self.pupilReflectivity * src.nPhoton * self.samplingTime * (self.D / self.resolution) ** 2
         return
@@ -304,6 +311,7 @@ class Telescope:
             else:
                 amp_mask = input_source[i_src].amplitude_filtered
                 phase = input_source[i_src].phase_filtered
+            amp_mask = amp_mask * xp.sqrt(input_source[i_src].scintillation)
             # amplitude of the EM field:
             amp = amp_mask*self.pupil*self.pupilReflectivity
             # add a Tip/Tilt for off-axis sources
