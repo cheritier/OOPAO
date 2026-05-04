@@ -15,6 +15,10 @@ import skimage.transform as sk
 from astropy.io import fits as pfits
 from OOPAO.tools import *
 import matplotlib.pyplot as plt
+from scipy.integrate import quad
+from scipy.special import j1
+from scipy.signal.windows import tukey
+import math
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% USEFUL FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -550,3 +554,169 @@ class OopaoError(Exception):
         self.string = string
         self.message = (string)
         super().__init__(self.message)
+
+
+# Scintillation specific tools
+def radial_profile(data, max_radius):
+    """
+    Computes the azimuthal average of a 2D array to yield a 1D profile.
+    """
+    y, x = np.indices(data.shape)
+    center = np.array(data.shape) / 2
+    r = np.sqrt((x - center[1])**2 + (y - center[0])**2)
+    r = r.astype(int)
+    tbin = np.bincount(r.ravel(), data.ravel())
+    nr = np.bincount(r.ravel())
+    radialprofile = tbin / np.maximum(nr, 1)
+    return radialprofile[:max_radius]
+
+def compute_rytov_variance(scintillation, pupil):
+    """
+    Computes the Rytov variance from scintillation data and pupil mask.
+    """
+    if scintillation is None:
+        return 0.0
+    mask = pupil > 0
+    I = scintillation[mask]
+    I = I[I > 1e-10]
+    I = I / np.mean(I)
+    chi = 0.5 * np.log(I)
+    var_chi = np.var(chi)
+    return 4.0 * var_chi
+
+
+def compute_theoretical_pupil_log_amp_variance(wavelength, D_tel, L_source, L0, Cn2_input):
+    """
+    Computes the pupil-averaged log-amplitude variance theoretically (Eq 3.43).
+    """
+    k0 = 2 * np.pi / wavelength
+    R_tel = D_tel / 2.0
+    K_piston = (R_tel**(5/3)) * (k0**2) 
+    def integrand_k(k, z):
+        if k < 1e-9: return 0
+        von_karman = (1 + ((2 * np.pi * R_tel) / (L0 * k))**2)**(-11/6)
+        diffraction = (j1(k))**2
+        propagation = np.sin((z * k**2) / (2 * k0 * R_tel**2))**2
+        power_law = k**(-14/3)
+        return power_law * diffraction * propagation * von_karman
+    def integrand_z(z):
+        val_cn2 = Cn2_input(z) if callable(Cn2_input) else Cn2_input
+        res_k, _ = quad(integrand_k, 0, 200, args=(z,), limit=100)
+        return val_cn2 * res_k
+    integral_z_val, _ = quad(integrand_z, 0, L_source)
+    variance_ap = 5.20 * K_piston * integral_z_val
+    return variance_ap 
+
+def compute_theoretical_rytov(wavelength, r0, altitudes, fractionalR0):
+    """
+    Computes the theoretical Rytov variance for a layered atmosphere.
+    
+    Parameters
+    ----------
+    wavelength : float [m]
+    r0 : float [m]
+    altitudes : array [m]
+    fractionalR0 : array (fractions de r0 par couche)
+    """
+    k0 = 2 * np.pi / wavelength
+    altitudes = np.array(altitudes)
+    fractionalR0 = np.array(fractionalR0)
+    # Conversion fractions r0 -> fractions Cn2
+    weights = fractionalR0**(5/3)
+    weights /= np.sum(weights)
+    # Cn2 integral factor (constant for a given r0 and wavelength)
+    Cn2_integral = (r0**(-5/3)) / (0.423 * k0**2)
+    # discrete summation over layers
+    sigma_R2 = 0
+    for i in range(len(altitudes)):
+        z = altitudes[i]
+        sigma_R2 += weights[i] * (z**(5/6))
+    sigma_R2 *= Cn2_integral
+    sigma_R2 *= 2.25 * (k0**(7/6))
+    return sigma_R2
+
+
+def compute_dsp(phase, scintillation, resolution, pixel_size):
+    """
+    Computes phase and scintillation PSD using a Tukey window to prevent spectral leakage.
+    Analyzes atmospheric statistics independently of the telescope pupil.
+    """
+    N = phase.shape[0]
+    # 2D Tukey windowing (alpha=0.2 keeps 80% of the center flat)
+    window_1d = tukey(N, alpha=0.2)
+    window_2d = np.outer(window_1d, window_1d)
+    # Convert intensity to log-amplitude (Chi)
+    center_slice = slice(N // 4, 3 * N // 4)
+    mean_I = np.mean(scintillation[center_slice, center_slice])
+    chi = 0.5 * np.log(scintillation / mean_I + 1e-12)
+    # Phase centering
+    phi = phase - np.mean(phase[center_slice, center_slice])
+    # Window application and weighted mean removal
+    chi_windowed = chi * window_2d
+    phi_windowed = phi * window_2d
+    chi_windowed -= np.sum(chi_windowed) / np.sum(window_2d) * window_2d
+    phi_windowed -= np.sum(phi_windowed) / np.sum(window_2d) * window_2d
+    # Fourier Transform and Power Normalization (w2 compensates window energy loss)
+    w2 = np.sum(window_2d**2) 
+    norm = (pixel_size**2) / w2
+    ft_chi = np.fft.fft2(chi_windowed)
+    dsp_chi_2d = np.fft.fftshift(np.abs(ft_chi)**2) * norm
+    ft_phi = np.fft.fft2(phi_windowed)
+    dsp_phi_2d = np.fft.fftshift(np.abs(ft_phi)**2) * norm
+    # Radial profiling and frequency axis
+    dsp_chi_1d = radial_profile(dsp_chi_2d, N // 2)
+    dsp_phi_1d = radial_profile(dsp_phi_2d, N // 2)
+    freqs = np.fft.fftshift(np.fft.fftfreq(N, pixel_size))
+    kappa = freqs[N // 2:]
+    return kappa, dsp_phi_1d, dsp_chi_1d
+
+def compute_theoretical_psd(kappa, wavelength, r0, L0, altitude):
+    k_wvl = 2 * np.pi / wavelength
+    # Standard von Karman Phase PSD (rad^2 . m^2)
+    # Factor is 0.0229 for a 3D Kolmogorov spectrum integrated into 1D radial PSD
+    psd_pure = 0.023 * (r0**(-5/3)) * (kappa**2 + (1/L0)**2)**(-11/6)
+    # Fresnel Filter Argument
+    fresnel_arg = (altitude * (2 * np.pi * kappa)**2) / (2 * k_wvl)
+    psd_phi = psd_pure * (np.cos(fresnel_arg)**2)
+    psd_chi = psd_pure * (np.sin(fresnel_arg)**2)
+    return psd_phi, psd_chi
+
+def compute_fresnel_padding(D_tel, resolution, wavelengths, z_max, r0_wvl_list, max_layer_step, res_factor=1):
+    """
+    Computes required padding for Fresnel propagation, quantized for WFS compatibility.
+    Uses strict ASM anti-aliasing criteria.
+    """
+    delta = D_tel / resolution
+    diagnostics = {}
+    for i, wvl in enumerate(wavelengths):
+        r0 = r0_wvl_list[i]
+        # Coy's spread 
+        D_turb = 4.0 * (wvl * z_max) / r0
+        D_total = D_tel + 2.0 * D_turb
+        delta_req = min(r0 / 4.0, (wvl * z_max) / D_total)
+        delta_status = "OK"
+        if delta > delta_req:
+            delta_status = f"WARNING: Pixel size ({delta*1000:.2f} mm) > Limit ({delta_req*1000:.2f} mm)."
+        # Strict ASM anti-aliasing
+        N_min_physique = (D_total / delta) + (wvl * z_max) / (delta**2)
+        # Quantization (WFS constraint)
+        N_final = int(math.ceil(N_min_physique / res_factor) * res_factor)
+        if N_final < resolution:
+            N_final = int(math.ceil(resolution / res_factor) * res_factor)
+        pad_needed = (N_final - resolution) // 2 if N_final > resolution else 0
+        # ASM Longitudinal constraint
+        z_asm = (N_final * delta**2) / wvl
+        asm_status = "OK"
+        if max_layer_step > z_asm:
+            asm_status = f"WARNING: Max step ({max_layer_step/1000:.1f} km) > ASM limit ({z_asm/1000:.1f} km)."
+        diagnostics[f"{wvl*1e9:.0f}nm"] = {
+            "r0": r0,
+            "delta_req": delta_req,
+            "delta_status": delta_status,
+            "N_min_physique": int(math.ceil(N_min_physique)),
+            "N_quantized": N_final,
+            "padding_per_side_needed": pad_needed,
+            "z_asm_limit": z_asm,
+            "asm_status": asm_status
+        }
+    return diagnostics
