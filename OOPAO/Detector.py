@@ -234,9 +234,8 @@ class Detector:
             if frame.max() > self.FWC:
                 warning('The ADC is saturating (gain applyed %i), %.1f %%' % (
                     self.gain, self.saturation))
-            frame = (frame / self.FWC * (2**self.bits-1)
-                     )
-            return np.clip(frame, a_min=max(frame.min(),self.clip_unsigned), a_max=2**self.bits-1)
+            frame = (frame / self.FWC * (2**self.bits-1))
+            return np.clip(frame, a_min=max(frame.min(), self.clip_unsigned), a_max=2**self.bits-1)
 
     def set_photon_noise(self, frame):
         self.photon_noise = np.sqrt(self.signal)
@@ -269,7 +268,7 @@ class Detector:
             frame -= self.backgroundMap
             return frame
         except:
-            raise OopaoError('The shape of the backgroun map does not match the detector frame resolution')
+            raise OopaoError('The shape of the backgroung map does not match the detector frame resolution')
 
     def readout(self):
         frame = np.sum(self.buffer_frame, axis=0)
@@ -283,7 +282,12 @@ class Detector:
 
         # If the sensor is EMCCD the applyed gain is before the analog-to-digital conversion
         if self.sensor == 'EMCCD':
+            frame = np.random.poisson(frame)  # EMCCD amplification noise
             frame *= self.gain
+
+        # Simulate hardware binning of the detector
+        if self.binning != 1:
+            frame = set_binning(frame, self.binning)
 
         # Simulate hardware binning of the detector
         if self.binning != 1:
