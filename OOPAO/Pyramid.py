@@ -450,7 +450,7 @@ class Pyramid:
 
     def get_phase_mask(self, resolution, n_subap, n_pix_separation, n_pix_edge, psf_centering=False, sx=[0, 0, 0, 0], sy=[0, 0, 0, 0]):
         # new mask compution to include Pyramid rooftop (F.Oyarzun 08/2025)
-        rooftop_pixels = self.rooftop * self.zeroPaddingFactor / np.sqrt(2)
+        rooftop_pixels = self.rooftop/ np.sqrt(2)#♦ * self.zeroPaddingFactor / np.sqrt(2)
         # size of the mask in pixel
         n_tot = int((n_subap*2+n_pix_separation+n_pix_edge*2) * self.telescope.resolution/self.nSubap)
 
