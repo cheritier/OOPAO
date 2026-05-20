@@ -101,7 +101,7 @@ Sprint.mis_registration_out.print_()
 
 from OOPAO.mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
 
-dm_ghost = applyMisRegistration(tel,Sprint.mis_registration_out,param)
+dm_ghost = applyMisRegistration(tel,Sprint.mis_registration_out,dm_input=dm)
 
 input_imat = get_imat_ghost(loc+'hadamard_IM_slopes_15_no_residual.npy', wfs, M2C=M2C[:,:400])
 
