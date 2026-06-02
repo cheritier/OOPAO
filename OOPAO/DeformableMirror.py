@@ -240,7 +240,7 @@ class DeformableMirror:
                                                               nThreads=nThreads,
                                                               floating_precision=floating_precision)
 
-    #            selection of the valid M4 actuators
+    # selection of the valid M4 actuators
                 if M4_param['validActCriteria'] != 0:
                     IF_STD = np.std(np.squeeze(
                         self.modes[telescope.pupilLogical, :]), axis=0)
@@ -348,7 +348,6 @@ class DeformableMirror:
 
             # In that case assumed that all the Influence Functions provided are controlled actuators
             validAct = (np.arange(0, self.nAct))
-
             self.validAct = validAct.astype(int)
             self.nValidAct = self.nAct
 
@@ -683,6 +682,31 @@ class DeformableMirror:
                 print('Error: wrong value for the coefficients')
                 sys.exit(0)
             self.current_coefs = self.coefs.copy()
+
+    def set_coefs_value(self, actuator_index:list, actuator_coefs:list):
+        """
+        This functions allows to assign a value to a given actuator list instead of a full set of actuator commands.
+        
+        Parameters
+        ----------
+        actuator_index : list
+            Index of the actuators to be updated.
+        actuator_value : list
+            Actuator Coefficient to be applied to the selected actuators
+        """
+        if np.isscalar(actuator_index) and np.isscalar(actuator_coefs):
+            actuator_index = [actuator_index]
+            actuator_coefs = [actuator_coefs]
+
+        if len(actuator_index) != len(actuator_coefs):
+            raise OopaoError('The list of actuator_index and actuator_coefs must have the same length')
+
+        for i_act in range(len(actuator_index)):
+            self.coefs[actuator_index[i_act]] = actuator_coefs[i_act]
+        # update dm shape
+        self.coefs = self.coefs
+        return
+
     # for backward compatibility
     def print_properties(self):
         print(self)
