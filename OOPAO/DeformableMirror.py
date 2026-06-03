@@ -321,8 +321,8 @@ class DeformableMirror:
 
             # default actuator selection
             if self.actuator_selection is None:
-                r_in = (telescope.centralObstruction*telescope.initial_D/2-0.5*self.pitch)
-                r_out = (telescope.initial_D/2+0.7533*self.pitch)
+                r_in = (telescope.centralObstruction*self.D/2-0.5*self.pitch)
+                r_out = (self.D/2+0.7533*self.pitch)
                 self.actuator_selection = [r_in, r_out]
             if np.isscalar(self.actuator_selection):
                 # Selection based on energy of the actuators in the pupil (after IF computation)
