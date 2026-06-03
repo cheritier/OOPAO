@@ -8,6 +8,7 @@ from OOPAO.ShackHartmann import ShackHartmann
 from OOPAO.Source import Source
 from OOPAO.Atmosphere import Atmosphere
 from OOPAO.Asterism import Asterism
+from OOPAO.FieldTransformer import FieldTransformer
 from OOPAO.tools.tools import crop
 import tomoAO
 from OOPAO.tools.displayTools import cl_plot, displayMap
@@ -24,21 +25,22 @@ tel = Telescope(diameter          = 8.0,   # diameter [m]
                samplingTime       = 0.001, # sampling time [s]
                fov                = 40)    # FOV of telescope [arcsec]
 
+# N = 2
+# n_subaperture += (2*N)
+# tel.pad(padding_values=N*n_pixel_per_subaperture)
+
 plt.figure()
 plt.imshow(tel.pupil)
 plt.title("Telescope pupil",fontsize=16,pad=10)
 plt.colorbar()
 plt.show()
+
 #%% ### Asterism ###
-
-from OOPAO.Source import Source
-
-from OOPAO.Asterism import Asterism
 
 n_lgs = 4
 lgs_zenith = [10]*n_lgs
 lgs_azimuth = np.linspace(0,360,n_lgs,endpoint=False)
-lgs_altitude = np.inf # lower altitude to simulate LGS extended spots
+lgs_altitude = 90e3 #np.inf # lower altitude to simulate LGS extended spots
 lgs_is_extended = False
 
 if lgs_is_extended:
@@ -71,65 +73,159 @@ lgs_asterism*tel
 
 r0 = 0.15
 
-atm = Atmosphere(telescope=tel,  # Telescope
-                  r0=r0,  # Fried Parameter [m]
-                  L0=25,  # Outer Scale [m]
-                  fractionalR0=[0.5,0.2,0.3],  # Cn2 Profile
-                  windSpeed=[10,15,13],  # Wind Speed in [m]
-                  windDirection=[0,90,120],  # Wind Direction in [degrees]
-                  altitude=[0,2000,10000]) # Altitude Layers in [m]
-
 # atm = Atmosphere(telescope=tel,  # Telescope
 #                   r0=r0,  # Fried Parameter [m]
 #                   L0=25,  # Outer Scale [m]
-#                   fractionalR0=[1],  # Cn2 Profile
-#                   windSpeed=[10],  # Wind Speed in [m]
-#                   windDirection=[0],  # Wind Direction in [degrees]
-#                   altitude=[0]) # Altitude Layers in [m]
+#                   fractionalR0=[0.5,0.2,0.3],  # Cn2 Profile
+#                   windSpeed=[10,15,13],  # Wind Speed in [m]
+#                   windDirection=[0,90,120],  # Wind Direction in [degrees]
+#                   altitude=[0,2000,10000]) # Altitude Layers in [m]
+
+atm = Atmosphere(telescope=tel,  # Telescope
+                  r0=r0,  # Fried Parameter [m]
+                  L0=25,  # Outer Scale [m]
+                  fractionalR0=[1],  # Cn2 Profile
+                  windSpeed=[10],  # Wind Speed in [m]
+                  windDirection=[0],  # Wind Direction in [degrees]
+                  altitude=[0]) # Altitude Layers in [m]
+
 atm.initializeAtmosphere(telescope=tel)
 
 atm.display_atm_layers()
 
 #%%
 
+# n_pix = n_pixel_per_subaperture/4
+n_pix = 2.0
+shift_x = [n_pix,-n_pix,n_pix,-n_pix]
+shift_y = [n_pix,-n_pix,-n_pix,n_pix]
+
+### Field transformer class to simulate different shifts between the 4 SHs
+# this operator allows to perform a geometrical transformation to the EM field
+# which will be different for each guide star --> SH pair (line of sight)
+# in this case only shifts are being considered, but rotations, magnifications, and other are possible
+
+ft = FieldTransformer(src=lgs_asterism,
+                      shift_x=shift_x,
+                      shift_y=shift_y)
+
 lgs_asterism**tel
 
 # diffractive SH WFS (is_geometric = False), with Nyquist sampled spots
 wfs = ShackHartmann(telescope          = tel,
-                      nSubap             = n_subaperture,
-                      lightRatio         = 0.5,
-                      is_geometric       = False,
-                      shannon_sampling   = True,
-                      threshold_cog      = 0.01,
-                      n_pixel_per_subaperture=12,
-                      pixel_scale=None)
+                    nSubap             = n_subaperture,
+                    lightRatio         = 1.0,
+                    is_geometric       = False,
+                    shannon_sampling   = False,
+                    threshold_cog      = 0.01,
+                    n_pixel_per_subaperture=6,
+                    em_field_transform=ft)
 
-#%%
-lgs_asterism**tel*wfs
-displayMap(wfs.cam.frame,axis=0)
+# assert we indeed created a diffractive SH
 assert wfs.is_geometric == False
 
+# ast --> tel --> EM transform --> SH
+lgs_asterism**tel*ft*wfs
+
+displayMap(wfs.cam.frame,axis=0)
+plt.show()
+plt.close()
+
+plt.figure()
+plt.plot(wfs.signal)
+plt.grid()
+plt.show()
+plt.close()
+
+# Each SH will have its own set of valid_subapertures, and reference signal
+valid_sh_subapertures = np.zeros((lgs_asterism.n_source,wfs.nSubap,wfs.nSubap),dtype=float)
+# valid_sh_subapertures = []
+
+for i in range(lgs_asterism.n_source):
+
+    plt.figure()
+    plt.title("Valid subapertures masks for source {}".format(i))
+    plt.imshow(wfs.sh_data['src_' + str(i)].valid_subapertures)
+    plt.colorbar()
+    plt.show()
+    plt.close()
+
+    print(np.sum(wfs.sh_data['src_' + str(i)].valid_subapertures))
+
+    valid_sh_subapertures[i] = wfs.sh_data['src_' + str(i)].valid_subapertures
+    # valid_sh_subapertures.append(wfs.sh_data['src_' + str(i)].valid_subapertures)
+
 displayMap(wfs.reference_signal_2D,axis=0)
-#%%
+plt.show()
+plt.close()
 
 lgs_asterism**tel
 
 # geometric SH WFS (is_geometric = True)
 wfs_geom = ShackHartmann(telescope     = tel,
-                      nSubap             = n_subaperture,
-                      lightRatio         = 0.5,
-                      is_geometric       = True,
-                      shannon_sampling   = True,
-                      threshold_cog      = 0.01)
+                         nSubap             = n_subaperture,
+                         lightRatio         = 1.0,
+                         is_geometric       = True,
+                         shannon_sampling   = True,
+                         threshold_cog      = 0.01,
+                         em_field_transform=ft)
 
 assert wfs_geom.is_geometric == True
+
+#%%
+
+print("Computing the noise cov from the SH wfs numerically ...")
+
+N = 500
+
+print("Applying desired noise in the SH ...")
+wfs.cam.photonNoise = True
+wfs.cam.readoutNoise = 0.0
+
+print("##### Noise being applied in the SH ####")
+print("Photon noise: {}".format(wfs.cam.photonNoise))
+print("Readout noise: {}".format(wfs.cam.readoutNoise))
+
+lgs_asterism**tel*ft*wfs
+
+N_signal = len(wfs.signal)
+
+# Initializing 2D data cube. At each iteration, the columns of this matrix are filled with wfs.signal
+# The covariance matrix can then be calculated using numpy.cov
+Cn_2d = np.zeros((N_signal, N))
+
+print("Doing {} SH noisy signal samples ...".format(N))
+
+for i in tqdm(range(N)):
+
+    # propagation of planar WF towards wfs
+    lgs_asterism**tel*ft*wfs
+
+    signal = wfs.signal.copy()
+
+    Cn_2d[:, i] = signal
+
+## Cov formula ##
+# rowvar = True -- each row is a variable and each column an observation
+Cn_slope = np.cov(Cn_2d, rowvar=True)
+# remove non-diagonal elements
+Cn_slope *= np.eye(len(Cn_slope))
+
+#%%
+
+#### Plot diagonal elements from covariance matrix ####
+plt.plot(np.diag(Cn_slope), ".-")
+plt.title(r"Diag. elements of numerical $C_{n}$ (Meas. space)",pad=10,fontsize=14)
+plt.ylabel(r"$[SH units]^2$",labelpad=10,fontsize=12)
+plt.grid()
+plt.show()
 
 #%%
 
 ### Deformable mirror ###
 
 dm = DeformableMirror(telescope = tel,
-                      nSubap = n_subaperture,
+                      nSubap = n_subaperture*2,
                       mechCoupling = 0.3,
                       pitch = None)
 
@@ -147,8 +243,6 @@ plt.colorbar()
 plt.show()
 
 dm.unfiltered_act_mask = unfiltered_act_mask
-
-dm.display_dm()
 
 #%%
 
@@ -180,16 +274,63 @@ config_vars["dm_resolution"] = config_vars["os"] * config_vars["nSubaperture"] +
 # resolution of the original simulated phase screens
 config_vars["resolution"] = tel.resolution
 
+## add offsets to mmse star by hand ##
+ngs.offset_x = 0
+ngs.offset_y = 0
+
+#%%
+
 # AO system. We give the different AO objects created in OOPAO as input
-aoSys = tomoAO.Simulation.AOSystem(config_vars,
-                                   tel=tel,         # telescope
-                                   mmse_star=ngs,         # natural guide star (giving optimization direction)
-                                   lgsAst=lgs_asterism,  # asterism
+aoSys = tomoAO.Simulation.AOSystem(param=config_vars,
+                                   tel=tel,               # telescope
+                                   atm=atm,               # atmosphere
+                                   dm=dm,                 # deformable mirror
+                                   lgsAst=lgs_asterism,   # asterism
+                                   filtered_subap_mask=valid_sh_subapertures, # list with valid subapertures mask for
+                                   # each SH
+                                   mmse_star=ngs,   # natural guide star
+                                   # (giving optimization direction for mmse reconstruction)
+                                   wfs=wfs,   # SH wfs
                                    sci_src=science,   # science source
-                                   atm=atm,         # atmosphere
-                                   dm=dm,           # deformable mirror
-                                   wfs=wfs,
-                                   filtered_subap_mask = wfs.valid_subapertures)       # SH WFS
+                                   filtered_subap_mask_operation="union",
+                                   os=config_vars["os"])
+
+
+plt.imshow(aoSys.outputReconstructiongrid)
+plt.title("Reconstruction grid",fontsize=14,pad=10)
+plt.colorbar()
+plt.show()
+
+plt.imshow(aoSys.filtered_subap_mask^aoSys.unfiltered_subap_mask)
+plt.colorbar()
+plt.show()
+
+plt.imshow(aoSys.filtered_subap_mask)
+plt.title("Filtered subap mask",fontsize=14,pad=10)
+plt.colorbar()
+plt.show()
+
+print(np.shape(aoSys.outputReconstructiongrid))
+print(np.shape(aoSys.filtered_subap_mask))
+print(np.shape(aoSys.unfiltered_subap_mask))
+
+print(lgs_asterism.src[0].offset_x)
+print(lgs_asterism.src[0].offset_y)
+
+print(aoSys.lgsAst[0].offset_x)
+print(aoSys.lgsAst[0].offset_y)
+
+#%%
+
+## put offsets into meters ##
+for i in range(lgs_asterism.n_source):
+    aoSys.lgsAst[i].offset_x = -shift_x[i]*tel.pixelSize
+    aoSys.lgsAst[i].offset_y = -shift_y[i]*tel.pixelSize
+    # aoSys.lgsAst.src[i].offset_x = 0
+    # aoSys.lgsAst.src[i].offset_y = 0
+
+print(aoSys.lgsAst[0].offset_x)
+print(aoSys.lgsAst[0].offset_y)
 
 #%% ## Spatio-angular Tomographic reconstructor ###
 
@@ -197,12 +338,13 @@ from tomoAO.Reconstruction.reconClassType import tomoReconstructor
 
 inital_time = time.time()
 
-rec = tomoReconstructor(ao_sys=aoSys,                  # AO system object (as crea:ted before)
+rec = tomoReconstructor(ao_sys=aoSys,                 # AO system object (as crea:ted before)
                         alpha=10,                     # constant used to compute the noise covariance
+                        # noise_covariance=Cn_slope,
                         os=config_vars["os"],         # oversampling factor (used to compute the reconstruction grid)
                         indexation="xxyy",            # related with slopes ordering (in oopao they are xxyy)
-                        remove_tt_focus = False,          # wether or not to remove TT from reconstruction
-                        filter_subapertures = False)  # wether or not to filter SH subapertures (in simulation the
+                        remove_tt_focus = False,      # wether or not to remove TT from reconstruction
+                        filter_subapertures = True)   # wether or not to filter SH subapertures (in simulation the
                                                       # valid subapertures are constant, so this is set False
                                                       
 final_time = time.time()
@@ -216,71 +358,121 @@ plt.imshow(reconstructor)
 plt.title("Spatio-angular reconstructor",fontsize=14,pad=10)
 plt.colorbar()
 plt.show()
+
+print(np.shape(rec.Gamma))
+print(np.shape(reconstructor))
+print(np.sum(aoSys.filtered_subap_mask)*2*4)
+print(wfs.nSignal)
+
+#%%
+
+plt.imshow(rec.filtered_subap_mask)
+plt.colorbar()
+plt.show()
+
 #%% Calibration of the SH WFS units to adapt to LGS gains, sampling, etc WITH tomographic reconstructor
 
-lgs_asterism**tel*wfs*wfs_geom
+lgs_asterism**tel*ft*wfs*wfs_geom
 
 
-wfs.set_slopes_units(tomographic_reconstructor = reconstructor, src = lgs_asterism,dm = dm)
-wfs_geom.set_slopes_units(tomographic_reconstructor = reconstructor, src = lgs_asterism,dm=dm)
+wfs.set_slopes_units(tomographic_reconstructor = reconstructor, src = lgs_asterism, dm = dm)
+wfs_geom.set_slopes_units(tomographic_reconstructor = reconstructor, src = lgs_asterism, dm = dm)
 
 print(wfs.slopes_units)
 print(wfs_geom.slopes_units)
 
-#% Test tomographic reconstruction:
+#%% Test tomographic reconstruction:
 plt.close('all')
 
 # propagate to geometric SHWFS 
-lgs_asterism ** atm *tel*wfs*wfs_geom
+lgs_asterism**atm*tel*ft*wfs*wfs_geom
 # save both geometric and diffractive SHWFS signals
 wfs_signal = np.hstack(wfs.signal)
 wfs_signal_geo = np.hstack(wfs_geom.signal)
 
 # apply the correction and show the residuals
 dm.coefs = -reconstructor@wfs_signal
-science ** atm *tel*dm
+science**atm*tel*dm
 plt.figure(),plt.imshow(science.OPD)
 plt.title('Diffractive SHWFS - Residual WFE: ' +str(np.round(1e9*np.std(science.OPD[science.mask]),2)) + ' nm')
+plt.show()
 
 # apply the correction and show the residuals
 dm.coefs = -reconstructor@wfs_signal_geo
-science ** atm *tel*dm
+science**atm*tel*dm
 plt.figure(),plt.imshow(science.OPD)
 plt.title('Geometric SHWFS - Residual WFE: ' +str(np.round(1e9*np.std(science.OPD[science.mask]),2)) + ' nm')
+plt.show()
 
 #%%
 displayMap(wfs_geom.signal_2D,axis=0)
 plt.colorbar()
+plt.show()
 
 displayMap(wfs.signal_2D,axis=0)
 plt.colorbar()
+plt.show()
+
 #%%
 # Interaction matrix using a zonal approach and the geometric SH, with a stroke equal to calib_src.wavelength/2/np.pi
 # This matrix is necessary for the pseudo-open loop reconstruction
 
-calib_src = Source('Na', 0)
-calib_src**tel*wfs_geom
+# calib_src = Source('Na', 0)
+# calib_src**tel*wfs_geom
 
 dm_eye = np.eye(dm.nValidAct)
-imat = np.zeros((wfs_geom.nValidSubaperture*2, dm.nValidAct))
+imat = np.zeros((wfs_geom.nSignal, dm.nValidAct))
 
 for i_act in tqdm(range(dm.nValidAct)):
 
-    dm.coefs = dm_eye[:, i_act]*calib_src.wavelength/2/np.pi
-    calib_src**tel*dm*wfs_geom
+    dm.coefs = dm_eye[:, i_act]*lgs_asterism.wavelength/2/np.pi
+    lgs_asterism**tel*dm*ft*wfs_geom
 
     wfsSignal = np.hstack(wfs_geom.signal)
 
     imat[:, i_act] = wfsSignal
 
-imat = imat*2*np.pi/calib_src.wavelength
-imat = np.vstack([imat]*n_lgs)
+imat = imat*2*np.pi/lgs_asterism.wavelength
+# imat = np.vstack([imat]*n_lgs)
 
 plt.imshow(imat)
 plt.title("Interaction matrix", fontsize=14,pad=10)
 plt.colorbar()
 plt.show()
 
+#%%
+
+from OOPAO.calibration.CalibrationVault import CalibrationVault
+
+# IntMat inversion using the SVD
+D_inv = CalibrationVault(imat,
+                         nTrunc = 50,
+                         invert=True)
+
+invIntMat = D_inv.M
+invIntMat_trunc = D_inv.Mtrunc
+
+print("Conditioning number : {}".format(D_inv.cond))
+
+noise_propag_coefs = np.diag(invIntMat@invIntMat.T)
+
+plt.plot(noise_propag_coefs)
+plt.title("Noise propag. coefficients",pad=10,fontsize=14)
+plt.yscale('log')
+plt.xscale('log')
+plt.grid()
+plt.show()
+
+normalized_s_values = D_inv.eigenValues/np.max(D_inv.eigenValues)
+
+plt.plot(normalized_s_values)
+plt.title("IM singular value decomposition",pad=10,fontsize=14)
+plt.ylabel("Normalized singular values",fontsize=12,labelpad=10)
+plt.xlabel("Mode index",fontsize=12,labelpad=10)
+plt.yscale('log')
+# plt.xscale('log')
+plt.grid()
+plt.show()
 
 #%%
 from OOPAO.tools.tools import strehlMeter
@@ -321,7 +513,7 @@ wfs.cam.photonNoise = False  # enable photon noise on the WFS camera
 display = False  # enable the display
 frame_delay = 1  # number of frame delay
 
-# variables used to to save closed-loop data data
+# variables used to save closed-loop data
 SR_ngs = np.zeros(n_loop)
 SR_science = np.zeros(n_loop)
 
@@ -394,7 +586,7 @@ for i in range(n_loop):
     wfe_atmosphere[i] = np.std(ngs.OPD[np.where(tel.pupil > 0)])*1e9
     # propagate light from the ngs through the atmosphere, telescope, DM to the wfs and ngs camera
     ngs**atm*tel*dm*ngs_cam
-    lgs_asterism**atm*tel*dm*wfs
+    lgs_asterism**atm*tel*dm*ft*wfs
 
     # save residuals corresponding to the ngs
     wfe_residual_NGS[i] = np.std(ngs.OPD[np.where(tel.pupil > 0)])*1e9
