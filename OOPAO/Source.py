@@ -258,6 +258,7 @@ class Source:
         if val is not None:
             self._OPD = self._array_backend.array(val)
             # OPD_no_pupil is set separately by propagation.
+            # self._OPD_no_pupil = self._array_backend.array(val)
         else:
             self._OPD = None
             self._OPD_no_pupil = None
