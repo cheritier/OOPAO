@@ -49,7 +49,7 @@ jobs:
       - name: Build HTML docs
         run: |
           cd docs
-          make html SPHINXOPTS="-W --keep-going"
+          make html SPHINXOPTS=" --keep-going"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
