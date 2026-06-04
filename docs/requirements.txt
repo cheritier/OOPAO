@@ -1,0 +1,5 @@
+# Sphinx build dependencies
+# Install with: pip install -r docs/requirements.txt
+sphinx>=7.0
+furo>=2024.1.29
+sphinx-autobuild>=2024.0.0

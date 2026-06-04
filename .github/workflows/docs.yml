@@ -1,0 +1,70 @@
+name: Build and deploy docs
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'docs/**'
+      - 'OOPAO/**'        # rebuild if source code changes too
+  pull_request:
+    branches: [master]
+    paths:
+      - 'docs/**'
+
+  # Allow manual trigger from the Actions tab
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one deployment at a time
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install OOPAO dependencies
+        run: |
+          pip install numpy matplotlib scipy astropy joblib \
+                      jsonpickle scikit-image tqdm psutil mpmath
+
+      - name: Install Sphinx and theme
+        run: |
+          pip install sphinx furo sphinx-autobuild
+
+      - name: Build HTML docs
+        run: |
+          cd docs
+          make html SPHINXOPTS="-W --keep-going"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/build/html
+
+  deploy:
+    # Only deploy on pushes to master, not on PRs
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

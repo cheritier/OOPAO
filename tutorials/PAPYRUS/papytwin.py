@@ -53,11 +53,13 @@ ngs*tel*wfs
 #%% PAPYRUS input data from the bench
 from pymatreader import read_mat
 
-M2C = read_mat('M2C_KL_OOPAO_synthetic_IF.mat')['M2C_KL']
+loc = 'C:/Users/cheritier/Documents/oopao_private/PAPYRUS/'
 
-valid_pixel = read_mat('useful_pixels_20250604_0305.mat')['usefulPix']
+M2C = -read_mat(loc+'M2C_KL_OOPAO_synthetic_IF.mat')['M2C_KL']
 
-im = read_mat('intMat_klOOPAO_synthetic_bin=1_F=500_rMod=5_20250604_0307.mat')['matrix_inf']
+valid_pixel = read_mat(loc+'useful_pixels_20250604_0305.mat')['usefulPix']
+
+im = read_mat(loc+'intMat_klOOPAO_synthetic_bin=1_F=500_rMod=5_20250604_0307.mat')['matrix_inf']
 
 # index of the KL modes included in the int-mat
 ind = [1, 5, 10, 20, 30, 50, 80, 100, 150]
@@ -127,6 +129,17 @@ if calibrate_mis_registration:
                            input_im = int_mat_binned,
                            index_modes = index_modes)
 
+#%%
+
+
+dm.coefs =  M2C
+
+ngs**tel*dm
+
+KL_dm = ngs.OPD.reshape(tel.resolution**2,M2C.shape[1])
+
+plt.figure(),
+plt.plot(np.std(KL_dm,axis=0))
 
 #%% PAPYTWIN Full Interaction Matrix Computation
 
@@ -164,6 +177,13 @@ plt.plot(np.std(calib.D,axis=0),label='PAPYTWIN')
 plt.legend()
 plt.xlabel('KL Mode Index')
 plt.ylabel('Int. Mat STD')
+
+
+
+#%%
+
+
+
 
 #%%  -----------------------     Close loop  ----------------------------------
 tel.resetOPD()
