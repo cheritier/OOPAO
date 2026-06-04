@@ -51,6 +51,14 @@ jobs:
           cd docs
           make html SPHINXOPTS=" --keep-going"
 
+      - name: Debug build output
+        run: |
+          echo "Contents of docs/build/html:"
+          ls -lah docs/build/html
+          echo ""
+          echo "Number of files:"
+          find docs/build/html -type f | wc -l
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
