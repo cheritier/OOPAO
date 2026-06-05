@@ -41,7 +41,8 @@ class Atmosphere:
                  geometric_phase_backup: bool = False,
                  unwrap_diffractive_phase=False,
                  rytov_var: float = None,
-                 rytov_wvl: float = 500e-9):
+                 rytov_wvl: float = 500e-9,
+                 t_boiling=None):
         """ ATMOSPHERE.
         An Atmosphere is made of one or several layer of turbulence that follow the Van Karmann statistics.
         Each layer is considered to be independant to the other ones and has its own properties (direction, speed, etc.)
@@ -98,6 +99,17 @@ class Atmosphere:
             The default is None, in which case the Rytov variance is computed from the Cn2 profile and the wavelength using the formula from Tatarskii (1961).
         rytov_wvl : float, optional
             Wavelength at which the Rytov variance is computed in [m]. The default is 500 nm.
+        t_boiling : float or list, optional
+            Boiling (atmospheric turbulence decorrelation) time-constant in [s]. By default (None) the layers follow the frozen-flow (Taylor) hypothesis only.
+            When set, each phase screen additionally decorrelates in time following a first-order auto-regressive (AR1) process with characteristic time t_boiling:
+                phi(t+dt) = alpha * phi(t) + sqrt(1 - alpha**2) * phi_noise 
+            with 
+            alpha = exp(-dt / t_boiling) and dt = telescope.samplingTime.
+            phi_noise is a fresh, independent phase screen sharing the same (r0, L0) Van-Karman statistics, so the spatial variance is preserved while the temporal
+            auto-correlation decays as exp(-tau / t_boiling).
+            A scalar is applied to every layer; a list provides one value per layer.
+            Boiling and frozen-flow translation are applied simultaneously, and boiling also works for layers with zero wind-speed.
+            The default is None.
 
         Raises
         ------
@@ -107,16 +119,6 @@ class Atmosphere:
         Returns
         -------
         None.
-
-        ************************** COUPLING A TELESCOPE AND AN ATMOSPHERE OBJECT **************************
-        A Telescope object "tel" can be coupled to an Atmosphere object "atm" using:
-            _ tel + atm
-        This means that a bridge is created between atm and tel: everytime that atm.OPD is updated, the tel.OPD property is automatically set to atm.OPD to reproduce the effect of the turbulence.
-
-        A Telescope object "tel" can be separated of an Atmosphere object "atm" using:
-            _ tel - atm
-        This corresponds to a diffraction limited case (no turbulence)
-
 
         ************************** PROPERTIES **************************
 
@@ -141,6 +143,7 @@ class Atmosphere:
             _ atm.windSpeed
             _ atm.windDirection
             _ atm.elevation
+            _ atm.t_boiling
         ************************** FUNCTIONS **************************
 
         _ atm.update()                              : update the OPD of the atmosphere for each layer according to the time step defined by tel.samplingTime
@@ -171,11 +174,13 @@ class Atmosphere:
         # Elevation initialization
         self.angular_spectrum_propagation = angular_spectrum_propagation
         self.geometric_phase_backup = geometric_phase_backup
+        self.unwrap_diffractive_phase = unwrap_diffractive_phase
         self.altitude = altitude  # altitude of the atmospheric layers
         self.wavelength = 500*1e-9  # Wavelengt used to define the properties of the atmosphere
         self._elevation = max(5.0, float(elevation))
         el_rad = np.radians(self._elevation)
         self.sampling_checked = False
+        self._saturation_warned = False  # whether the Rytov saturation warning was already emitted
         self.altitude_zenith = [h * np.sin(el_rad) for h in self.altitude]
         self.r0_def = 0.15  # Default Fried Parameter in m at 500 nm to build covariance matrices once and scale them later
         self.r0 = r0  # User input Fried Parameter in m at 500 nm
@@ -186,6 +191,7 @@ class Atmosphere:
         self.nLayer = len(fractionalR0)     # number of layer
         self.windSpeed = windSpeed         # wind speed of the layers in m/s
         self.windDirection = windDirection     # wind direction in degrees
+        self.t_boiling = t_boiling             # boiling (AR1 decorrelation) time-constant(s) in [s], None = frozen flow only
         self.n_extra_pixel = 2                 # number of extra pixel to generate the phase screens
         self.telescope = telescope         # associated telescope object
         self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed)**(5/3)))**(3/5)  # computation of equivalent wind speed, Roddier 1982
@@ -248,6 +254,8 @@ class Atmosphere:
                 tmp_layer.OPD = tmp_layer.initial_OPD/self.wavelength*2*xp.pi
                 # reset the random state to its initial value
                 tmp_layer.randomState = RandomState(42+i_layer*1000)
+                # reset the boiling noise seed counter for reproducibility
+                tmp_layer.boiling_seed = 100000 + i_layer * 100000
                 # reset the covariance matrices value
                 Z = tmp_layer.OPD[tmp_layer.innerMask[1:-1, 1:-1] != 0]
                 X = xp.matmul(tmp_layer.A, Z) + xp.matmul(tmp_layer.B, tmp_layer.randomState.normal(size=tmp_layer.B.shape[1]))
@@ -318,6 +326,11 @@ class Atmosphere:
                                        seed=i_layer)
         layer.initial_OPD = layer.OPD.copy()
         layer.seed = i_layer
+        # boiling (AR1 temporal decorrelation) state for this layer
+        layer.t_boiling = self.t_boiling[i_layer]
+        # dedicated seed counter so the boiling noise screens are independent of the
+        # frozen-flow extrusion randomness and reproducible across runs
+        layer.boiling_seed = 100000 + i_layer * 100000
         b = time.time()
         print('initial phase screen : ' + str(b-a) + ' s')
 
@@ -359,6 +372,40 @@ class Atmosphere:
             layer.B = layer.A.astype(self.precision())
             print('Done!')
         return layer
+
+    def get_t_boiling(self, val):
+        if val is None:
+            return [None] * self.nLayer
+        if np.isscalar(val):
+            return [val] * self.nLayer
+        val = list(val)
+        if len(val) != self.nLayer:
+            raise OopaoError('Wrong value for t_boiling! Provide either a scalar '
+                             '(applied to each layer) or a list with a value per layer.')
+        return val
+
+    def apply_boiling(self, layer):
+        t_b = layer.t_boiling
+        # frozen flow: no boiling requested or degenerate value
+        if t_b is None or not np.isfinite(t_b) or t_b <= 0:
+            return False
+        dt = self.telescope.samplingTime
+        alpha = float(np.exp(-dt / t_b))
+        # alpha == 1 means perfect correlation (frozen). Skip the expensive screen
+        # generation when the per-step decorrelation is negligible (t_boiling >> dt).
+        if alpha >= 1.0 - 1e-6:
+            return False
+        beta = float(np.sqrt(max(0.0, 1.0 - alpha ** 2)))
+        # new independent phase screen on the same support as mapShift
+        layer.boiling_seed += 1
+        screen_resolution = layer.mapShift.shape[0]
+        pixel_size = layer.D / layer.resolution
+        if self.mode == 2:
+            phi_boiling = ft_sh_phase_screen(self, screen_resolution, pixel_size, seed=layer.boiling_seed)
+        else:
+            phi_boiling = ft_phase_screen(self, screen_resolution, pixel_size, seed=layer.boiling_seed)
+        layer.mapShift = (alpha * layer.mapShift + beta * phi_boiling).astype(self.precision())
+        return True
 
     def add_row(self, layer, stepInPixel, map_full=None):
         if map_full is None:
@@ -404,8 +451,18 @@ class Atmosphere:
         ps_turb_x = layer.vX*self.telescope.samplingTime
         ps_turb_y = layer.vY*self.telescope.samplingTime
 
+        # Boiling: temporally decorrelate the persistent phase-screen support (AR1 model).
+        # Applied to layer.mapShift *before* the frozen-flow translation below so that the
+        # temporal memory accumulates in the persistent state and composes with the wind shift.
+        boiling_active = self.apply_boiling(layer)
+
         if layer.vX == 0 and layer.vY == 0 and shift is None:
-            layer.OPD = layer.OPD
+            if boiling_active:
+                # No wind: the screen still evolves through boiling only. Deliver the boiled
+                # screen by re-extracting the interior of the (just updated) support.
+                layer.OPD = layer.mapShift[layer.outerMask == 0].reshape(layer.resolution, layer.resolution)
+            else:
+                layer.OPD = layer.OPD
 
         else:
             if layer.notDoneOnce:
@@ -497,16 +554,14 @@ class Atmosphere:
             src.through_atm = True
             src.optical_path.append([self.tag, self])
         # geometric baseline
-        needs_geometric = (not getattr(self, 'angular_spectrum_propagation', False)) or \
-                          getattr(self, 'geometric_phase_backup', False) or \
-                          getattr(self, 'unwrap_diffractive_phase', False)
+        needs_geometric = (not self.angular_spectrum_propagation) or self.geometric_phase_backup or self.unwrap_diffractive_phase
         OPD_support = self.initialize_OPD_support()
         if needs_geometric:
             for i_layer in range(self.nLayer):
                 tmp_layer = getattr(self, 'layer_' + str(i_layer + 1))
                 OPD_support = self.fill_OPD_support(tmp_layer, OPD_support, i_layer)
         # diffractive propagation
-        if getattr(self, 'angular_spectrum_propagation', False):
+        if self.angular_spectrum_propagation:
             self.check_fresnel_sampling()
             # sort layers by altitude (top to bottom)
             layers_data = [{'layer': getattr(self, 'layer_'+str(i+1)), 'idx': i, 'alt': getattr(self, 'layer_'+str(i+1)).altitude} for i in range(self.nLayer)]
@@ -588,7 +643,10 @@ class Atmosphere:
 
     def fill_scintillation_support(self, tmp_layer, scintillation_support, distance, i_layer):
         n_pix = self.telescope.resolution
-        pxl_scale = getattr(self.telescope, 'pixelSize', self.telescope.D / self.telescope.resolution)
+        if hasattr(self.telescope, 'pixelSize'):
+            pxl_scale = self.telescope.pixelSize
+        else:
+            pxl_scale = self.telescope.D / self.telescope.resolution
         # extract the geometric OPD for this layer only
         temp_zeros = [xp.zeros((n_pix, n_pix), dtype=self.precision()) for _ in range(len(self.src_list))]
         layer_opd = self.fill_OPD_support(tmp_layer, temp_zeros, i_layer)
@@ -612,10 +670,10 @@ class Atmosphere:
             intensity = xp.abs(E_field)**2
             intensity_support.append(intensity)
             # --- Phase Extraction Routing ---
-            if getattr(self, 'geometric_phase_backup', False):
+            if self.geometric_phase_backup:
                 # Case 1: Pure geometric OPD (OPD_support is already populated)
                 pass
-            elif getattr(self, 'unwrap_diffractive_phase', False):
+            elif self.unwrap_diffractive_phase:
                 # Case 2: Hybrid geometric guide + diffractive perturbation
                 # Convert geometric OPD to phase [rad]
                 phi_geo = OPD_support[i] * (2 * xp.pi / wvl)
@@ -737,6 +795,8 @@ class Atmosphere:
 
             tmp_layer.OPD = phase
             tmp_layer.randomState = RandomState(seed+i_layer*1000)
+            # re-seed the boiling noise stream so a regenerated screen boils reproducibly
+            tmp_layer.boiling_seed = 100000 + seed + i_layer * 100000
             if self.compute_covariance:
                 Z = tmp_layer.OPD[tmp_layer.innerMask[1:-1, 1:-1] != 0]
                 X = xp.matmul(tmp_layer.A, Z) + xp.matmul(tmp_layer.B, tmp_layer.randomState.normal(size=tmp_layer.B.shape[1]))
@@ -867,8 +927,8 @@ class Atmosphere:
             if self.altitude[i] > 1e-3:
                 current_rytov += (total_cn2_integral * self.fractionalR0[i]) * (self.altitude[i]**(5/6))
         self._rytov_var = current_rytov * 2.2524 * (k_target**(7/6))
-        if getattr(self, 'angular_spectrum_propagation', False):
-            if self._rytov_var > 0.3 and not getattr(self, '_saturation_warned', False):
+        if self.angular_spectrum_propagation:
+            if self._rytov_var > 0.3 and not self._saturation_warned:
                 warning(f"Atmospheric conditions degraded. Rytov variance ({self._rytov_var:.2f}) exceeds 0.3 limit! "
                         "Entering saturation regime.")
                 self._saturation_warned = True
@@ -916,11 +976,17 @@ class Atmosphere:
         Internal verification of the telescope grid for Fresnel propagation.
         Issues warnings if the grid is prone to aliasing or violates ASM limits.
         """
-        if not getattr(self, 'scintillation', False) or getattr(self, 'sampling_checked', False):
+        if not self.angular_spectrum_propagation or self.sampling_checked:
             return
-        D_tel_phys = getattr(self.telescope, 'initial_D', self.telescope.D)
+        if hasattr(self.telescope, 'initial_D'):
+            D_tel_phys = self.telescope.initial_D
+        else:
+            D_tel_phys = self.telescope.D
         N_current = self.telescope.resolution
-        delta = getattr(self.telescope, 'pixelSize', self.telescope.D / N_current)
+        if hasattr(self.telescope, 'pixelSize'):
+            delta = self.telescope.pixelSize
+        else:
+            delta = self.telescope.D / N_current
         alts = sorted(self.altitude + [0.0], reverse=True)
         max_step = max([alts[i] - alts[i+1] for i in range(len(alts)-1)]) if len(alts) > 1 else 0
         z_max = max(self.altitude) if self.altitude else 0
@@ -1036,6 +1102,20 @@ class Atmosphere:
                     setattr(self, 'layer_'+str(i_layer+1), tmp_layer)
 
     @property
+    def t_boiling(self):
+        return self._t_boiling
+
+    @t_boiling.setter
+    def t_boiling(self, val):
+        self._t_boiling = self.get_t_boiling(val)
+        if self.hasNotBeenInitialized is False:
+            print('Updating the boiling time-constant(s)...')
+            for i_layer in range(self.nLayer):
+                tmp_layer = getattr(self, 'layer_'+str(i_layer+1))
+                tmp_layer.t_boiling = self._t_boiling[i_layer]
+                setattr(self, 'layer_'+str(i_layer+1), tmp_layer)
+
+    @property
     def fractionalR0(self):
         return self._fractionalR0
 
@@ -1082,7 +1162,7 @@ class Atmosphere:
 
     @property
     def rytov_var(self):
-        if not getattr(self, 'angular_spectrum_propagation', False):
+        if not self.angular_spectrum_propagation:
             return 0.0
         if not hasattr(self, '_rytov_var'):
             self.update_rytov_variance()
@@ -1090,7 +1170,7 @@ class Atmosphere:
 
     @rytov_var.setter
     def rytov_var(self, val):
-        if not getattr(self, 'angular_spectrum_propagation', False):
+        if not self.angular_spectrum_propagation:
             warning("Cannot set Rytov variance because atm.angular_spectrum_propagation is False.")
             return
         val = float(val)
@@ -1110,7 +1190,7 @@ class Atmosphere:
             self.r0 = new_r0
             scale_factor = float(np.sqrt(ratio))
 
-            for i in range(1, getattr(self, 'nLayer', 3) + 1):
+            for i in range(1, self.nLayer + 1):
                 layer_name = f'layer_{i}'
                 if hasattr(self, layer_name):
                     layer_obj = getattr(self, layer_name)
@@ -1120,8 +1200,8 @@ class Atmosphere:
         else:
             warning("Cannot scale Rytov (all layers are at 0m).")
 
-        if getattr(self, 'angular_spectrum_propagation', False):
-            if self._rytov_var > 0.3 and not getattr(self, '_saturation_warned', False):
+        if self.angular_spectrum_propagation:
+            if self._rytov_var > 0.3 and not self._saturation_warned:
                 warning(f"Atmospheric conditions degraded. Rytov variance ({self._rytov_var:.2f}) exceeds 0.3 limit! "
                         "Entering saturation regime.")
                 self._saturation_warned = True
@@ -1134,13 +1214,18 @@ class Atmosphere:
 
     def properties(self) -> dict:
         self.prop = dict()
-        self.prop['parameters'] = f"{'Layer':^7s}|{'Direction':^11s}|{'Speed':^7s}|{'Altitude':^10s}|{'Frac Cn²':^10s}|{'Diameter':^10s}|"
-        self.prop['units'] = f"{'':^7s}|{'[°]':^11s}|{'[m/s]':^7s}|{'[m]':^10s}|{'[%]':^10s}|{'[m]':^10s}|"
+        # self.prop['t_boiling'] = f"{'Boiling [s]':<16s}|{tb_str:^10s}"
+        self.prop['parameters'] = f"{'Layer':^7s}|{'Direction':^11s}|{'Speed':^7s}|{'Altitude':^10s}|{'Frac Cn²':^10s}|{'Diameter':^10s}|{'Evolution':^20s}|"
+        self.prop['units'] = f"{'':^7s}|{'[°]':^11s}|{'[m/s]':^7s}|{'[m]':^10s}|{'[%]':^10s}|{'[m]':^10s}|{'':^20s}|"
         for i in range(self.nLayer):
-            if i % 2 == 0:
-                self.prop['layer_%02d' % i] = f"\033[00m{i+1:^7d}|{self.windDirection[i]:^11.0f}|{self.windSpeed[i]:^7.1f}|{self.altitude[i]:^10.0e}|{self.fractionalR0[i]*100:^10.0f}|{getattr(self, 'layer_'+str(i+1)).D:^10.3f}|"
+            if self.t_boiling[i] is None:
+                tb_str = f"{'Frozen Flow':^20s}"
             else:
-                self.prop['layer_%02d' % i] = f"\033[47m{i+1:^7d}|{self.windDirection[i]:^11.0f}|{self.windSpeed[i]:^7.1f}|{self.altitude[i]:^10.0e}|{self.fractionalR0[i]*100:^10.0f}|{getattr(self, 'layer_'+str(i+1)).D:^10.3f}|"
+                tb_str = f"{f'Boiling: t = {self._t_boiling[i]:.4g} s':^20s}"
+            if i % 2 == 0:
+                self.prop['layer_%02d' % i] = f"\033[00m{i+1:^7d}|{self.windDirection[i]:^11.0f}|{self.windSpeed[i]:^7.1f}|{self.altitude[i]:^10.0e}|{self.fractionalR0[i]*100:^10.0f}|{getattr(self, 'layer_'+str(i+1)).D:^10.3f}|{tb_str}|"
+            else:
+                self.prop['layer_%02d' % i] = f"\033[47m{i+1:^7d}|{self.windDirection[i]:^11.0f}|{self.windSpeed[i]:^7.1f}|{self.altitude[i]:^10.0e}|{self.fractionalR0[i]*100:^10.0f}|{getattr(self, 'layer_'+str(i+1)).D:^10.3f}|{tb_str}|"
         self.prop['delimiter'] = ''
         self.prop['r0'] = f"{'r0 @ 500 nm [m]':<16s}|{self.r0:^10.2f}"
         self.prop['L0'] = f"{'L0 [m]':<16s}|{self.L0:^10.1f}"
