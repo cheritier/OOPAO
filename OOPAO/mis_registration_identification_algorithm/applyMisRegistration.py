@@ -41,12 +41,20 @@ def applyMisRegistration(tel,
             
         if dm_input is None:
             # case synthetic DM - with user-defined coordinates                
-            # try:
+            try:
+                n_subaperture  = param['nSubaperture']
+                mechanical_coupling  = param['mechanicalCoupling']
+                
+            except:
+                n_subaperture = param['wfs_n_subaperture']
+                mechanical_coupling  = param['dm_mechanical_coupling']
+
+                    
                 if param['isM4'] is True:
                     # case with M4
                     dm_tmp = DeformableMirror(telescope    = tel,\
-                                        nSubap       = param['nSubaperture'],\
-                                        mechCoupling = param['mechanicalCoupling'],\
+                                        nSubap       = n_subaperture,\
+                                        mechCoupling = mechanical_coupling,\
                                         coordinates  = coordinates,\
                                         pitch        = None,\
                                         misReg       = misRegistration_tmp + extra_dm_mis_registration,\
@@ -73,8 +81,8 @@ def applyMisRegistration(tel,
                     param['isM4'] = False
                     # create a deformable mirror with input influence functions interpolated
                     dm_tmp = DeformableMirror(telescope    = tel,\
-                        nSubap       = param['nSubaperture'],\
-                        mechCoupling = param['mechanicalCoupling'],\
+                        nSubap       = n_subaperture,\
+                        mechCoupling = mechanical_coupling,\
                         coordinates  = coord,\
                         pitch        = pitch,\
                         misReg       = misRegistration_tmp + extra_dm_mis_registration,\
@@ -89,8 +97,8 @@ def applyMisRegistration(tel,
                 else:
                         # default case => use of param['dm_ccordinates']
                         dm_tmp = DeformableMirror(telescope    = tel,\
-                                                  nSubap       = param['nSubaperture'],\
-                                                  mechCoupling = param['mechanicalCoupling'],\
+                                                  nSubap       = n_subaperture,\
+                                                  mechCoupling = mechanical_coupling,\
                                                   coordinates  = coordinates,\
                                                   pitch        = pitch,\
                                                   misReg       = misRegistration_tmp + extra_dm_mis_registration,\
@@ -103,7 +111,7 @@ def applyMisRegistration(tel,
               dm_tmp = DeformableMirror(telescope    = tel,
                       nSubap       = dm_input.nAct-1,
                       mechCoupling = dm_input.mechCoupling,
-                      coordinates  = coordinates,
+                      coordinates  = dm_input.initial_coordinates,
                       pitch        = dm_input.pitch,
                       misReg       = misRegistration_tmp + extra_dm_mis_registration,
                       flip         = dm_input.flip_,

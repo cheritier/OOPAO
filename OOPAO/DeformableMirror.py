@@ -207,6 +207,7 @@ class DeformableMirror:
         self.M4_param = M4_param
         self.rad2arcsec = (180./np.pi)*3600
         self.actuator_selection = actuator_selection
+        self.defaut_configuration_flag = False
         if M4_param is not None:
             if M4_param['isM4']:
                 from .M4_model.make_M4_influenceFunctions import makeM4influenceFunctions
@@ -306,6 +307,7 @@ class DeformableMirror:
             # In that case corresponds to the number of actuator along the diameter
             self.nAct = nSubap+1
             self.nActAlongDiameter = self.nAct-1
+            self.defaut_configuration_flag = True
 
             # set the coordinates of the DM object to produce a cartesian geometry
             x = np.linspace(-(self.D)/2, (self.D)/2, self.nAct)
@@ -354,6 +356,11 @@ class DeformableMirror:
         #  initial coordinates
         xIF0 = self.xIF0[self.validAct]
         yIF0 = self.yIF0[self.validAct]
+        self.nIF = len(xIF0)
+
+        self.initial_coordinates = np.zeros([self.nIF, 2])
+        self.initial_coordinates[:, 0] = xIF0
+        self.initial_coordinates[:, 1] = yIF0
 
         # anamorphosis
         xIF3, yIF3 = self.anamorphosis(xIF0, yIF0, self.misReg.anamorphosisAngle * np.pi/180, self.misReg.tangentialScaling, self.misReg.radialScaling)
@@ -371,11 +378,11 @@ class DeformableMirror:
         # corresponding coordinates on the pixel grid
         u0x = self.resolution/2+xIF*self.resolution/self.D
         u0y = self.resolution/2+yIF*self.resolution/self.D
-        self.nIF = len(xIF)
         # store the coordinates
         self.coordinates = np.zeros([self.nIF, 2])
         self.coordinates[:, 0] = xIF
         self.coordinates[:, 1] = yIF
+        
 
         if self.isM4 is False:
             print_('Generating a Deformable Mirror: ', print_dm_properties)

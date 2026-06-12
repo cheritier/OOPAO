@@ -14,72 +14,73 @@ from numpy.random import RandomState
 def initializeParameterFile():
     # initialize the dictionaries
     param = dict()
+    param['location_data'] = 'C:/Users/cheritier/Documents/oopao_private/ghost/ghost_simulation/'
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
-    param['r0'                      ] = 0.15                                           # value of r0 in the visibile in [m]
-    param['L0'                      ] = 30                                             # value of L0 in the visibile in [m]
-    param['fractionnalR0'           ] = [0.15,0.2,0.05,0.05,0.1,0.1,0.05,0.15,0.1,0.05]                                            # Cn2 profile
+    param['atmosphere_r0'                      ] = 0.15                                           # value of r0 in the visibile in [m]
+    param['atmosphere_L0'                      ] = 30                                             # value of L0 in the visibile in [m]
+    param['atmosphere_fractionnalR0'           ] = [0.15,0.2,0.05,0.05,0.1,0.1,0.05,0.15,0.1,0.05]                                            # Cn2 profile
     N = 10
     # create a random state
     randomState    = RandomState(42)
     # SLOW
-    param['windSpeed'               ] = list(randomState.randint(10,15,N))                                            # wind speed of the different layers in [m.s-1]
-    param['windDirection'           ] = list(randomState.randint(0,360,N))                                             # wind direction of the different layers in [degrees]
-    param['altitude'                ] = list(randomState.randint(1,10000,N))  
+    param['atmosphere_windSpeed'               ] = list(randomState.randint(10,15,N))                                            # wind speed of the different layers in [m.s-1]
+    param['atmosphere_windDirection'           ] = list(randomState.randint(0,360,N))                                             # wind direction of the different layers in [degrees]
+    param['atmosphere_altitude'                ] = list(randomState.randint(1,10000,N))  
                               
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% M1 PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
-    param['diameter'                ] = 6.9                                             # diameter in [mm]
-    param['n_subaperture'           ] = 36                                             # number of PWFS subaperture along the telescope diameter
-    param['n_pixel_per_subaperture' ] = 2                                            # sampling of the PWFS subapertures
-    param['n_extra_subaperture'     ] = 6
-    param['sampling_time'           ] = 1/1000                                         # loop sampling time in [s]
-    param['central_obstruction'     ] = 0                                              # central obstruction in percentage of the diameter
-    param['m1_reflectivity'         ] = 1                                   # reflectivity of the 798 segments
+    param['telescope_diameter'                ] = 6.9                                             # diameter in [mm]
+    param['wfs_n_subaperture'                 ] = 36                                             # number of PWFS subaperture along the telescope diameter
+    param['wfs_n_pixel_per_subaperture'       ] = 1                                            # sampling of the PWFS subapertures
+    param['wfs_n_extra_subaperture'           ] = 6                                            # extra subaperture to pad the pupils (even number required)   
+    param['telescope_sampling_time'           ] = 1/1000                                         # loop sampling time in [s]
+    param['telescope_central_obstruction'     ] = 0                                              # central obstruction in percentage of the diameter
+    param['telescope_m1_reflectivity'         ] = 1                                   # reflectivity of the 798 segments
           
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% NGS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
-    param['magnitude'               ] = 6.16                                              # magnitude of the guide star
-    param['optical_band'            ] = 'I'                                            # optical band of the guide star
+    param['source_magnitude'               ] = 6.16                                              # magnitude of the guide star
+    param['source_optical_band'            ] = 'I'                                            # optical band of the guide star
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% DM PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    param['n_actuator'              ] = 24                                         # number of actuators 
-    param['mechanical_coupling'     ] = 0.15
-    param['isM4'                    ] = False                                           # tag for the deformable mirror class
-    param['isLBT'                   ] = False
-    param['dm_coordinates'          ] = 'dm_coord.mat'                                           # tag for the eformable mirror class
+    param['dm_n_actuator'              ] = 24                                         # number of actuators 
+    param['dm_mechanical_coupling'     ] = 0.15
+    param['isM4'                       ] = False                                           # tag for the deformable mirror class
+    param['isLBT'                      ] = False
     # --------------------------- Specific to GHOST bench
     import scipy.io
-    loc = 'C:/Users/cheritier/Documents/oopao_private/ghost/ghost_simulation/'
-    dm_coord            = scipy.io.loadmat(loc+'dm_coord.mat')
-    nAct_ghost          = param['n_actuator']
+    dm_coord            = scipy.io.loadmat(param['location_data']+'dm_coord.mat')
+    nAct_ghost          = param['dm_n_actuator']
     diameter_dm_ghost   = 6.9
     coordinates         = np.zeros([492,2])
-    coordinates[:,0]    = (dm_coord['x']-(nAct_ghost-1)/2)*param['diameter']/2/((nAct_ghost-1)/2)
-    coordinates[:,1]    = (dm_coord['y']-(nAct_ghost-1)/2)*param['diameter']/2/((nAct_ghost-1)/2)
+    coordinates[:,0]    = (dm_coord['x']-(nAct_ghost-1)/2)*param['telescope_diameter']/2/((nAct_ghost-1)/2)
+    coordinates[:,1]    = (dm_coord['y']-(nAct_ghost-1)/2)*param['telescope_diameter']/2/((nAct_ghost-1)/2)
     
-    param['coordinates'             ] = coordinates                                           # tag for the eformable mirror class
+    param['dm_coordinates'             ] = coordinates                                           # tag for the eformable mirror class
     param['pitch'                   ] = diameter_dm_ghost/nAct_ghost
     # ---------------------------
     # mis-registrations                                                             
     param['shiftX'                  ] = 0                                              # shift X of the DM in pixel size units ( tel.D/tel.resolution ) 
     param['shiftY'                  ] = 0                                              # shift Y of the DM in pixel size units ( tel.D/tel.resolution )
-    param['rotationAngle'           ] = 0                                              # rotation angle of the DM in [degrees]
+    param['rotationAngle'           ] = 5                                              # rotation angle of the DM in [degrees]
     param['anamorphosisAngle'       ] = 0                                              # anamorphosis angle of the DM in [degrees]
     param['radialScaling'           ] = -0.02                                            # radial scaling in percentage of diameter
     param['tangentialScaling'       ] = -0.02                                            # tangential scaling in percentage of diameter
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    param['modulation'              ] = 3                                             # modulation radius in ratio of wavelength over telescope diameter
-    param['n_pix_separation'        ] = 6                                             # separation ratio between the PWFS pupils
-    param['n_pix_edge'              ] = 2
-    param['psf_centering'           ] = True                                         # centering of the FFT and of the PWFS mask on the 4 central pixels
-    param['light_threshold'         ] = 0.1                                           # light threshold to select the valid pixels
-    param['post_processing'         ] = 'slopesMaps'                                   # post-processing of the PWFS signals 
-    
+    param['pyramid_modulation'              ] = 3                                             # modulation radius in ratio of wavelength over telescope diameter
+    param['pyramid_n_pix_separation'        ] = 6                                             # separation ratio between the PWFS pupils
+    param['pyramid_n_pix_edge'              ] = 2
+    param['pyramid_psf_centering'           ] = True                                         # centering of the FFT and of the PWFS mask on the 4 central pixels
+    param['pyramid_light_threshold'         ] = 0.1                                           # light threshold to select the valid pixels
+    param['pyramid_post_processing'         ] = 'slopesMaps'                                   # post-processing of the PWFS signals 
+    param['pyramid_sx'              ] = [0,0,0,0]                                   # X-shift for each PWFS pupil 
+    param['pyramid_sy'              ] = [0,0,0,0]                                   # Y-shift for each PWFS pupil 
+
     # --------------------------- Specific to GHOST bench
-    param['user_valid_signal'] = np.pad(np.load(loc+'pupil_mask_PYR.npy'),param['n_extra_subaperture']//2).astype(bool)
+    param['pyramid_user_valid_signal'] = np.pad(np.load(param['location_data']+'pupil_mask_PYR.npy'),param['wfs_n_extra_subaperture']//2).astype(bool)
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOOP PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     

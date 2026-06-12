@@ -6,29 +6,28 @@ Created on Thu Oct 27 09:43:10 2022
 """
 
 import matplotlib.pyplot as plt
-import numpy             as np 
+import numpy as np
 import time
 
+# generic function to create an AO system with Pyramid WFS
 from compute_ao_model_pyramid import compute_ao_model_pyramid
-# calibration modules compute_ao_model_pyramid
-from OOPAO.calibration.compute_KL_modal_basis import compute_M2C
+
 # display modules
 from OOPAO.tools.displayTools           import displayMap, display_wfs_signals, makeSquareAxes,interactive_show
 
-#% -----------------------     read parameter file   ----------------------------------
+# % -----------------------     read parameter file   ----------------------------------
 from parameterFile_GHOST import initializeParameterFile, get_imat_ghost, compute_imat_4_ghost
 param = initializeParameterFile()
 
-# location of the relevant data (WFS pupil mask, KL basis, measured iMat... )
-loc = 'C:/Users/cheritier/Documents/oopao_private/ghost/ghost_simulation/'
+#%%
 
 # create the ghost AO objects
-tel,ngs,dm,wfs,atm = compute_ao_model_pyramid(param = param, loc = loc)
+tel,ngs,dm,wfs,atm = compute_ao_model_pyramid(param = param, loc = param['location_data'])
 
 
 #%% Modal basis
-
-M2C = np.load(loc+'KL_PTT_ifun_BMC492_psim.npy')
+# check that the KL basis did not change
+M2C = np.load(param['location_data']+'KL_PTT_ifun_BMC492_psim.npy')
 
 dm.coefs = M2C[:,10:20]*1e-9
 
@@ -37,14 +36,15 @@ ngs**tel*dm*wfs
 displayMap(tel.OPD, norma = True)
 
 # show the corresponding synthetic WFS signals
-sim_imat = display_wfs_signals(wfs, wfs.signal, norma=True,returnOutput=True)
-sim_imat[np.isinf(sim_imat)] = 0
+synthetic_imat = display_wfs_signals(wfs, wfs.signal, norma=True,returnOutput=True)
+synthetic_imat[np.isinf(synthetic_imat)] = 0
 
 #%% Load experimental interaction matrix
 
 #% read and display the input imat
 # consider only 400 modes in this example
-input_imat = get_imat_ghost(loc+'hadamard_IM_slopes_15_no_residual.npy', wfs, M2C=M2C[:,:400])
+input_imat = get_imat_ghost(param['location_data']+'hadamard_IM_slopes_15_no_residual.npy', wfs, M2C=M2C[:,:400])
+# input_imat = get_imat_ghost(param['location_data']+'hadamard_IM_slopes_55.npy', wfs, M2C=M2C[:,:400])
 
 # display the modes 10 to 20
 exp_imat = display_wfs_signals(wfs, input_imat[:,10:20], norma = True,returnOutput=True)
@@ -55,7 +55,7 @@ exp_imat[np.isinf(exp_imat)] = 0
 #%% SPRINT estimation
 
 # index of the KL modes used to estimate the parameters (for the first estimation pick a few middle-order within the first 100 KL modes -- avoid high order modes)
-index_modes = np.arange(80,100)
+index_modes = 80
 
 # modal basis considered
 from OOPAO.tools.tools import emptyClass
@@ -75,7 +75,7 @@ obj.param   = param
 
 from OOPAO.SPRINT import SPRINT
 tel.resetOPD()
-n_mis_reg             = 5           # consider the 5 mis-reg shift X & Y, rotation, magnification X & Y
+n_mis_reg             = 3           # consider the 5 mis-reg shift X & Y, rotation, magnification X & Y
 recompute_sensitivity = True        # forces to recompute the sensitivity matrices. If False, the pre-eisting ones are loaded if they exist.
 mis_registration_zero_point = None  # mis-registration starting point. if None, zero-mis-registration is considered
 
@@ -96,31 +96,35 @@ print('The validity flag for the estimation of the parameters is '+str(Sprint.va
 # the value can be printed using
 Sprint.mis_registration_out.print_()
 
+#%%
+plt.figure()
+plt.plot(dm.coordinates[:,0],dm.coordinates[:,1],'+')
+plt.plot(dm.initial_coordinates[:,0],dm.initial_coordinates[:,1],'+')
 
 #%%
-
+plt.close('all')
 from OOPAO.mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
 
 dm_ghost = applyMisRegistration(tel,Sprint.mis_registration_out,dm_input=dm)
 
-input_imat = get_imat_ghost(loc+'hadamard_IM_slopes_15_no_residual.npy', wfs, M2C=M2C[:,:400])
+input_imat = get_imat_ghost(param['location_data']+'hadamard_IM_slopes_15_no_residual.npy', wfs, M2C=M2C[:,:400])
 
-ind = [80,81,82,100]
+ind = 100
 # show the comparison for a few modes
 dm.coefs = M2C[:,ind]*1e-9
 
 ngs**tel*dm*wfs
 
-sim_imat = display_wfs_signals(wfs, wfs.signal, norma=True,returnOutput=True)
-sim_imat[np.isinf(sim_imat)] = 0
+synthetic_imat = display_wfs_signals(wfs, wfs.signal, norma=True,returnOutput=True)
+synthetic_imat[np.isinf(synthetic_imat)] = 0
 
 # display the modes 10 to 20
 exp_imat = display_wfs_signals(wfs, input_imat[:,ind], norma = True,returnOutput=True)
 exp_imat[np.isinf(exp_imat)] = 0
 
-interactive_show(sim_imat,exp_imat)
+interactive_show(synthetic_imat,exp_imat)
 
-display_wfs_signals(wfs, np.var(input_imat,axis=1), norma = True)
+# display_wfs_signals(wfs, np.var(input_imat,axis=1), norma = True)
 
 
 
@@ -146,7 +150,7 @@ calib = InteractionMatrix(  ngs            = ngs,\
     
     
 #%%
-imat_from_ghost = get_imat_ghost(loc+'hadamard_IM_slopes_15_no_residual.npy', wfs,normalization_factor=1)
+imat_from_ghost = get_imat_ghost(param['location_data']+'hadamard_IM_slopes_15_no_residual.npy', wfs,normalization_factor=1)
 
 imat_4_ghost = 0.75*compute_imat_4_ghost(calib.D, wfs)
 
@@ -157,7 +161,7 @@ plt.plot(np.std(imat_from_ghost,axis=0))
 
 
 
-np.save(loc+'imat_4_ghost_mod_3',imat_4_ghost)
+np.save(param['location_data']+'imat_4_ghost_mod_3',imat_4_ghost)
 
 
 

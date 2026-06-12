@@ -29,19 +29,19 @@ def compute_ao_model_pyramid(param, loc='C:/diskb/cheritier/GHOST/'):
 
     from OOPAO.Telescope import Telescope
     # create the Telescope object
-    tel = Telescope(resolution          = param['n_subaperture']*param['n_pixel_per_subaperture'],
-                    diameter            = param['diameter'],
-                    samplingTime        = param['sampling_time'],
-                    centralObstruction  = param['central_obstruction'])
+    tel = Telescope(resolution          = param['wfs_n_subaperture']*param['wfs_n_pixel_per_subaperture'],
+                    diameter            = param['telescope_diameter'],
+                    samplingTime        = param['telescope_sampling_time'],
+                    centralObstruction  = param['telescope_central_obstruction'])
     
-    if param['n_extra_subaperture'] != 0:
-        tel.pad(param['n_extra_subaperture']*param['n_pixel_per_subaperture']//2)
+    if param['wfs_n_extra_subaperture'] != 0:
+        tel.pad(param['wfs_n_extra_subaperture']*param['wfs_n_pixel_per_subaperture']//2)
 
     #%% -----------------------     NGS   ----------------------------------
     from OOPAO.Source import Source
     # create the Source object
-    ngs=Source(optBand   = param['optical_band'],\
-               magnitude = param['magnitude'])
+    ngs=Source(optBand   = param['source_optical_band'],\
+               magnitude = param['source_magnitude'])
     
     # combine the NGS to the telescope using '*' operator:
     ngs*tel
@@ -51,43 +51,46 @@ def compute_ao_model_pyramid(param, loc='C:/diskb/cheritier/GHOST/'):
 
     # if no coordonates specified, create a cartesian dm
     dm = DeformableMirror(telescope     = tel,\
-                    nSubap              = param['n_actuator']-1,\
-                    mechCoupling        = param['mechanical_coupling'],\
-                    coordinates         = param['coordinates'],\
+                    nSubap              = param['dm_n_actuator']-1,\
+                    mechCoupling        = param['dm_mechanical_coupling'],\
+                    coordinates         = param['dm_coordinates'],\
                     misReg              = None,\
                     pitch               = param['pitch'])
     
     param['dm_coordinates'] = dm.coordinates
-    param['pitch']          = dm.pitch
+    param['dm_pitch']          = dm.pitch
     
     from OOPAO.MisRegistration import MisRegistration
     misRegistration_tmp = MisRegistration(param)
     from OOPAO.mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
-    dm = applyMisRegistration(tel = tel, misRegistration_tmp = misRegistration_tmp, param = param)
+    dm = applyMisRegistration(tel = tel, misRegistration_tmp = misRegistration_tmp, dm_input=dm)
     
     #%% -----------------------     PYRAMID WFS   ----------------------------------
     from OOPAO.Pyramid import Pyramid
     
     # create the Pyramid Object
-    wfs = Pyramid(nSubap            = param['n_subaperture'] + param['n_extra_subaperture'],\
+    wfs = Pyramid(nSubap            = param['wfs_n_subaperture'] + param['wfs_n_extra_subaperture'],\
               telescope             = tel,\
-              modulation            = param['modulation'],\
-              lightRatio            = param['light_threshold'],\
-              n_pix_separation      = param['n_pix_separation'],\
-              n_pix_edge            = param['n_pix_edge'],\
-              psfCentering          = param['psf_centering'],\
-              postProcessing        = param['post_processing'],\
-              userValidSignal       = param['user_valid_signal'])
+              modulation            = param['pyramid_modulation'],\
+              lightRatio            = param['pyramid_light_threshold'],\
+              n_pix_separation      = param['pyramid_n_pix_separation'],\
+              n_pix_edge            = param['pyramid_n_pix_edge'],\
+              psfCentering          = param['pyramid_psf_centering'],\
+              postProcessing        = param['pyramid_post_processing'],\
+              userValidSignal       = param['pyramid_user_valid_signal'])
+    # shift the pyramid pupils
+    wfs.apply_shift_wfs(sx = param['pyramid_sx'],
+                        sy = param['pyramid_sy'])
         
     #%% -----------------------     ATMOSPHERE   ----------------------------------
     from OOPAO.Atmosphere import Atmosphere
     
     atm = Atmosphere(telescope      = tel,\
-                     r0             = param['r0'],\
-                     L0             = param['L0'],\
-                     windSpeed      = param['windSpeed'],\
-                     fractionalR0   = param['fractionnalR0'],\
-                     windDirection  = param['windDirection'],\
-                     altitude       = param['altitude'])
+                     r0             = param['atmosphere_r0'],\
+                     L0             = param['atmosphere_L0'],\
+                     windSpeed      = param['atmosphere_windSpeed'],\
+                     fractionalR0   = param['atmosphere_fractionnalR0'],\
+                     windDirection  = param['atmosphere_windDirection'],\
+                     altitude       = param['atmosphere_altitude'])
     
     return tel,ngs,dm,wfs,atm
