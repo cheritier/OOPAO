@@ -160,6 +160,29 @@ class Asterism:
             _scintillation_no_pupil.append(getattr(src, 'scintillation_no_pupil', None))
         return np.array(_scintillation_no_pupil, dtype=object)
 
+    @property
+    def intensity(self):
+        # Aggregated field intensity (fluxMap * scintillation) of each source.
+        # This is the energy-bearing quantity; the per-source intensity is kept
+        # as a SINGLE array on each Source so a FieldTransformer warp conserves
+        # energy (no W(flux)*W(scint) cross-term). dtype=object mirrors the
+        # scintillation aggregation since sources may have None / differently
+        # shaped intensities (e.g. before propagation, or NGS vs LGS).
+        _intensity = []
+        for src in self.src:
+            _intensity.append(getattr(src, 'intensity', None))
+        return np.array(_intensity, dtype=object)
+
+    @intensity.setter
+    def intensity(self, val):
+        # Distribute a per-source intensity back to each Source so a
+        # FieldTransformer can write warped intensities the same way it does
+        # for scintillation. After such a write the per-source fluxMap /
+        # scintillation are stale relative to intensity -- intensity is the
+        # authoritative amplitude path (amplitude = sqrt(intensity)).
+        for src in self.src:
+            src.intensity = val[src.ast_idx]
+
     def __pow__(self, obj):
         # Re-propagation function. Same as .* in OOMAO
 

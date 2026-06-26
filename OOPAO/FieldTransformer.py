@@ -20,7 +20,8 @@ class FieldTransformer:
                  anamorphosisAngle=None,
                  tangentialScaling=None,
                  radialScaling=None,
-                 remove_edge_effects:bool=True):
+                 remove_edge_effects:bool=True,
+                 order = 1):
         """
         FieldTransformer object allows to perform a geometrical transformation to the Electromagnetic field (EMF),
         i.e., both phase and amplitude.
@@ -85,6 +86,7 @@ class FieldTransformer:
         self.tangentialScaling = tangentialScaling
         self.radialScaling = radialScaling
         self.remove_edge_effects = remove_edge_effects
+        self.order = order
         # initialize values
         for i_param in parameters:
             tmp_param = getattr(self, i_param)
@@ -117,8 +119,10 @@ class FieldTransformer:
 
         for src in self.src_list:
             src.optical_path.append([self.tag, self])
+            
             # shift the EM field amplitude (fluxMap)
-            src.fluxMap = interpolate_image(image_in=src.fluxMap.copy(),
+            input_energy_intensity = np.sqrt(np.sum(src.intensity))
+            src.intensity = interpolate_image(image_in=src.fluxMap.copy(),
                                             pixel_size_in=1.0,
                                             pixel_size_out=1.0,
                                             resolution_out=len(src.fluxMap.copy()),
@@ -129,11 +133,31 @@ class FieldTransformer:
                                             tangentialScaling=self.tangentialScaling[src.ast_idx],
                                             radialScaling=self.radialScaling[src.ast_idx],
                                             shape_out=None,
-                                            order=1)
+                                            order=self.order)
+            src.intensity *= input_energy_intensity/np.sqrt(np.sum(src.intensity))
 
             # pupil mask containing only the pixels fully illuminated (no "gray" pixels)
             pupil_mask = src.fluxMap == np.max(src.fluxMap)
 
+            # # shift the scintillation map
+            # input_energy_scintillation = np.sqrt(np.sum(src.scintillation))
+
+            # # by updating the OPD, the phase (and OPD_no_pupil) will be also updated accordingly automatically
+            # src.scintillation = interpolate_image(image_in=src.scintillation.copy(),
+            #                             pixel_size_in=1.0,
+            #                             pixel_size_out=1.0,
+            #                             resolution_out=len(src.OPD.copy()),
+            #                             rotation_angle=self.rotation_angle[src.ast_idx],
+            #                             shift_x=self.shift_x[src.ast_idx],
+            #                             shift_y=self.shift_y[src.ast_idx],
+            #                             anamorphosisAngle=self.anamorphosisAngle[src.ast_idx],
+            #                             tangentialScaling=self.tangentialScaling[src.ast_idx],
+            #                             radialScaling=self.radialScaling[src.ast_idx],
+            #                             shape_out=None,
+            #                             order=self.order)
+            # src.scintillation *= input_energy_scintillation/np.sqrt(np.sum(src.scintillation))
+
+            
             # shift the EM OPD and phase
             # by updating the OPD, the phase (and OPD_no_pupil) will be also updated accordingly automatically
             src.OPD = interpolate_image(image_in=src.OPD.copy(),
@@ -147,13 +171,15 @@ class FieldTransformer:
                                         tangentialScaling=self.tangentialScaling[src.ast_idx],
                                         radialScaling=self.radialScaling[src.ast_idx],
                                         shape_out=None,
-                                        order=1)
+                                        order=self.order)
 
             # removing possible "edge artifacts" due to sub-pixel shifts after the EM field transformation
             # this allows removing "gray" zones near the pupil borders or central obstruction
-            if self.remove_edge_effects:
-                src.fluxMap *= pupil_mask
-                src.OPD *= pupil_mask
+            # if self.remove_edge_effects:
+            #     src.fluxMap *= pupil_mask
+            #     src.OPD *= pupil_mask
+            #     src.scintillation *= pupil_mask
+                # src.mask *=pupil_mask
 
     def properties(self) -> dict:
         self.prop = dict()

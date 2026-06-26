@@ -300,7 +300,7 @@ class ShackHartmann:
             # set the valid lenslets accordingly
             self.set_valid_subaperture(src=src, sh_data=self.sh_data['src_'+str(i_src)])
             # Set the pupil masks for each SH (needed for the geometric SH implementation with EM field transform)
-            self.sh_data['src_' + str(i_src)].pupil_mask = src.fluxMap == np.max(src.fluxMap)
+            self.sh_data['src_' + str(i_src)].pupil_mask = src.intensity == np.max(src.intensity)
             # initialize the weithing map for the CoG computation
             self.sh_data['src_'+str(i_src)].weighting_map = 1
             # store the number of signal
@@ -318,7 +318,7 @@ class ShackHartmann:
         return
 
     def initialize_flux(self, src, sh_data):
-        input_flux_map = src.fluxMap.T
+        input_flux_map = src.intensity.T
         tmp_flux_h_split = np.hsplit(input_flux_map, self.nSubap)
         sh_data.cube_flux = np.zeros([self.nSubap ** 2,
                                       self.n_pix_lenslet_init,
@@ -461,10 +461,10 @@ class ShackHartmann:
                 # compute spot intensity
                 if src.phase_filtered is None:
                     phase = src.phase
-                    # self.initialize_flux(input_flux_map=src.fluxMap.T)
+                    # self.initialize_flux(input_flux_map=src.intensity.T)
                 else:
                     phase = src.phase_filtered
-                    self.initialize_flux(((src.amplitude_filtered)**2).T*src.fluxMap.T)
+                    self.initialize_flux(((src.amplitude_filtered)**2).T*src.intensity.T)
                 intensity = (np.abs(np.fft.fft2(np.asarray(self.get_lenslet_em_field(src=src,
                                                                                      sh_data=sh_data,
                                                                                      phase=phase)), axes=[1, 2])/norma)**2)
@@ -711,7 +711,7 @@ class ShackHartmann:
 
     def get_lenslet_em_field(self, src, sh_data, phase):
         tmp_phase_h_split = np.hsplit(phase.T, self.nSubap)
-        tmp_amp_h_split = np.hsplit(np.sqrt(src.scintillation.T), self.nSubap)
+        tmp_amp_h_split = np.hsplit(np.sqrt(src.intensity.T), self.nSubap)
         self.cube_em = np.zeros([self.nSubap**2,
                                  self.n_pix_lenslet_init,
                                  self.n_pix_lenslet_init], dtype=complex)
@@ -723,7 +723,9 @@ class ShackHartmann:
             self.cube_em[i*self.nSubap:(i+1)*self.nSubap,
                          self.center_init - self.n_pix_subap_init//2:self.center_init+self.n_pix_subap_init//2,
                          self.center_init - self.n_pix_subap_init//2:self.center_init+self.n_pix_subap_init//2] = complex_field
-        self.cube_em *= np.sqrt(sh_data.cube_flux)*self.phasor_tiled
+        # self.cube_em *= np.sqrt(sh_data.cube_flux)*self.phasor_tiled
+        self.cube_em *= self.phasor_tiled
+
         return self.cube_em
 
     def fill_raw_data(self, ind_x, ind_y, intensity, index_frame=None):

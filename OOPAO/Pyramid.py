@@ -333,8 +333,10 @@ class Pyramid:
         # Prepare the Tip Tilt for the modulation -- normalized to apply the modulation in terms of lambda/D
         [self.Tip, self.Tilt] = np.meshgrid(np.linspace(-np.pi, np.pi, self.telescope.resolution), np.linspace(-np.pi, np.pi, self.telescope.resolution))
         # truncate with the pupil and scale the TT to account for eventual padding of the pupil
-        self.Tilt *= self.telescope.pupil * self.telescope.resolution/self.telescope.initial_resolution
-        self.Tip *= self.telescope.pupil * self.telescope.resolution/self.telescope.initial_resolution
+        # self.Tilt *= self.telescope.pupil * self.telescope.resolution/self.telescope.initial_resolution
+        # self.Tip *= self.telescope.pupil * self.telescope.resolution/self.telescope.initial_resolution
+        self.Tilt *= self.telescope.resolution/self.telescope.initial_resolution
+        self.Tip *= self.telescope.resolution/self.telescope.initial_resolution
 
         # compute the phasor to center the PSF on 4 pixels
         [xx, yy] = np.meshgrid(np.linspace(0, self.resolution-1, self.resolution), np.linspace(0, self.resolution-1, self.resolution))
@@ -586,11 +588,14 @@ class Pyramid:
         self.isInitialized = True
         return
 
-    def wfs_calibration(self):
+    def wfs_calibration(self, src=None):
         # save current OPD to be re-applied after calibration:
         tmp_OPD = self.src.OPD.copy()
-        # reference slopes acquisition
-        self.src**self.telescope
+        if src is None:
+            # reference slopes acquisition
+            self.src**self.telescope
+        else:
+            self.src = src
         # compute the refrence signals
         self.relay(self.src)
         self.referenceSignal_2D, self.referenceSignal = self.signalProcessing()
@@ -666,7 +671,7 @@ class Pyramid:
         if phase_in is not None:
             self.src.phase = phase_in
         # mask amplitude for the light propagation
-        self.maskAmplitude = self.convert_for_gpu(np.sqrt((self.src.fluxMap * self.src.scintillation)/self.nTheta))
+        self.maskAmplitude = self.convert_for_gpu(np.sqrt((self.src.intensity)/self.nTheta))
 
         if self.spatialFilter is not None:
             if np.ndim(phase_in) == 2:
@@ -1128,7 +1133,7 @@ class Pyramid:
             self.phaseBuffModulation = np.zeros([self.nTheta, self.resolution, self.resolution]).astype(xp.float32)
             self.phaseBuffModulationLowres = np.zeros([self.nTheta, self.telescope.resolution, self.telescope.resolution]).astype(xp.float32)
             for i in range(self.nTheta):
-                self.TT = (self.modulation_path[i][0]*self.Tip+self.modulation_path[i][1]*self.Tilt)*self.telescope.pupil
+                self.TT = (self.modulation_path[i][0]*self.Tip+self.modulation_path[i][1]*self.Tilt)
                 self.phaseBuffModulation[i, self.center-self.telescope.resolution//2:self.center+self.telescope.resolution //
                                          2, self.center-self.telescope.resolution//2:self.center+self.telescope.resolution//2] = self.TT
                 self.phaseBuffModulationLowres[i, :, :] = self.TT
@@ -1141,7 +1146,7 @@ class Pyramid:
 
         if hasattr(self, 'isCalibrated'):
             if self.isCalibrated:
-                print('Updating the reference slopes and Wavelength Calibration for the new modulation')
+                print('Updating the reference slopes')
                 self.slopesUnits = 1
                 self.referenceSignal = 0
                 self.referenceSignal_2D = 0

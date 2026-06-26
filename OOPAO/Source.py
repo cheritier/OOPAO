@@ -74,6 +74,7 @@ class Source:
 
         _ src.nPhoton   : number of photons per m2 per s. if this property is changed after the initialization, the magnitude is automatically updated to the right value.
         _ src.fluxMap   : 2D map of the number of photons per pixel per frame (depends on the loop frequency defined by tel.samplingTime)
+        _ src.intensity : 2D map of the field intensity, i.e. fluxMap * scintillation, computed as a SINGLE array and refreshed automatically whenever fluxMap or scintillation is updated. This is the energy-bearing quantity: the complex field amplitude is sqrt(src.intensity). Build/transform the field from this array (not from the separately-warped factors) to conserve energy under a FieldTransformer warp.
         _ src.display_properties : display the properties of the src object
         _ src.chromatic_shift : list of shift in arcesc to be applied to the pupil footprint at each layer of the atmosphere object.
 
@@ -118,6 +119,7 @@ class Source:
         # self.phase = []                                    # phase of the source
         # phase of the source (no pupil)
         # self.phase_no_pupil = []
+        self._intensity = None                               # field intensity = fluxMap * scintillation (single array)
         self.fluxMap = []                                    # 2D flux map of the source
         # number of photon per m2 per s
         self._nPhoton = self.zeroPoint*10**(-0.4*magnitude)
@@ -151,6 +153,7 @@ class Source:
         # Variables for scintillation
         self.var_chi = None
         self.var_rytov = None
+        self._intensity = None
         self.scintillation = None
         # mask to compute the OPD with pupil.
         # Initally set to 1 so it doesnt do anything until the source is propagated through the telescope.
@@ -200,6 +203,53 @@ class Source:
                     tmp_path += ' ~~> '
             print(tmp_path)
 
+    def _refresh_intensity(self):
+        """Recompute the field intensity as a SINGLE array.
+
+        intensity = fluxMap * scintillation
+
+        The product is formed *before* any spatial transform so that a later
+        single warp of `intensity` conserves energy. Warping the two factors
+        separately and multiplying afterwards introduces a bilinear cross-term
+        (sum of W(flux)*W(scint) != sum of flux*scint, even when each factor
+        keeps its own sum), which is the source of the non-conservation.
+
+        Guarded with getattr so it is safe to call during __init__ before all
+        backing attributes exist.
+        """
+        flux = getattr(self, '_fluxMap', None)
+        scint = getattr(self, '_scintillation', None)
+        if flux is None or np.size(flux) == 0:
+            self._intensity = None
+        elif scint is None:
+            # no scintillation computed yet -> uniform modulation
+            self._intensity = np.array(flux, dtype=self.precision)
+        else:
+            self._intensity = (np.array(flux) * np.array(scint)).astype(self.precision)
+
+    @property
+    def intensity(self):
+        """Field intensity (fluxMap * scintillation) as a single array.
+
+        This is the energy-bearing quantity. The complex field amplitude is
+        sqrt(intensity), so build the field as:
+            field = np.sqrt(src.intensity) * np.exp(1j * src.phase)
+        and let a FieldTransformer warp `intensity` once (settable below)
+        rather than warping fluxMap and scintillation independently.
+        """
+        return self._intensity
+
+    @intensity.setter
+    def intensity(self, val):
+        # Settable so a FieldTransformer can write back a single warped
+        # intensity array. Note: after such a write, fluxMap/scintillation are
+        # stale relative to intensity (their product no longer equals it) --
+        # intensity is the authoritative amplitude path.
+        if val is not None:
+            self._intensity = np.array(val, dtype=self.precision)
+        else:
+            self._intensity = None
+
     @property
     def OPD(self):
         return self._OPD
@@ -230,6 +280,18 @@ class Source:
             self._OPD_no_pupil = None
 
     @property
+    def fluxMap(self):
+        return self._fluxMap
+
+    @fluxMap.setter
+    def fluxMap(self, val):
+        if val is not None:
+            self._fluxMap = np.array(val)
+        else:
+            self._fluxMap = None
+        self._refresh_intensity()
+
+    @property
     def phase(self):
         return self.OPD*2*np.pi/self.wavelength
 
@@ -257,6 +319,8 @@ class Source:
         else:
             self._scintillation = None
             self._scintillation_no_pupil = None
+        # keep the single-array intensity in sync with the factors
+        self._refresh_intensity()
 
     @property
     def scintillation_no_pupil(self):

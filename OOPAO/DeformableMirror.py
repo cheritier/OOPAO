@@ -41,7 +41,8 @@ class DeformableMirror:
                  flip=False,
                  flip_lr=False,
                  sign=1,
-                 actuator_selection=None):
+                 actuator_selection=None,
+                 user_defined_influence_functions_tag = None):
         """DEFORMABLE MIRROR
         A Deformable Mirror object consists in defining the 2D maps of influence functions of the actuators.
         By default, the actuator grid is cartesian in a Fried Geometry with respect to the nSubap parameter.
@@ -208,6 +209,7 @@ class DeformableMirror:
         self.rad2arcsec = (180./np.pi)*3600
         self.actuator_selection = actuator_selection
         self.defaut_configuration_flag = False
+        self.user_defined_influence_functions_tag = user_defined_influence_functions_tag
         if M4_param is not None:
             if M4_param['isM4']:
                 from .M4_model.make_M4_influenceFunctions import makeM4influenceFunctions
