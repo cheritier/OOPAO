@@ -20,11 +20,11 @@ def initializeParameterFile():
                               
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% M1 PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
-    param['nSubaperture'         ] = 40                                                                                 # number of PWFS subaperture along the telescope diameter
-    param['nExtraSubaperture'    ] = 4                                                                                  # extra subaperture on the edges
+    param['nSubaperture'         ] = 48                                                                                 # number of PWFS subaperture along the telescope diameter
+    param['nExtraSubaperture'    ] = 6                                                                                  # extra subaperture on the edges
     param['diameter'             ] = 1.82                                                                               # diameter in [m]
     param['ratio'                ] = 1                                                                                  # ratio factor for binned case
-    param['nPixelPerSubap'       ] = 1                                                                                  # sampling of the PWFS subapertures in pix
+    param['nPixelPerSubap'       ] = 2                                                                                  # sampling of the PWFS subapertures in pix
     param['resolution'           ] = param['nSubaperture']*param['nPixelPerSubap']                                    # resolution of the telescope driven by the PWFS
     param['sizeSubaperture'      ] = param['diameter']/param['nSubaperture']                                          # size of a sub-aperture projected in the M1 space
     param['samplingTime'         ] = 1/1000                                                                             # loop sampling time in [s]
@@ -43,24 +43,28 @@ def initializeParameterFile():
     param['mechanicalCoupling'   ] = 0.36                                        # Mechanical coupling of the DM influence functions
     param['dm_coordinates'       ] = None                                        # tag for the deformable mirror class
     param['dm_inf_funct_factor'  ] = 1                                           # factor to account for the influence functions deformation in DM units
+    param['dm_inf_funct_location'] =  'C:/Users/cheritier/Documents/oopao_private/ekarus/EKARUS_DM468/' # files available here: https://drive.google.com/drive/folders/1hbWyCq_AX1r32JB4jyVfZ-Ss3bVuRInE
+    param['dm_pitch'             ] = 1.5e-3 *param['diameter']/33e-3                                         # factor to account for the influence functions deformation in DM units
+
     # mis-registrations                                                             
     param['rotationAngle'        ] = 0                                           # rotation angle of the DM in [degrees]    
     param['shiftX'               ] = 0                                           # shift X of the DM in pixel size units ( tel.D/tel.resolution ) 
-    param['shiftY'               ] = 0                                           # shift Y of the DM in pixel size units ( tel.D/tel.resolution )
+    param['shiftY'               ] = - param['diameter']/param['nActuator']/2    # shift Y of the DM in pixel size units ( tel.D/tel.resolution )
     param['anamorphosisAngle'    ] = 0                                           # anamorphosis angle of the DM in [degrees]
-    param['tangentialScaling'    ] = 0                                           # tangential scaling in percentage of diameter
-    param['radialScaling'        ] = 0                                           # radial scaling in percentage of diameter
+    param['tangentialScaling'    ] = 0.05                                        # tangential scaling in percentage of diameter
+    param['radialScaling'        ] = 0.05                                        # radial scaling in percentage of diameter
 
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
     param['modulation'            ] = 3                                             # modulation radius in ratio of wavelength over telescope diameter
-    param['n_pix_separation'      ] = 8                                             # separation between the PWFS pupils in pix
+    param['n_pix_separation'      ] = 0                                             # separation between the PWFS pupils in pix
+    param['n_pix_edge'            ] = 0                                             # separation between the PWFS pupils in pix
     param['psfCentering'          ] = False                                         # centering of the FFT and of the PWFS mask on the 4 central pixels
     param['lightThreshold'        ] = 0.3                                           # light threshold to select the valid pixels
-    param['postProcessing'        ] = 'fullFrame'                                   # post-processing of the PWFS signals 'slopesMaps' ou 'fullFrame'
+    param['postProcessing'        ] = 'fullFrame_sum_flux'                          # post-processing of the PWFS signals 'slopesMaps' ou 'fullFrame'
     param['pwfs_pupils_shift_x'   ] = [0]*4                                         # shift X of the PWFS pupils on the detector
     param['pwfs_pupils_shift_y'   ] = [0]*4                                         # shift Y of the PWFS pupils on the detector
-    param['pwfs_rooftop'          ] = 1                                             # size of the PWFS "rooftop" in lambda/D
+    param['pwfs_rooftop'          ] = 0                                             # size of the PWFS "rooftop" in lambda/D
 
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% OUTPUT DATA %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

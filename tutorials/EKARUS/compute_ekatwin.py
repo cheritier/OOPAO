@@ -89,30 +89,59 @@ def compute_ekarus_model(param,loc,source,IFreal=False):
     from OOPAO.DeformableMirror import DeformableMirror, MisRegistration
     from OOPAO.tools.interpolateGeometricalTransformation import interpolate_cube
     
-    # mis-registrations object
-    misReg = MisRegistration(param)
-    D_T152 = 1.82    
-    pitch  = 1.82/param['nActuator'] # projected on sky
-    
-    x = np.linspace(-D_T152/2, D_T152/2, param['nActuator'])
-    [X,Y] = np.meshgrid(x,x)
-    
-    DM_coordinates = np.asarray([X.reshape(param['nActuator']**2),Y.reshape(param['nActuator']**2)]).T
-    dist           = np.sqrt(DM_coordinates[:,0]**2 + DM_coordinates[:,1]**2)
-    DM_coordinates = DM_coordinates[dist <= D_T152/2 + 1.5*pitch/2, :]
-    
-    param['dm_coordinates'] = DM_coordinates
-    param['pitch']          = pitch
+    def get_influence_functions_dm468(loc,diameter,resolution_out,pixel_size_out,mis_registration = None):
+        
+        IF=[]
+        for i in range(468):
+            i_if = f"{i:04d}"
+            tmp_IF = fits.getdata(loc+'mode_'+i_if+'.fits')
+            if i==0:
+                pupil = tmp_IF!=0
+            # remove global piston
+            tmp_IF[pupil] = tmp_IF[pupil]-np.mean(tmp_IF[pupil])
+            IF.append(tmp_IF)
+        # convert to numpy array
+        IF = np.asarray(IF)
+        n_if,n_px1,n_px2 = np.shape(IF)
+        # compute pixel size projected on sky
+        pixel_size_input = (diameter / (n_px1-22)) # 22 extra pixels on the input data?
+        # reshape in 2D
+        IF = IF.reshape(IF.shape[0],IF.shape[1]*IF.shape[2])
+        H2Z = fits.getdata(loc+'cmdMatrix.fits')
+        Z2H = np.linalg.pinv(H2Z)
+        
+        # decode Hadamard matrix to get zonal influence functions
+        IF = Z2H@IF
+        
+        #reshape in 3D for interpolation
+        IF = IF.reshape(n_if,n_px1,n_px2)
+        if resolution_out != n_px1:
+            IF = np.asarray(interpolate_cube(cube_in=IF,
+                         pixel_size_in= pixel_size_input,
+                         pixel_size_out=pixel_size_out,
+                         resolution_out = resolution_out,
+                         mis_registration=mis_registration))
+            
+        coord  =  centroid(IF)
+        IF = IF.reshape(n_if,resolution_out*resolution_out).T
+
+        return IF,coord
+        
+    if_dm468, coord_dm468 = get_influence_functions_dm468(loc = param['dm_inf_funct_location'],
+                                                          diameter=tel.initial_D*24/23,#to be fine tuned
+                                                          resolution_out=tel.resolution,
+                                                          pixel_size_out=tel.pixelSize,
+                                                          mis_registration=MisRegistration(param))
     
     dm=DeformableMirror(telescope    = tel,\
                         nSubap       = param['nActuator']-1,\
                         mechCoupling = param['mechanicalCoupling'],\
-                        misReg       = misReg, \
-                        coordinates  = DM_coordinates,\
-                        pitch        = pitch,\
-                        modes        = None,
+                        misReg       = None, \
+                        coordinates  = coord_dm468,\
+                        pitch        = param['dm_pitch'],\
+                        modes        = if_dm468,
                         flip_lr      = True,
-                        sign         = -1/param['dm_inf_funct_factor'  ])
+                        sign         = param['dm_inf_funct_factor'  ])
         
     #%% -----------------------     Tip/Tilt MIRROR   ----------------------------------
     from OOPAO.Zernike import Zernike
@@ -131,10 +160,10 @@ def compute_ekarus_model(param,loc,source,IFreal=False):
               telescope             = tel,
               modulation            = param['modulation'],
               lightRatio            = 0,
-              n_pix_separation      = 4//param['ratio'],
-              n_pix_edge            = 2//param['ratio'],
+              n_pix_separation      = param['n_pix_separation'],
+              n_pix_edge            = param['n_pix_edge'],
               psfCentering          = True,
-              postProcessing        = 'fullFrame_sum_flux',
+              postProcessing        = param['postProcessing'],
               userValidSignal       = None,
               user_modulation_path  = None)
 
@@ -170,6 +199,22 @@ def compute_ekarus_model(param,loc,source,IFreal=False):
                     darkCurrent     = OCAM_param['darkCurrent'],
                     readoutNoise    = OCAM_param['readoutNoise'],
                     photonNoise     = OCAM_param['photonNoise'])
-    OCAM.output_precision = np.uint16
-    wfs.cam = perfect_OCAM
+    # OCAM.output_precision = np.uint16
+    # wfs.cam = perfect_OCAM
     return tel,ngs,src,dm,wfs,atm,tt, perfect_OCAM,OCAM
+
+
+def centroid( image, threshold=0.01):
+    if np.ndim(image) <= 2:
+        im = np.reshape(image.copy(), (1, np.shape(image)[0], np.shape(image)[1]))
+    else:
+        im = np.atleast_3d(image.copy())
+    im[im < (threshold*im.max())] = 0
+    centroid_out = np.zeros([im.shape[0], 2])
+    X_map, Y_map = np.meshgrid(np.arange(im.shape[1]), np.arange(im.shape[2]))
+    X_coord_map = np.atleast_3d(X_map).T
+    Y_coord_map = np.atleast_3d(Y_map).T
+    norma = np.sum(np.sum(im, axis=1), axis=1)
+    centroid_out[:, 0] = np.sum(np.sum(im*X_coord_map, axis=1), axis=1)/norma
+    centroid_out[:, 1] = np.sum(np.sum(im*Y_coord_map, axis=1), axis=1)/norma
+    return centroid_out

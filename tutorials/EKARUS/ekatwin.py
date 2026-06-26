@@ -32,12 +32,38 @@ wfs     = Ekatwin.wfs
 # atmosphere object
 atm     = Ekatwin.atm
 # Tip/Tilt mirror object
-tt = Ekatwin.tt
+tt      = Ekatwin.tt
 # parameter file
 param   = Ekatwin.param
 
+dm.display_dm()
+
+
+
+#%% apply a shift of the EM field
+
+
+from OOPAO.FieldTransformer import FieldTransformer
+pupil_shift = FieldTransformer(shift_x=[1], # shift X in pixel
+                               shift_y=[0], # shift Y in pixel
+                               src = ngs)
+
+# case with no pupil shift
+ngs**tel*dm*wfs
+plt.figure(),plt.imshow(wfs.cam.frame)
+
+# case with no pupil shift on both DM and WFS 
+ngs**tel*pupil_shift*dm*wfs
+plt.figure(),plt.imshow(wfs.cam.frame)
+# case with no pupil shift only on WFS 
+ngs**tel*dm*pupil_shift*wfs
+plt.figure(),plt.imshow(wfs.cam.frame)
+
+
+
+
 #%% Function to swith to on-sky pupil (possibility to add an offset for the position of the pupil)
-Ekatwin.set_pupil(calibration=False,
+Ekatwin.set_pupil(calibration=True,
                    sky_offset=[0,0])
 
 ngs*tel*wfs
@@ -48,12 +74,12 @@ plt.figure()
 plt.imshow(wfs.cam.frame)
 
 # set back to calibration pupil
-Ekatwin.set_pupil(calibration=True)
-ngs*tel*wfs
-plt.figure()
-plt.imshow(tel.pupil)
-plt.figure()
-plt.imshow(wfs.cam.frame)
+# Ekatwin.set_pupil(calibration=True)
+# ngs*tel*wfs
+# plt.figure()
+# plt.imshow(tel.pupil)
+# plt.figure()
+# plt.imshow(wfs.cam.frame)
 
 
 #%% PAPYRUS KL Basis Computation (only for the bench)
@@ -64,7 +90,7 @@ if compute_kl_basis:
     M2C = compute_KL_basis(tel = tel,
                            atm = atm,
                            dm  = dm,
-                           lim = 1e-3)
+                           lim = 1e-4)
 
 
 # apply a few modes for display:  
@@ -91,10 +117,9 @@ calib_dm_468 = InteractionMatrix(ngs       = ngs,
                             display        = True)
     
 #%%  -----------------------     Close loop  ----------------------------------
-tel.resetOPD()
 
 # truncate to a given number of modes before the inversion
-end_mode    = 400  
+end_mode    = 360 
 
 # closed loop data
 M2C_CL      = M2C[:,:end_mode]  # modes-to-command matrix used in closed loop
@@ -114,7 +139,7 @@ from OOPAO.Detector import Detector
 from OOPAO.tools.tools import strehlMeter
 # select desired pupil(Calib)
 
-Ekatwin.set_pupil(calibration=True,spiders=True)
+Ekatwin.set_pupil(calibration=False,spiders=True)
 
 # compute KL modal projector truncating the modes by the pupil used
 KL_basis_dm = (dm.modes@M2C)*np.tile(tel.pupil.flatten()[:,None],M2C.shape[1])
@@ -123,7 +148,7 @@ projector_kl = np.linalg.pinv(KL_basis_dm)
 
 #%%
 # select desired pupil(Sky/Calib)
-Ekatwin.set_pupil(calibration=True,spiders=True)
+Ekatwin.set_pupil(calibration=False,spiders=True)
 
 # instrument path
 src_cam = Detector(tel.resolution*2)
@@ -145,11 +170,10 @@ src*tel*src_cam
 
 src_psf_ref = src_cam.frame.copy()
 
-
 #%%
 
 
-# atm.initializeAtmosphere(tel)
+atm.initializeAtmosphere(tel)
 
 
 # initialize Telescope DM commands
@@ -159,12 +183,20 @@ ngs*tel*dm*wfs
 wfs*wfs.focal_plane_camera
 
 plt.close('all')
-    
+atm.r0 = 0.05
 # To make sure to always replay the same turbulence, generate a new phase screen for the atmosphere and combine it with the Telescope
 atm.generateNewPhaseScreen(seed=10)
 
 # combine telescope with atmosphere
 tel+atm
+
+
+from OOPAO.FieldTransformer import FieldTransformer
+
+
+pupil_wobble = FieldTransformer(ngs,
+                                shift_x=[0],
+                                shift_y=[0])
 
 # propagate both sources
 atm*ngs*tel*ngs_cam
@@ -173,8 +205,8 @@ atm*src*tel*src_cam
 # loop parameters
 nLoop = 500  # number of iterations
 gainCL = 0.4  # integrator gain
-wfs.cam.photonNoise = False  # enable photon noise on the WFS camera
-display = False  # enable the display
+wfs.cam.photonNoise = True  # enable photon noise on the WFS camera
+display = True  # enable the display
 frame_delay = 2  # number of frame delay
 
 # variables used to to save closed-loop data data
@@ -244,10 +276,10 @@ plot_obj = cl_plot(list_fig=[atm.OPD,  # list of data for the different subplots
                    list_ratio=[[0.95, 0.95, 0.1],
                                [1, 1, 1, 1]],
                    s=20)  # size of the scatter markers
-
-
+cam_ = 0
 for i in range(nLoop):
-    a = time.time()
+    a = time.time()    
+        
     # update phase screens => overwrite tel.OPD and consequently tel.src.phase
     atm.update()
     # save the wave-front error of the incoming turbulence within the pupil
@@ -255,7 +287,8 @@ for i in range(nLoop):
     # compute input modes from atmosphere
     modes_in.append(projector_kl@(atm.OPD*tel.pupil).flatten())
     # propagate light from the ngs through the atmosphere, telescope, DM to the WFS and ngs camera if display is enable
-    atm*ngs*tel*dm*wfs
+    ngs**atm*tel*pupil_wobble*dm*wfs
+    cam_+=wfs.cam.frame
     if display:
         tel*ngs_cam
         NGS_PSF = np.log10(np.abs(ngs_cam.frame))
@@ -274,7 +307,7 @@ for i in range(nLoop):
 
     modes_out.append(projector_kl@tel.OPD.flatten())
     # propagate light from the src through the atmosphere, telescope, DM to the src camera if display is enable
-    atm*src*tel*dm
+    src**atm*tel*pupil_wobble*dm
     if display:
         tel*src_cam
         SRC_PSF = np.log10(np.abs(src_cam.frame))
@@ -329,7 +362,7 @@ for i in range(nLoop):
                           1e9*OPD_NGS,
                           1e9*OPD_SRC,
                           wfs.cam.frame,
-                          np.log10(wfs.focal_plane_camera.frame),
+                          cam_,
                           [np.arange(i+1), wfe_residual_SRC[:i+1], wfe_residual_NGS[:i+1]],
                           NGS_PSF,
                           SRC_PSF],
@@ -343,6 +376,7 @@ for i in range(nLoop):
     print('SRC: Strehl ratio [%] : ', np.round(SR_src[i],1), ' // WFE [nm] : ', np.round(wfe_residual_SRC[i],2))
 
     
+#%%
     
 #%% Closed Loop data analysis
 

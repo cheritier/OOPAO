@@ -90,9 +90,9 @@ class Ekarus:
                 plt.draw()
     
         else:
-            if self.wfs.telescope.is_calibration_pupil is False:
-                raise OopaoError('The calibration of the pupil positions must be achieved using the calibration pupil.\n'+
-                                 'Switch to the calibration pupil using the Papyrus.set_pupil() method')
+            # if self.wfs.telescope.is_calibration_pupil is False:
+            #     raise OopaoError('The calibration of the pupil positions must be achieved using the calibration pupil.\n'+
+            #                      'Switch to the calibration pupil using the Papyrus.set_pupil() method')
             for i_it in range(n_it):
                 self.wfs.apply_shift_wfs(sx =xs,sy = ys)
             
