@@ -4,12 +4,16 @@ Object-Oriented Python Adaptive Optics (OOPAO) is a project under development to
 This code is inspired from the OOMAO architecture: https://github.com/cmcorreia/LAM-Public developped by C. Correia and R. Conan (https://doi.org/10.1117/12.2054470). 
 The project was initially intended for personal use in the frame of an ESO project. It is now open to any interested user. 
 
+## DOCUMENTATION 
+
+The OOPAO documentation is here:  https://cheritier.github.io/OOPAO/index.html
+
 ## FUNCTIONALITIES
 
-	_ Atmosphere: 		Multi-layers with infinitely and non-stationary phase screens, conditions can be updated on the fly if required
+	_ Atmosphere: 		Multi-layers with infinitely and non-stationary phase screens, conditions can be updated on the fly if required, scintillation can be simulated
 	_ Telescope: 		Default circular pupil or user defined, with/without spiders
 	_ Deformable Mirror:	Gaussian Influence Functions (default) or user defined, cartesian coordinates (default) or user defined
-	_ WFS: 			Pyramid, SH-WFS (diffractive and geometric)
+	_ WFS: 			Pyramid, SH-WFS (diffractive and geometric), Bi-O Edge
 	_ Source: 		NGS or LGS
 	_ Control Basis: 	KL modal basis, Zernike Polynomials
 
@@ -96,15 +100,6 @@ If you experience errors during the installation of one of the required scientif
 please consider using a `conda` environment and installing these using `conda install`.
 
 
-## CODE OPTIMIZATION
-
-OOPAO multi-threading is based on the use of the numpy package built with the mkl library, make sure that the proper numpy package is installed to make sure that the operations are multi-threaded. 
-To do this you can use the numpy.show_config() function in your python session: 
-```
-import numpy
-numpy.show_config()
-```
-
 ## CONTRIBUTORS
 Main developer and maintainer: Cédric Taïssir Héritier
 
@@ -117,6 +112,8 @@ Main contributors:
  - Christophe Vérinaud
  - Jonathan Dray
  - João Monteiro
+ - Matteo Pasinetti
+ - Francisco Oyarzùn
 
 ## CITING OOPAO
 If you use OOPAO for your own research, we kindly ask you to cite the OOPAO AO4ELT7 proceeding (Heritier et al. 2023).
