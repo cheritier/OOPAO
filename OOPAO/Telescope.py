@@ -458,7 +458,7 @@ class Telescope:
             self.set_pupil()
         return
 
-    def pad(self, padding_values=0, sky_offset=[0, 0]):
+    def pad(self, padding_values=0, sky_offset=None):
         """
         This functions allows to pad the pupil of padding_values pixels on both sides.
         The Telescope properties associated to it are automatically updated.
@@ -470,11 +470,12 @@ class Telescope:
         """
         pupil_padded = np.pad(self.initial_pupil, [padding_values, padding_values])*0
         n_extra_pix = padding_values
-        if max(sky_offset) < n_extra_pix:
-            pupil_padded[n_extra_pix-sky_offset[0]:-n_extra_pix-sky_offset[0],
-                         n_extra_pix-sky_offset[1]:-n_extra_pix-sky_offset[1]] = self.initial_pupil
-        else:
-            raise OopaoError('The sky_offsets are too large for the considered pupil')
+        if sky_offset is not None:
+            if max(sky_offset) < n_extra_pix:
+                pupil_padded[n_extra_pix-sky_offset[0]:-n_extra_pix-sky_offset[0],
+                             n_extra_pix-sky_offset[1]:-n_extra_pix-sky_offset[1]] = self.initial_pupil
+            else:
+                raise OopaoError('The sky_offsets are too large for the considered pupil')
         self.resolution = pupil_padded.shape[0]
         self.D = self.resolution * self.pixelSize
         self.pupil = pupil_padded.copy()
