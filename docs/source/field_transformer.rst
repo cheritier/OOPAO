@@ -30,6 +30,7 @@ API reference
 .. class:: FieldTransformer(src, shift_x=None, shift_y=None, rotation_angle=None, anamorphosisAngle=None, tangentialScaling=None, radialScaling=None, remove_edge_effects=True)
 
    Geometric EM field transformer for individual sources.
+   The class acts on both the :attrib:`intensity` and :attrib:`phase` of each source.
 
    :param src: Source or Asterism to transform.
    :type src: Source or Asterism

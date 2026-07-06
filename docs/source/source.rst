@@ -39,8 +39,11 @@ Key concepts
 * **OPD** — per-source optical path difference in metres, accumulated as the source propagates through the chain.
 * **phase** — 2-D phase map in radians at the source wavelength, derived from the source OPD.
 * **nPhoton** — photons per m² per second. Changing this property automatically recomputes the magnitude.
-* **fluxMap** — 2-D map of photons per pixel per AO frame (depends on ``tel.samplingTime``).
+* **fluxMap** — 2-D map of photons per pixel per AO frame (depends on ``tel.samplingTime`` and ``tel.pupil``).
+* **scintillation** — 2-D map of scintillation map derived from the diffractive propagation triggered by the :class:`~OOPAO.Atmosphere.Atmosphere`.
+* **intensity** — 2-D map computed by the product of the :attr:`fluxMap` and :attr:`scintillation`.
 * **LGS mode** — activated by setting a finite ``altitude``. Enables cone-effect interpolation in the :class:`~OOPAO.Atmosphere.Atmosphere`.
+
 
 Quick start
 ~~~~~~~~~~~
