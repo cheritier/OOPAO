@@ -9,6 +9,7 @@ from PIL import Image
 from astropy.io import fits
 import copy
 import matplotlib.pyplot as plt
+from OOPAO.tools.tools import OopaoError
 
 def compute_rama_model(param,loc,source,IFreal=False):
     """
@@ -97,8 +98,10 @@ def compute_rama_model(param,loc,source,IFreal=False):
                                      mis_registration = None,
                                      flip_lr = False,
                                      flip_ud = False):
-        
-        IF = np.moveaxis(np.load(loc), 2,0)
+        try:
+            IF = np.moveaxis(np.load(loc), 2,0)
+        except:
+            raise OopaoError('Could not find the RAMA data. Make sure you downloaded it from https://nuage.osupytheas.fr/s/YRbHrHSQA9ZSiQP and indicated the correct path in the parameter file')
 
         # convert to numpy array
         IF = np.asarray(IF)
@@ -135,7 +138,7 @@ def compute_rama_model(param,loc,source,IFreal=False):
                                                           mis_registration=MisRegistration(param),
                                                           flip_lr = param['dm_flip_lr'],
                                                           flip_ud = param['dm_flip_ud'])
-    
+    plt.figure(),plt.imshow(np.var(if_dm97,axis=1).reshape(tel.pupil.shape))
     dm=DeformableMirror(telescope    = tel,\
                         nSubap       = param['nActuator']-1,\
                         mechCoupling = param['mechanicalCoupling'],\

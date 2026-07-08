@@ -4,12 +4,14 @@ Created on Tue Sep 17 16:12:28 2024
 
 @author: cheritier
 """
-from OOPAO.tools.tools import createFolder
+from OOPAO.tools.tools import createFolder, warning
 
 def initializeParameterFile():
     # initialize the dictionaries
     param = dict()
-    
+    # location of the calibration data
+    param['path_data'] = 'C:/Users/cheritier/Documents/RAMA/'        
+    warning('Make sure that you downloaded the RAMA data here: https://nuage.osupytheas.fr/s/YRbHrHSQA9ZSiQP')
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     param['r0'                   ] = 0.1                                            # value of r0 in the visibile in [m]
     param['L0'                   ] = 30                                             # value of L0 in the visibile in [m]
@@ -24,7 +26,7 @@ def initializeParameterFile():
     param['nExtraSubaperture'    ] = 0                                                                                  # extra subaperture on the edges
     param['diameter'             ] = 0.6                                                                               # diameter in [m]
     param['ratio'                ] = 1                                                                                  # ratio factor for binned case
-    param['nPixelPerSubap'       ] = 1                                                                                  # sampling of the PWFS subapertures in pix
+    param['nPixelPerSubap'       ] = 2                                                                                  # sampling of the PWFS subapertures in pix
     param['resolution'           ] = param['nSubaperture']*param['nPixelPerSubap']                                    # resolution of the telescope driven by the PWFS
     param['sizeSubaperture'      ] = param['diameter']/param['nSubaperture']                                          # size of a sub-aperture projected in the M1 space
     param['samplingTime'         ] = 1/1000                                                                             # loop sampling time in [s]
@@ -43,7 +45,7 @@ def initializeParameterFile():
     param['mechanicalCoupling'   ] = 0.36                                        # Mechanical coupling of the DM influence functions
     param['dm_coordinates'       ] = None                                        # tag for the deformable mirror class
     param['dm_inf_funct_factor'  ] = -1                                           # factor to account for the influence functions deformation in DM units
-    param['dm_inf_funct_location'] =  'C:/Users/cheritier/Documents/RAMA/IF_97.npy' # files available here: https://drive.google.com/drive/folders/1hbWyCq_AX1r32JB4jyVfZ-Ss3bVuRInE
+    param['dm_inf_funct_location'] =  param['path_data'] +'IF_97.npy' # files available here: https://drive.google.com/drive/folders/1hbWyCq_AX1r32JB4jyVfZ-Ss3bVuRInE
     param['dm_pitch'             ] = 1.5e-3 *param['diameter']/13.5e-3                                         # factor to account for the influence functions deformation in DM units
     param['dm_flip_lr'           ] = False
     param['dm_flip_ud'           ] = True
@@ -71,9 +73,6 @@ def initializeParameterFile():
 
     # name of the system
     param['name'] = 'RAMA_' +  param['opticalBand'] +'_band_'+ str(param['nSubaperture'])+'x'+ str(param['nSubaperture'])  
-    
-    # location of the calibration data
-    param['path_data'] = 'C:/Users/cheritier/Documents/RAMA/' 
 
     print('Reading/Writting calibration data from ' + param['path_data'])
     
