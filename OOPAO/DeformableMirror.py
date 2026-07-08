@@ -42,7 +42,7 @@ class DeformableMirror:
                  flip_lr=False,
                  sign=1,
                  actuator_selection=None,
-                 user_defined_influence_functions_tag = None):
+                 user_defined_influence_functions_tag=None):
         """DEFORMABLE MIRROR
         A Deformable Mirror object consists in defining the 2D maps of influence functions of the actuators.
         By default, the actuator grid is cartesian in a Fried Geometry with respect to the nSubap parameter.
@@ -106,8 +106,8 @@ class DeformableMirror:
         altitude : float, optional
             Altitude to which the DM is conjugated. The default is None and corresponds to a DM conjugated to the ground.
         actuator_selection : optional
-            Selection of the valid actuator: 
-                - if actuator_selection is a scalar => selected based on the standard deviation of their influence function within the pupil. 
+            Selection of the valid actuator:
+                - if actuator_selection is a scalar => selected based on the standard deviation of their influence function within the pupil.
                 - if actuator_selection is a vector of length two [r_inner,r_outer] => the actuators are selected based on their coordinates r to be part of the r_inner<r<r_outer.
                 - if None (default), r_inner is computed based on the telescope central obstruction and r_outer on the telescope diameter.
         Returns
@@ -192,7 +192,7 @@ class DeformableMirror:
             l.append(len(i))
         path = OOPAO_path[np.argmin(l)]
         precision = np.load(path+'/precision_oopao.npy')
-        if precision ==64:
+        if precision == 64:
             self.precision = np.float64
         else:
             self.precision = np.float32
@@ -359,24 +359,24 @@ class DeformableMirror:
         xIF0 = self.xIF0[self.validAct]
         yIF0 = self.yIF0[self.validAct]
         self.nIF = len(xIF0)
-
         self.initial_coordinates = np.zeros([self.nIF, 2])
         self.initial_coordinates[:, 0] = xIF0
         self.initial_coordinates[:, 1] = yIF0
-
         # anamorphosis
-        xIF3, yIF3 = self.anamorphosis(xIF0, yIF0, self.misReg.anamorphosisAngle * np.pi/180, self.misReg.tangentialScaling, self.misReg.radialScaling)
-
+        xIF3, yIF3 = self.anamorphosis_coordinates(xIF0,
+                                                   yIF0,
+                                                   self.misReg.anamorphosisAngle * np.pi/180,
+                                                   self.misReg.tangentialScaling,
+                                                   self.misReg.radialScaling)
         # rotation
-        xIF4, yIF4 = self.rotateDM(xIF3, yIF3, self.misReg.rotationAngle*np.pi/180)
-
+        xIF4, yIF4 = self.rotate_coordinates(xIF3,
+                                             yIF3,
+                                             self.misReg.rotationAngle*np.pi/180)
         # shifts
         xIF = xIF4-self.misReg.shiftX
         yIF = yIF4-self.misReg.shiftY
-
         self.xIF = xIF
         self.yIF = yIF
-
         # corresponding coordinates on the pixel grid
         u0x = self.resolution/2+xIF*self.resolution/self.D
         u0y = self.resolution/2+yIF*self.resolution/self.D
@@ -384,39 +384,33 @@ class DeformableMirror:
         self.coordinates = np.zeros([self.nIF, 2])
         self.coordinates[:, 0] = xIF
         self.coordinates[:, 1] = yIF
-        
-
         if self.isM4 is False:
             print_('Generating a Deformable Mirror: ', print_dm_properties)
-            if np.ndim(modes) == 0:
+            if modes is None:
                 print_('Computing the 2D zonal modes...', print_dm_properties)
-
                 def joblib_construction():
-                    Q = Parallel(n_jobs=8, prefer='threads')(
-                        delayed(self.modesComputation)(i, j) for i, j in zip(u0x, u0y))
+                    Q = Parallel(n_jobs=8, prefer='threads')(delayed(self.modesComputation)(i, j) for i, j in zip(u0x, u0y))
                     return Q
-                self.modes = np.squeeze(np.moveaxis(
-                    np.asarray(joblib_construction()), 0, -1))
-                    
+                self.modes = np.squeeze(np.moveaxis(np.asarray(joblib_construction()), 0, -1))
                 if np.isscalar(self.actuator_selection):
-                        print_('Filtering valid actuators based on pupil influence functions std...', print_dm_properties)
-                        # Calculate std only within the illuminated pupil
-                        IF_STD = np.std(np.squeeze(self.modes[np.where(telescope.pupil.flatten()==1), :]), axis=0)
-                        self.validAct = np.where(IF_STD > self.actuator_selection * np.max(IF_STD))[0]
+                    print_('Filtering valid actuators based on pupil influence functions std...', print_dm_properties)
+                    # Calculate std only within the illuminated pupil
+                    IF_STD = np.std(np.squeeze(self.modes[np.where(telescope.pupil.flatten() == 1), :]), axis=0)
+                    self.validAct = np.where(IF_STD > self.actuator_selection * np.max(IF_STD))[0]
 
-                        # Update properties
-                        self.modes = self.modes[:, self.validAct]
-                        self.nValidAct = len(self.validAct)
-                        self.nIF = self.nValidAct
+                    # Update properties
+                    self.modes = self.modes[:, self.validAct]
+                    self.nValidAct = len(self.validAct)
+                    self.nIF = self.nValidAct
 
-                        # Update coordinates
-                        self.xIF = self.xIF[self.validAct]
-                        self.yIF = self.yIF[self.validAct]
-                        self.coordinates = self.coordinates[self.validAct, :]
+                    # Update coordinates
+                    self.xIF = self.xIF[self.validAct]
+                    self.yIF = self.yIF[self.validAct]
+                    self.coordinates = self.coordinates[self.validAct, :]
 
             else:
                 print_('Loading the 2D zonal modes...', print_dm_properties)
-                self.modes = modes
+                self.modes = modes * self.sign
                 self.nValidAct = self.modes.shape[1]
                 print_('Done!', print_dm_properties)
 
@@ -562,12 +556,12 @@ class DeformableMirror:
 
         return OPD
 
-    def rotateDM(self, x, y, angle):
+    def rotate_coordinates(self, x, y, angle):
         xOut = x*np.cos(angle)-y*np.sin(angle)
         yOut = y*np.cos(angle)+x*np.sin(angle)
         return xOut, yOut
 
-    def anamorphosis(self, x, y, angle, mRad, mNorm):
+    def anamorphosis_coordinates(self, x, y, angle, mRad, mNorm):
 
         mRad += 1
         mNorm += 1
@@ -599,7 +593,6 @@ class DeformableMirror:
 
         if self.flip_:
             G = np.flip(G)
-
         output = np.reshape(G, [1, self.resolution**2])
 
         if self.floating_precision == 32:
@@ -692,10 +685,10 @@ class DeformableMirror:
                 sys.exit(0)
             self.current_coefs = self.coefs.copy()
 
-    def set_coefs_value(self, actuator_index:list, actuator_coefs:list):
+    def set_coefs_value(self, actuator_index: list, actuator_coefs: list):
         """
         This functions allows to assign a value to a given actuator list instead of a full set of actuator commands.
-        
+
         Parameters
         ----------
         actuator_index : list
