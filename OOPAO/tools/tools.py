@@ -284,18 +284,32 @@ def findNextPowerOf2(n):
     # return next power of 2
     return n << 1
       
-def centroid(image, threshold = 0):
-    im = np.copy(image)
-    im[im<threshold]=0
-    x = 0
-    y = 0
-    s = im.sum()
-    for i in range(im.shape[0]):
-        for j in range(im.shape[1]):
-            x+=im[i,j]*j/s
-            y+=im[j,i]*j/s
+# def centroid(image, threshold = 0):
+#     im = np.copy(image)
+#     im[im<threshold]=0
+#     x = 0
+#     y = 0
+#     s = im.sum()
+#     for i in range(im.shape[0]):
+#         for j in range(im.shape[1]):
+#             x+=im[i,j]*j/s
+#             y+=im[j,i]*j/s
             
-    return x,y
+#     return x,y
+def centroid( image, threshold=0.01):
+    if np.ndim(image) <= 2:
+        im = np.reshape(image.copy(), (1, np.shape(image)[0], np.shape(image)[1]))
+    else:
+        im = np.atleast_3d(image.copy())
+    im[im < (threshold*im.max())] = 0
+    centroid_out = np.zeros([im.shape[0], 2])
+    X_map, Y_map = np.meshgrid(np.arange(im.shape[1]), np.arange(im.shape[2]))
+    X_coord_map = np.atleast_3d(X_map).T
+    Y_coord_map = np.atleast_3d(Y_map).T
+    norma = np.sum(np.sum(im, axis=1), axis=1)
+    centroid_out[:, 0] = np.sum(np.sum(im*X_coord_map, axis=1), axis=1)/norma
+    centroid_out[:, 1] = np.sum(np.sum(im*Y_coord_map, axis=1), axis=1)/norma
+    return centroid_out
 
 
 def bin_ndarray(ndarray, new_shape, operation='sum', ignore_zeros=False):
