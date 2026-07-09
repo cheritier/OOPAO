@@ -29,6 +29,8 @@ OOPAO is a Python end-to-end Adaptive Optics (AO) simulation framework inspired 
    atmosphere
    deformable_mirror
    asterism
+   detector
+   influence_functions
 
 .. toctree::
    :maxdepth: 2
@@ -82,9 +84,3 @@ OOPAO is a Python end-to-end Adaptive Optics (AO) simulation framework inspired 
 
    tools/index
    phase_stats
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Tutorials
-
-   tutorials/index
