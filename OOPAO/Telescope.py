@@ -476,6 +476,8 @@ class Telescope:
                              n_extra_pix-sky_offset[1]:-n_extra_pix-sky_offset[1]] = self.initial_pupil
             else:
                 raise OopaoError('The sky_offsets are too large for the considered pupil')
+        else:
+            pupil_padded[n_extra_pix:-n_extra_pix, n_extra_pix:-n_extra_pix] = self.initial_pupil
         self.resolution = pupil_padded.shape[0]
         self.D = self.resolution * self.pixelSize
         self.pupil = pupil_padded.copy()
