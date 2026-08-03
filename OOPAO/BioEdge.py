@@ -446,9 +446,9 @@ class BioEdge:
         C = np.copy(A.T)
         D = np.copy(B.T)
         if np.isscalar(sx):
-            sx = [sx]*4
+            sx = [sx] * 4
         if np.isscalar(sy):
-            sy = [sy]*4
+            sy = [sy] * 4
         if len(sx) == 4 and len(sy) == 4:
             A_TT = -sx[3] * Tip * norma + sy[3] * Tilt * norma
             B_TT = -sx[2] * Tip * norma + sy[2] * Tilt * norma
@@ -499,13 +499,8 @@ class BioEdge:
 
         # sx and sy are the units of displacements in pixels
         if np.isscalar(sx) and np.isscalar(sy):
-<<<<<<< Updated upstream
-            shift_x = [factor*sx]*4
-            shift_y = [factor*sy]*4
-=======
-            shift_x = [factor * sx, factor * sx, factor * sx, factor * sx]
-            shift_y = [factor * sy, factor * sy, factor * sy, factor * sy]
->>>>>>> Stashed changes
+            shift_x = [factor * sx] * 4
+            shift_y = [factor * sy] * 4
         else:
             if len(sx) == 4 and len(sy) == 4:
                 shift_x = []
@@ -683,13 +678,9 @@ class BioEdge:
         if phase_in is not None:
             self.src.phase = phase_in
         # mask amplitude for the light propagation
-<<<<<<< Updated upstream
-        self.maskAmplitude = self.convert_for_gpu(np.sqrt((self.src.intensity)/self.nTheta))
-=======
         self.maskAmplitude = self.convert_for_gpu(
             np.sqrt(self.src.fluxMap / self.nTheta) * self.telescope.pupilReflectivity
         )
->>>>>>> Stashed changes
 
         if self.spatialFilter is not None:
             if np.ndim(phase_in) == 2:
