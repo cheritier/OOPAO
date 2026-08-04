@@ -296,21 +296,49 @@ def findNextPowerOf2(n):
 #             y+=im[j,i]*j/s
             
 #     return x,y
-def centroid( image, threshold=0.01):
-    if np.ndim(image) <= 2:
-        im = np.reshape(image.copy(), (1, np.shape(image)[0], np.shape(image)[1]))
-    else:
-        im = np.atleast_3d(image.copy())
-    im[im < (threshold*im.max())] = 0
-    centroid_out = np.zeros([im.shape[0], 2])
-    X_map, Y_map = np.meshgrid(np.arange(im.shape[1]), np.arange(im.shape[2]))
-    X_coord_map = np.atleast_3d(X_map).T
-    Y_coord_map = np.atleast_3d(Y_map).T
-    norma = np.sum(np.sum(im, axis=1), axis=1)
-    centroid_out[:, 0] = np.sum(np.sum(im*X_coord_map, axis=1), axis=1)/norma
-    centroid_out[:, 1] = np.sum(np.sum(im*Y_coord_map, axis=1), axis=1)/norma
-    return centroid_out
+# def centroid( image, threshold=0.01):
+#     if np.ndim(image) <= 2:
+#         im = np.reshape(image.copy(), (1, np.shape(image)[0], np.shape(image)[1]))
+#     else:
+#         im = np.atleast_3d(image.copy())
+#     im[im < (threshold*im.max())] = 0
+#     centroid_out = np.zeros([im.shape[0], 2])
+#     X_map, Y_map = np.meshgrid(np.arange(im.shape[1]), np.arange(im.shape[2]))
+#     X_coord_map = np.atleast_3d(X_map).T
+#     Y_coord_map = np.atleast_3d(Y_map).T
+#     norma = np.sum(np.sum(im, axis=1), axis=1)
+#     centroid_out[:, 0] = np.sum(np.sum(im*X_coord_map, axis=1), axis=1)/norma
+#     centroid_out[:, 1] = np.sum(np.sum(im*Y_coord_map, axis=1), axis=1)/norma
+#     return centroid_out[0]
+def centroid(image, threshold=0.01):
+    """Center of mass of one image or a stack of images.
 
+    Returns [x, y] for a single image (x = column, y = row),
+    or an (N, 2) array of [x, y] for a stack of N images.
+    Thresholding is per-frame: each frame is cut at threshold * its own max.
+    """
+    # Normalize to a 3D stack (N, H, W) and work in float to avoid
+    # integer overflow in the weighted sums and integer-division surprises.
+    if np.ndim(image) <= 2:
+        im = np.asarray(image, dtype=np.float64)[np.newaxis, :, :]
+    else:
+        im = np.asarray(image, dtype=np.float64)
+
+    N, H, W = im.shape
+
+    # Per-frame threshold: each frame against its own max, not a global max.
+    frame_max = im.max(axis=(1, 2), keepdims=True)      # (N, 1, 1)
+    im = np.where(im < threshold * frame_max, 0.0, im)
+    col_map, row_map = np.meshgrid(np.arange(W), np.arange(H))
+
+    norma = im.sum(axis=(1, 2))                          # (N,)
+    norma[norma == 0] = np.nan                           # force empty frame to be nan
+
+    centroid_out = np.zeros((N, 2))
+    centroid_out[:, 0] = (im * col_map).sum(axis=(1, 2)) / norma   # X (column)
+    centroid_out[:, 1] = (im * row_map).sum(axis=(1, 2)) / norma   # Y (row)
+
+    return centroid_out[0] if np.ndim(image) <= 2 else centroid_out
 
 def bin_ndarray(ndarray, new_shape, operation='sum', ignore_zeros=False):
     """
