@@ -45,7 +45,8 @@ def compute_ekarus_model(param,loc,source,IFreal=False):
                     fov                 = 0)
     
     tel.pupil_calib = tel.pupil.copy()
-    tel.pad(n_extra_pix//2)
+    if n_extra_pix>0:
+        tel.pad(n_extra_pix//2)
 
     # Telescope Object for the sky pupil with central obstruction without spider
     tel_sky = Telescope(resolution      = param['resolution'],
@@ -87,66 +88,40 @@ def compute_ekarus_model(param,loc,source,IFreal=False):
     #%% -----------------------     DEFORMABLE MIRROR   ----------------------------------
     
     from OOPAO.DeformableMirror import DeformableMirror, MisRegistration
-    from OOPAO.tools.interpolateGeometricalTransformation import interpolate_cube
-
-    def get_influence_functions_dm468(loc,diameter,resolution_out,pixel_size_out,mis_registration = None):
-        vect = fits.getdata(loc+'descramble.fits').astype(int)
-        IF=[]
-        for i in range(468):
-            i_if = f"{i:04d}"
-            tmp_IF = fits.getdata(loc+'mode_'+i_if+'.fits')
-            if i==0:
-                pupil = tmp_IF!=0
-            # remove global piston
-            tmp_IF[pupil] = tmp_IF[pupil]-np.mean(tmp_IF[pupil])
-            IF.append(tmp_IF)
-        # convert to numpy array
-        IF = np.asarray(IF)
-        n_if,n_px1,n_px2 = np.shape(IF)
-        # compute pixel size projected on sky
-        pixel_size_input = (diameter / (n_px1-22)) # 22 extra pixels on the input data?
-        # reshape in 2D
-        IF = IF.reshape(IF.shape[0],IF.shape[1]*IF.shape[2])
-        H2Z = fits.getdata(loc+'cmdMatrix.fits')
-        Z2H = np.linalg.pinv(H2Z)
-        
-        # decode Hadamard matrix to get zonal influence functions
-        IF = Z2H@IF
-        
-        IF_descrambled = IF.copy()
-
-        for i in range(468):
-            IF_descrambled[i,:] = IF[vect[i],:].copy()
-            
-        #reshape in 3D for interpolation
-        IF_descrambled = IF_descrambled.reshape(n_if,n_px1,n_px2)
-        if resolution_out != n_px1:
-            IF_descrambled = np.asarray(interpolate_cube(cube_in=IF_descrambled,
-                         pixel_size_in= pixel_size_input,
-                         pixel_size_out=pixel_size_out,
-                         resolution_out = resolution_out,
-                         mis_registration=mis_registration))
-            
-        coord  =  centroid(IF_descrambled)
-        IF_descrambled = IF_descrambled.reshape(n_if,resolution_out*resolution_out).T
-
-        return IF_descrambled,coord
-        
-    if_dm468, coord_dm468 = get_influence_functions_dm468(loc = param['dm_inf_funct_location'],
-                                                          diameter=tel.initial_D*24/24,#to be fine tuned
-                                                          resolution_out=tel.resolution,
-                                                          pixel_size_out=tel.pixelSize,
-                                                          mis_registration=MisRegistration(param))
+    from OOPAO.InfluenceFunctions import InfluenceFunctions
+    diameter = tel.initial_D #to be fine tuned
+    resolution = tel.resolution
+    name_system = 'EKARUS_DM468'
     
+    IF = InfluenceFunctions(name_system=name_system,
+                            diameter=diameter,
+                            resolution=resolution,
+                            specific_parameters = None,
+                            loc = param['dm_inf_funct_location'],
+                            mis_registration=MisRegistration(param),
+                            flip_lr=param['flip_lr'],
+                            flip_ud=param['flip_ud'],
+                            sign = param['dm_inf_funct_factor']
+                            )
+
     dm=DeformableMirror(telescope    = tel,\
                         nSubap       = param['nActuator']-1,\
                         mechCoupling = param['mechanicalCoupling'],\
-                        misReg       = None, \
-                        coordinates  = coord_dm468,\
+                        misReg       = MisRegistration(param), \
                         pitch        = param['dm_pitch'],\
-                        modes        = if_dm468,
-                        flip_lr      = True,
-                        sign         = param['dm_inf_funct_factor'  ])
+                        modes        = IF)    
+    # synthetic DM in case
+    coordinates = np.load( param['dm_inf_funct_location'] + 'coord_dm468_theoretical.npy')
+    coordinates /=coordinates.max()
+    coordinates *=tel.initial_D/2 *1.15
+    dm_synthetic = DeformableMirror(telescope = tel,
+                           nSubap=param['nActuator']-1,
+                           misReg=MisRegistration(param),
+                           coordinates=coordinates,
+                           mechCoupling=param['mechanicalCoupling'] ,
+                           flip_lr=True,
+                           flip=param['flip_ud'],
+                           sign =  param['dm_inf_funct_factor'])
         
     #%% -----------------------     Tip/Tilt MIRROR   ----------------------------------
     from OOPAO.Zernike import Zernike
@@ -206,7 +181,7 @@ def compute_ekarus_model(param,loc,source,IFreal=False):
                     photonNoise     = OCAM_param['photonNoise'])
     # OCAM.output_precision = np.uint16
     # wfs.cam = perfect_OCAM
-    return tel,ngs,src,dm,wfs,atm,tt, perfect_OCAM,OCAM
+    return tel,ngs,src,dm,dm_synthetic,wfs,atm,tt, perfect_OCAM,OCAM
 
 
 def centroid( image, threshold=0.01):

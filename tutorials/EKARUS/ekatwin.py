@@ -6,7 +6,7 @@ Accurate version of PAPYRUS AO System used for reproducing the real system in de
 - 17/06/2025: Update after change of the WFS camera.
 - 23/06/2025: Update to prepare the integration with DAO
 - 17/09/2026: Update of the PAPYRUS file to match EKARUS config
-@author: cheritie - astriffl
+@author: cheritie
 """
 import time
 import matplotlib.pyplot as plt
@@ -15,10 +15,12 @@ from OOPAO.calibration.CalibrationVault import CalibrationVault
 from OOPAO.calibration.InteractionMatrix import InteractionMatrix
 from OOPAO.tools.displayTools import cl_plot, displayMap
 from Ekarus import Ekarus
-
+from parameter_files.parameterFile_ekatwin import initializeParameterFile
 #%% Compute the OOPAO Objects
 
-Ekatwin = Ekarus()
+param = initializeParameterFile()
+
+Ekatwin = Ekarus(param)
 # telescope object
 tel     = Ekatwin.tel
 # source object VIS
