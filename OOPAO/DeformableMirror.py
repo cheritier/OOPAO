@@ -410,7 +410,16 @@ class DeformableMirror:
 
             else:
                 print_('Loading the 2D zonal modes...', print_dm_properties)
-                self.modes = modes * self.sign
+                try:
+                    self.modes = modes.influence_function_2D
+                    self.name_system = modes.name_system
+                    self.flip_lr = modes.flip_lr
+                    self.flip_ud = modes.flip_ud
+                    self.loc = modes.loc
+                    self.sign = modes.sign
+                    self.specific_parameters = modes.specific_parameters
+                except:
+                    self.modes = modes * self.sign
                 self.nValidAct = self.modes.shape[1]
                 print_('Done!', print_dm_properties)
 
@@ -455,6 +464,40 @@ class DeformableMirror:
                     src.OPD[:, :, i] = src.OPD[:, :, i] * src.mask
             else:
                 src.OPD = src.OPD_no_pupil * src.mask
+    def apply_mis_registration(self,misRegistration_tmp):
+        if hasattr(self,'name_system'):   
+            from OOPAO.InfluenceFunctions import InfluenceFunctions
+            IF = InfluenceFunctions(name_system=self.name_system,
+                                    diameter=self.D,
+                                    resolution=self.resolution,
+                                    specific_parameters = self.specific_parameters,
+                                    loc = self.loc,
+                                    mis_registration = misRegistration_tmp,
+                                    flip_lr=self.flip_lr,
+                                    flip_ud=self.flip_ud,
+                                    sign = self.sign)
+        
+            dm_tmp=DeformableMirror(telescope    = self.telescope,
+                                    nSubap       = self.nAct,
+                                    mechCoupling = self.mechCoupling,
+                                    misReg       = misRegistration_tmp,
+                                    coordinates  = IF.coordinates,
+                                    pitch        = self.pitch,
+                                    modes        = IF,
+                                    print_dm_properties=False)
+        else:
+            dm_tmp = DeformableMirror(telescope=self.telescope,
+                                      nSubap=self.nAct-1,
+                                      mechCoupling=self.mechCoupling,
+                                      coordinates=self.initial_coordinates,
+                                      pitch=self.pitch,
+                                      misReg=misRegistration_tmp,
+                                      flip=self.flip_,
+                                      flip_lr=self.flip_lr,
+                                      sign=self.sign,
+                                      print_dm_properties=False)
+        return dm_tmp
+    
 
     def set_pupil_footprint(self):
         if len(self.src_list) == 1:
