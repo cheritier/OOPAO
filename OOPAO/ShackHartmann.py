@@ -6,18 +6,20 @@ Created on Thu May 20 17:52:09 2021
 """
 import numpy as np
 from .Detector import Detector
-from .tools.tools import bin_ndarray, gaussian_2D, warning, OopaoError, emptyClass
+from .tools.tools import bin_ndarray, gaussian_2D, warning, OopaoError, emptyClass, get_array_module
 from joblib import Parallel, delayed
-import scipy as sp
+from scipy import signal as sg
 import sys
 from .OPD_map import OPD_map
 
 try:
     import cupy as xp
+    from cupyx.scipy import signal as csg
     global_gpu_flag = True
-    xp = np  # for now
 except ImportError or ModuleNotFoundError:
     xp = np
+    csg = sg
+    global_gpu_flag = False
 
 
 class ShackHartmann:
@@ -329,7 +331,10 @@ class ShackHartmann:
                               self.center_init - self.n_pix_subap_init // 2:self.center_init + self.n_pix_subap_init // 2,
                               self.center_init - self.n_pix_subap_init // 2:self.center_init + self.n_pix_subap_init // 2] = np.asarray(tmp_flux_v_split)
         # required to compute the valid subapertures
-        sh_data.photon_per_subaperture = np.apply_over_axes(np.sum, sh_data.cube_flux, [1, 2])
+        # np.apply_over_axes has no cupy equivalent; xp.sum(..., keepdims=True)
+        # is the direct, backend-agnostic replacement (same shape/values)
+        xp_local = get_array_module(sh_data.cube_flux)
+        sh_data.photon_per_subaperture = xp_local.sum(sh_data.cube_flux, axis=(1, 2), keepdims=True)
         sh_data.current_nPhoton = src.nPhoton
         return
 
@@ -799,7 +804,12 @@ class ShackHartmann:
         return np.concatenate((sx, sy))
 
     def convolve_direct(self, A_in, B_in):
-        return sp.signal.convolve(A_in, B_in, mode='same', method='direct')
+        # dispatch on the actual array backend rather than on whether cupy is
+        # merely importable: cupyx.scipy.signal.convolve rejects plain numpy
+        # input outright, so this stays correct regardless of the state of the
+        # rest of the pipeline (still numpy-only for now).
+        signal_module = sg if get_array_module(A_in) is np else csg
+        return signal_module.convolve(A_in, B_in, mode='same', method='direct')
 
     def get_convolution_spot(self, src, sh_data, fwhm_factor=1, compute_fft_kernel=False, is_gaussian=False):
         print('Computing LGS spots convolution kernels...')
