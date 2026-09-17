@@ -12,14 +12,12 @@ from scipy import signal as sg
 import sys
 from .OPD_map import OPD_map
 
-try:
-    import cupy as xp
+from .runtime import array_backend, precision_bits
+xp, global_gpu_flag = array_backend()
+if global_gpu_flag:
     from cupyx.scipy import signal as csg
-    global_gpu_flag = True
-except ImportError or ModuleNotFoundError:
-    xp = np
+else:
     csg = sg
-    global_gpu_flag = False
 
 
 class ShackHartmann:
@@ -146,7 +144,7 @@ class ShackHartmann:
         for i in OOPAO_path:
             l.append(len(i))
         path = OOPAO_path[np.argmin(l)]
-        precision = np.load(path+'/precision_oopao.npy')
+        precision = precision_bits()
         if precision == 64:
             self.precision = np.float64
         else:
@@ -280,7 +278,8 @@ class ShackHartmann:
         # Compute camera frame in case of multiple measurements
         self.get_raw_data_multi = False
         # WFS detector object
-        self.cam = Detector(round(nSubap*self.n_pix_subap))
+        self.cam = Detector(round(nSubap*self.n_pix_subap),
+                            output_precision=np.float32 if precision == 32 else None)
         self.cam.photonNoise = 0
         self.cam.readoutNoise = 0
         # joblib parameter
@@ -760,16 +759,11 @@ class ShackHartmann:
             phase.T.reshape(self.nSubap, npx, self.nSubap, npx).transpose(2, 0, 1, 3).reshape(self.nSubap**2, npx, npx))
         amp_tiles = self.convert_for_gpu(
             np.sqrt(src.intensity.T).reshape(self.nSubap, npx, self.nSubap, npx).transpose(2, 0, 1, 3).reshape(self.nSubap**2, npx, npx))
-        # dtype is hardcoded to complex128 (not self.precision_complex()) to
-        # match the pre-existing behavior exactly: self.precision_complex was
-        # computed but never actually applied anywhere in this class before,
-        # so this always ran in complex128 regardless of the precision_oopao
-        # setting. Actually applying it here would be a real behavior change
-        # for anyone running in single precision -- a separate, deliberate
-        # decision this GPU port should not make as a side effect.
+        # Keep the original complex128 path in default precision. Single
+        # precision uses complex64 for the dominant lenslet FFT allocation.
         self.cube_em = xp.zeros([self.nSubap**2,
                                  self.n_pix_lenslet_init,
-                                 self.n_pix_lenslet_init], dtype=xp.complex128)
+                                 self.n_pix_lenslet_init], dtype=self.precision_complex)
         c = self.center_init - npx//2
         self.cube_em[:, c:c+npx, c:c+npx] = amp_tiles * xp.exp(1j*phase_tiles)
         # self.cube_em *= np.sqrt(sh_data.cube_flux)*self.phasor_tiled

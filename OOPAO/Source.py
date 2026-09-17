@@ -5,6 +5,7 @@ Created on Wed Feb 19 10:32:15 2020
 @author: cheritie
 """
 import numpy as np
+from .runtime import precision_bits
 from .tools.tools import OopaoError
 import sys
 
@@ -97,7 +98,7 @@ class Source:
         for i in OOPAO_path:
             l.append(len(i))
         path = OOPAO_path[np.argmin(l)]
-        precision = np.load(path+'/precision_oopao.npy')
+        precision = precision_bits()
 
         if precision == 64:
             self.precision = np.float64

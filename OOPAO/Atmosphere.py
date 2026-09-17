@@ -16,12 +16,9 @@ from .phaseStats import ft_phase_screen, ft_sh_phase_screen, makeCovarianceMatri
 from .tools.displayTools import makeSquareAxes
 from .tools.interpolateGeometricalTransformation import interpolate_cube, interpolate_image
 from .tools.tools import createFolder, emptyClass, globalTransformation, pol2cart, translationImageMatrix, OopaoError, warning, get_array_module
-try:
-    import cupy as xp
-    global_gpu_flag = True
-except ImportError or ModuleNotFoundError:
-    xp = np
-    global_gpu_flag = False
+from .runtime import array_backend, precision_bits
+from .tools.gpuTransforms import translate_cubic
+xp, global_gpu_flag = array_backend()
 
 
 class Atmosphere:
@@ -161,7 +158,7 @@ class Atmosphere:
         for i in OOPAO_path:
             l_.append(len(i))
         path = OOPAO_path[np.argmin(l_)]
-        precision = np.load(path+'/precision_oopao.npy')
+        precision = precision_bits()
         if precision == 64:
             self.precision = np.float64
         else:
@@ -170,14 +167,8 @@ class Atmosphere:
             self.precision_complex = np.complex64
         else:
             self.precision_complex = np.complex128
-        # bridge used only around the layer.A/B matmul in add_row (the per-frame
-        # frozen-flow extension); the skimage.transform.warp call in the same
-        # function stays on CPU -- cupyx.scipy.ndimage.affine_transform does not
-        # reproduce skimage's cubic-spline result closely enough to be a safe
-        # substitute (checked numerically before writing any of this: matches
-        # scipy.ndimage.affine_transform exactly, but skimage.transform.warp
-        # itself diverges from plain scipy.ndimage at order=3, by ~10% even away
-        # from edges -- that's a skimage-internals difference, not a cupy one)
+        # GPU mode keeps the frozen-flow support on the device. The cubic
+        # translation reproduces skimage's interpolation and clipping rules.
         self.gpu_available = global_gpu_flag
         if self.gpu_available:
             self.convert_for_gpu = xp.asarray
@@ -449,13 +440,12 @@ class Atmosphere:
         # dispatch on map_full's actual backend (layer.A/B/outerMask/innerMask
         # are uploaded together in buildLayer, so they always match it)
         xp_ = get_array_module(map_full)
-        # skimage.transform.warp (inside globalTransformation) is host-only --
-        # bridge just this one call rather than the whole function; see the
-        # note in __init__ on why cupyx.scipy.ndimage isn't a safe substitute
-        map_full_np = self.convert_for_numpy(map_full)
-        shiftMatrix = translationImageMatrix(map_full_np, [stepInPixel[0], stepInPixel[1]])  # units are in pixel of the M1
-        tmp = globalTransformation(map_full_np, shiftMatrix)
-        onePixelShiftedPhaseScreen = xp_.asarray(tmp[1:-1, 1:-1])
+        if self.gpu_available:
+            shifted = translate_cubic(map_full, stepInPixel)
+        else:
+            shiftMatrix = translationImageMatrix(map_full, stepInPixel)
+            shifted = globalTransformation(map_full, shiftMatrix)
+        onePixelShiftedPhaseScreen = shifted[1:-1, 1:-1]
         Z = onePixelShiftedPhaseScreen[layer.innerMask[1:-1, 1:-1] != 0]
         rand_vec = xp_.asarray(layer.randomState.normal(size=layer.B.shape[1]).astype(self.precision()))
         X = layer.A@Z + layer.B@rand_vec
@@ -556,14 +546,13 @@ class Atmosphere:
             layer.buff[0] = (np.abs(layer.buff[0]) % 1)*np.sign(layer.buff[0])
             layer.buff[1] = (np.abs(layer.buff[1]) % 1)*np.sign(layer.buff[1])
 
-            # skimage.transform.warp is host-only; bridge here too (same as
-            # add_row) -- this also means layer.OPD comes out numpy already,
-            # with no separate download step needed
-            map_full_np = self.convert_for_numpy(layer.mapShift)
-            shiftMatrix = translationImageMatrix(
-                map_full_np, [layer.buff[0], layer.buff[1]])  # units are in pixel of the M1
-            layer.OPD = globalTransformation(
-                map_full_np, shiftMatrix)[1:-1, 1:-1]
+            if self.gpu_available:
+                shifted = translate_cubic(layer.mapShift, layer.buff)
+                layer.OPD = self.convert_for_numpy(shifted[1:-1, 1:-1])
+            else:
+                shiftMatrix = translationImageMatrix(layer.mapShift, layer.buff)
+                layer.OPD = globalTransformation(
+                    layer.mapShift, shiftMatrix)[1:-1, 1:-1]
 
     def update(self, OPD=None):
         if self.hasNotBeenInitialized:

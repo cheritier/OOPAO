@@ -8,6 +8,7 @@ Created on Thu Feb 20 11:32:10 2020
 import sys
 import time
 import numpy as np
+from .runtime import array_backend, precision_bits
 try:
     import cupy as xp
     global_gpu_flag = True
@@ -191,7 +192,7 @@ class DeformableMirror:
         for i in OOPAO_path:
             l.append(len(i))
         path = OOPAO_path[np.argmin(l)]
-        precision = np.load(path+'/precision_oopao.npy')
+        precision = precision_bits()
         if precision == 64:
             self.precision = np.float64
         else:
@@ -425,6 +426,9 @@ class DeformableMirror:
 
         else:
             print_('Using M4 Influence Functions', print_dm_properties)
+        self.gpu_available = array_backend()[1]
+        self._gpu_modes = None
+        self._gpu_modes_source = None
         if floating_precision == 32:
             self.coefs = np.zeros(self.nValidAct, dtype=np.float32)
         else:
@@ -691,6 +695,18 @@ class DeformableMirror:
         makeSquareAxes(plt.gca())
         return
 
+    def _modes_times_coefs(self):
+        if not self.gpu_available:
+            try:
+                return np.matmul(self.modes, self._coefs)
+            except (TypeError, ValueError):
+                return self.modes @ self._coefs
+        import cupy as cp
+        if self._gpu_modes_source is not self.modes:
+            self._gpu_modes = cp.asarray(self.modes)
+            self._gpu_modes_source = self.modes
+        return cp.asnumpy(self._gpu_modes @ cp.asarray(self._coefs))
+
     @property
     def coefs(self):
         return self._coefs
@@ -704,25 +720,17 @@ class DeformableMirror:
         if np.isscalar(val):
             if val == 0:
                 self._coefs = np.zeros(self.nValidAct, dtype=self.precision())
-                try:
-                    self.OPD = self.precision(np.reshape(np.matmul(self.modes, self._coefs), [self.resolution, self.resolution]))
-                except:
-                    self.OPD = self.precision(np.reshape(self.modes@self._coefs, [self.resolution, self.resolution]))
+                self.OPD = self.precision(np.reshape(
+                    self._modes_times_coefs(), [self.resolution, self.resolution]))
             else:
                 print('Error: wrong value for the coefficients')
         else:
             if len(val) == self.nValidAct:
-                if np.ndim(val) == 1:  # case of a single mode at a time
-                    try:
-                        self.OPD = self.precision(np.reshape(np.matmul(self.modes, self._coefs), [self.resolution, self.resolution]))
-                    except:
-                        self.OPD = self.precision(np.reshape(self.modes@self._coefs, [self.resolution, self.resolution]))
-                else:                # case of multiple modes at a time
-                    try:
-                        self.OPD = self.precision(np.reshape(np.matmul(self.modes, self._coefs), [self.resolution, self.resolution, val.shape[1]]))
-                    except:
-                        self.OPD = self.precision(np.reshape(
-                            self.modes@self._coefs, [self.resolution, self.resolution, val.shape[1]]))
+                if np.ndim(val) == 1:
+                    shape = [self.resolution, self.resolution]
+                else:
+                    shape = [self.resolution, self.resolution, val.shape[1]]
+                self.OPD = self.precision(np.reshape(self._modes_times_coefs(), shape))
             else:
                 print('Error: wrong value for the coefficients')
                 sys.exit(0)

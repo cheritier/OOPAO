@@ -8,12 +8,8 @@ Created on Wed Feb 19 10:23:18 2020
 import numpy as np
 import copy
 import sys
-try:
-    import cupy as xp
-    global_gpu_flag = True
-except ImportError or ModuleNotFoundError:
-    xp = np
-    global_gpu_flag = False
+from .runtime import array_backend, precision_bits
+xp, global_gpu_flag = array_backend()
 from OOPAO.tools.tools import set_binning, warning, OopaoError, get_array_module
 
 
@@ -147,7 +143,7 @@ class Telescope:
         for i in OOPAO_path:
             l.append(len(i))
         path = OOPAO_path[np.argmin(l)]
-        precision = np.load(path+'/precision_oopao.npy')
+        precision = precision_bits()
         if precision == 64:
             self.precision = np.float64
         else:
@@ -303,11 +299,13 @@ class Telescope:
         maximum_fov = pixel_scale*img_resolution/2
         n_extra = np.abs(np.floor((maximum_fov - max(x_max, y_max))/pixel_scale) - img_resolution//2)
         n_pix = np.ceil(max(int(img_resolution/2 + n_extra)*2, img_resolution)).astype('int')
+        detector_gpu = detector is not None and getattr(detector, 'gpu_available', False)
+        psf_backend = xp if detector_gpu else np
         if self.apply_off_axis_tip_tilt:
-            self.support_PSF = np.zeros([n_pix, n_pix])
+            self.support_PSF = psf_backend.zeros([n_pix, n_pix])
         else:
             n_pix = img_resolution
-            self.support_PSF = np.zeros([img_resolution, img_resolution])
+            self.support_PSF = psf_backend.zeros([img_resolution, img_resolution])
         center = self.support_PSF.shape[0]//2
 
         input_wavelenght = input_source[0].wavelength
@@ -369,10 +367,8 @@ class Telescope:
                                 phase=self.convert_for_gpu(phase+self.delta_TT*factor),
                                 zeroPaddingFactor=zeroPaddingFactor,
                                 img_resolution=img_resolution)
-            # tel.PSF is read by Detector.integrate (noise model, no cupy
-            # awareness) and by user code expecting numpy -- convert back here,
-            # once, right after the only GPU-capable step in this loop
-            self.PSF = self.convert_for_numpy(self.PSF)
+            if not detector_gpu:
+                self.PSF = self.convert_for_numpy(self.PSF)
             # normalized PSF
             self.PSF_norma = self.PSF/self.PSF.max()
             output_PSF.append(self.PSF.copy())
@@ -384,6 +380,13 @@ class Telescope:
             output_PSF_norma = output_PSF_norma[0]
         self.PSF = self.support_PSF
         self.PSF_norma = self.PSF/self.PSF.max()
+        if detector_gpu:
+            self.PSF_norma = self.convert_for_numpy(self.PSF_norma)
+        if detector_gpu:
+            if isinstance(output_PSF, list):
+                output_PSF = [self.convert_for_numpy(frame) for frame in output_PSF]
+            else:
+                output_PSF = self.convert_for_numpy(output_PSF)
         self.PSF_list = output_PSF
 
     def PropagateField(self, amplitude, phase, zeroPaddingFactor, img_resolution=None):
