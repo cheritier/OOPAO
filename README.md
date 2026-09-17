@@ -35,7 +35,7 @@ tqdm 		=> loading bar
 ```
 If GPU computation is available:
 ```
-cupy => GPU computation of the PWFS code (Not required)
+cupy => GPU computation of the PWFS and SH code (Not required)
 ```
 
 ## INSTALLATION 
