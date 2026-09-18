@@ -5,7 +5,7 @@ Created on Wed Feb 19 10:32:15 2020
 @author: cheritie
 """
 import numpy as np
-from .runtime import precision_bits
+from .runtime import array_backend, gpu_resident, precision_bits
 from .tools.tools import OopaoError
 import sys
 
@@ -109,6 +109,8 @@ class Source:
             self.precision_complex = np.complex64
         else:
             self.precision_complex = np.complex128
+        self.gpu_resident = gpu_resident()
+        self._array_backend = array_backend()[0] if self.gpu_resident else np
         self.is_initialized = False
         self.display_properties = display_properties
         # get the photometry properties
@@ -224,9 +226,9 @@ class Source:
             self._intensity = None
         elif scint is None:
             # no scintillation computed yet -> uniform modulation
-            self._intensity = np.array(flux, dtype=self.precision)
+            self._intensity = self._array_backend.array(flux, dtype=self.precision)
         else:
-            self._intensity = (np.array(flux) * np.array(scint)).astype(self.precision)
+            self._intensity = (self._array_backend.array(flux) * self._array_backend.array(scint)).astype(self.precision)
 
     @property
     def intensity(self):
@@ -247,7 +249,7 @@ class Source:
         # stale relative to intensity (their product no longer equals it) --
         # intensity is the authoritative amplitude path.
         if val is not None:
-            self._intensity = np.array(val, dtype=self.precision)
+            self._intensity = self._array_backend.array(val, dtype=self.precision)
         else:
             self._intensity = None
 
@@ -258,8 +260,8 @@ class Source:
     @OPD.setter
     def OPD(self, val):
         if val is not None:
-            self._OPD = np.array(val)
-            # self._OPD_no_pupil = np.array(val)
+            self._OPD = self._array_backend.array(val)
+            # OPD_no_pupil is set separately by propagation.
         else:
             self._OPD = None
             self._OPD_no_pupil = None
@@ -271,12 +273,12 @@ class Source:
     @OPD_no_pupil.setter
     def OPD_no_pupil(self, val):
         if val is not None:
-            self._OPD_no_pupil = np.array(val)
+            self._OPD_no_pupil = self._array_backend.array(val)
 
             if len(val.shape) > 2 and np.isscalar(self.mask) is False:
-                self.OPD = self._OPD_no_pupil*self.mask[:, :, np.newaxis]
+                self.OPD = self._OPD_no_pupil*self._array_backend.asarray(self.mask)[:, :, np.newaxis]
             else:
-                self.OPD = self._OPD_no_pupil*self.mask
+                self.OPD = self._OPD_no_pupil*self._array_backend.asarray(self.mask)
         else:
             self._OPD_no_pupil = None
 
@@ -287,7 +289,7 @@ class Source:
     @fluxMap.setter
     def fluxMap(self, val):
         if val is not None:
-            self._fluxMap = np.array(val)
+            self._fluxMap = self._array_backend.array(val)
         else:
             self._fluxMap = None
         self._refresh_intensity()
@@ -315,8 +317,8 @@ class Source:
     @scintillation.setter
     def scintillation(self, val):
         if val is not None:
-            self._scintillation = np.array(val)
-            # self._scintillation_no_pupil = np.array(val)
+            self._scintillation = self._array_backend.array(val)
+            # scintillation_no_pupil is set separately by propagation.
         else:
             self._scintillation = None
             self._scintillation_no_pupil = None
@@ -330,11 +332,11 @@ class Source:
     @scintillation_no_pupil.setter
     def scintillation_no_pupil(self, val):
         if val is not None:
-            self._scintillation_no_pupil = np.array(val)
+            self._scintillation_no_pupil = self._array_backend.array(val)
             if len(val.shape) > 2 and np.isscalar(self.mask) is False:
-                self.scintillation = self._scintillation_no_pupil * self.mask[:, :, np.newaxis]
+                self.scintillation = self._scintillation_no_pupil * self._array_backend.asarray(self.mask)[:, :, np.newaxis]
             else:
-                self.scintillation = self._scintillation_no_pupil * self.mask
+                self.scintillation = self._scintillation_no_pupil * self._array_backend.asarray(self.mask)
         else:
             self._scintillation_no_pupil = None
 

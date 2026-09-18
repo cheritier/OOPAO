@@ -16,7 +16,7 @@ from .phaseStats import ft_phase_screen, ft_sh_phase_screen, makeCovarianceMatri
 from .tools.displayTools import makeSquareAxes
 from .tools.interpolateGeometricalTransformation import interpolate_cube, interpolate_image
 from .tools.tools import createFolder, emptyClass, globalTransformation, pol2cart, translationImageMatrix, OopaoError, warning, get_array_module
-from .runtime import array_backend, precision_bits
+from .runtime import array_backend, gpu_resident, precision_bits
 from .tools.gpuTransforms import translate_cubic
 xp, global_gpu_flag = array_backend()
 
@@ -170,6 +170,7 @@ class Atmosphere:
         # GPU mode keeps the frozen-flow support on the device. The cubic
         # translation reproduces skimage's interpolation and clipping rules.
         self.gpu_available = global_gpu_flag
+        self.gpu_resident = gpu_resident()
         if self.gpu_available:
             self.convert_for_gpu = xp.asarray
             self.convert_for_numpy = xp.asnumpy
@@ -494,9 +495,9 @@ class Atmosphere:
             if boiling_active:
                 # No wind: the screen still evolves through boiling only. Deliver the boiled
                 # screen by re-extracting the interior of the (just updated) support.
-                # layer.OPD must stay numpy (read outside this class with no cupy
-                # awareness); layer.mapShift may be GPU-resident, see buildLayer
-                layer.OPD = self.convert_for_numpy(layer.mapShift[layer.outerMask == 0]).reshape(layer.resolution, layer.resolution)
+                # Preserve a device layer in explicit GPU-resident mode.
+                layer_opd = layer.mapShift[layer.outerMask == 0].reshape(layer.resolution, layer.resolution)
+                layer.OPD = layer_opd if self.gpu_resident else self.convert_for_numpy(layer_opd)
             else:
                 layer.OPD = layer.OPD
 
@@ -548,7 +549,7 @@ class Atmosphere:
 
             if self.gpu_available:
                 shifted = translate_cubic(layer.mapShift, layer.buff)
-                layer.OPD = self.convert_for_numpy(shifted[1:-1, 1:-1])
+                layer.OPD = shifted[1:-1, 1:-1] if self.gpu_resident else self.convert_for_numpy(shifted[1:-1, 1:-1])
             else:
                 shiftMatrix = translationImageMatrix(layer.mapShift, layer.buff)
                 layer.OPD = globalTransformation(
@@ -613,7 +614,8 @@ class Atmosphere:
             self.set_scintillation_support(scintillation_support, OPD_support)
         else:
             # apply standard geometric maps if scintillation is disabled
-            intensity_support = [np.ones((self.telescope.resolution, self.telescope.resolution), dtype=self.precision()) for _ in self.src_list]
+            backend = xp if self.gpu_resident else np
+            intensity_support = [backend.ones((self.telescope.resolution, self.telescope.resolution), dtype=self.precision()) for _ in self.src_list]
             self.set_scintillation(intensity_support)
             self.set_OPD(OPD_support)
         self.is_user_defined_opd = False
@@ -621,16 +623,20 @@ class Atmosphere:
 
     def initialize_OPD_support(self):
         OPD_support = []
+        backend = xp if self.gpu_resident else np
         for i in range(len(self.src_list)):
-            OPD_support.append(np.zeros([self.telescope.resolution, self.telescope.resolution], dtype=self.precision()))
+            OPD_support.append(backend.zeros([self.telescope.resolution, self.telescope.resolution], dtype=self.precision()))
         return OPD_support
 
     def fill_OPD_support(self, tmp_layer, OPD_support, i_layer):
         for i_src in range(len(self.src_list)):
             if self.src_list[i_src].altitude <= tmp_layer.altitude:
                 raise OopaoError('The source altitude ('+str(self.src_list[i_src].altitude[i_src])+' m) is below or at the same altitude as the atmosphere layer ('+str(tmp_layer.altitude)+' m)')
-            _im = tmp_layer.OPD.copy()
+            backend = xp if self.gpu_resident else np
+            _im = backend.asarray(tmp_layer.OPD).copy()
             if tmp_layer.extra_sx[i_src] != 0 or tmp_layer.extra_sy[i_src] != 0:
+                # The general off-axis interpolation still uses the CPU helper.
+                _im = self.convert_for_numpy(_im)
                 pixel_size_in = 1
                 pixel_size_out = 1
                 resolution_out = _im.shape[0]
@@ -638,6 +644,7 @@ class Atmosphere:
                                  resolution_out, shift_x=tmp_layer.extra_sx[i_src], shift_y=tmp_layer.extra_sy[i_src]))
             interpolate_cone_effect = False
             if self.src_list[i_src].altitude != np.inf:
+                _im = self.convert_for_numpy(_im)
                 sub_im = np.reshape(_im[np.where(tmp_layer.pupil_footprint[i_src] == 1)], [self.telescope.resolution, self.telescope.resolution])
                 h = self.src_list[i_src].altitude-tmp_layer.altitude
                 if np.isinf(h):
@@ -654,7 +661,9 @@ class Atmosphere:
             if interpolate_cone_effect:
                 _im = np.squeeze(interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out)).T
             else:
-                _im = _im[tmp_layer.pupil_footprint[i_src] == 1].reshape(self.telescope.resolution, self.telescope.resolution)
+                footprint = backend.asarray(tmp_layer.pupil_footprint[i_src] == 1)
+                _im = backend.asarray(_im)[footprint].reshape(self.telescope.resolution, self.telescope.resolution)
+            _im = backend.asarray(_im)
             _im *= self.wavelength/2/np.pi
             _im *= np.sqrt(self.fractionalR0[i_layer])
             OPD_support[i_src] += _im
@@ -664,14 +673,16 @@ class Atmosphere:
         for i, src in enumerate(self.src_list):
             src.OPD_no_pupil = OPD_support[i]
             src.OPD = src.OPD_no_pupil*src.mask
-        self.OPD = np.squeeze(np.array(OPD_support))
+        backend = xp if self.gpu_resident else np
+        self.OPD = backend.squeeze(backend.stack(OPD_support))
         return
 
     def set_scintillation(self, scintillation_support):
         for i, src in enumerate(self.src_list):
             src.scintillation_no_pupil = scintillation_support[i]
             src.scintillation = src.scintillation_no_pupil*src.mask
-        self.scintillation_map = np.squeeze(np.array(scintillation_support))
+        backend = xp if self.gpu_resident else np
+        self.scintillation_map = backend.squeeze(backend.stack(scintillation_support))
         return
 
     def initialize_scintillation_support(self):

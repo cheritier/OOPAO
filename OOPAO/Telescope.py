@@ -8,7 +8,7 @@ Created on Wed Feb 19 10:23:18 2020
 import numpy as np
 import copy
 import sys
-from .runtime import array_backend, precision_bits
+from .runtime import array_backend, gpu_resident, precision_bits
 xp, global_gpu_flag = array_backend()
 from OOPAO.tools.tools import set_binning, warning, OopaoError, get_array_module
 
@@ -156,6 +156,7 @@ class Telescope:
         # FFT-heavy PSF hot path); everything else in this class stays numpy,
         # see the notes in set_pupil and computePSF
         self.gpu_available = global_gpu_flag
+        self.gpu_resident = gpu_resident()
         if self.gpu_available:
             self.convert_for_gpu = xp.asarray
             self.convert_for_numpy = xp.asnumpy
@@ -211,21 +212,22 @@ class Telescope:
         for src in self.src_list:
             src.optical_path.append([self.tag, self])
             src.tel = self
-            src.mask = self.pupil.copy()
+            backend = xp if src.gpu_resident else np
+            src.mask = backend.asarray(self.pupil).copy()
             if src.OPD is None:
-                src.OPD_no_pupil = np.zeros(self.pupil.shape)
+                src.OPD_no_pupil = backend.zeros(self.pupil.shape)
             if np.ndim(src.OPD) == 2:
                 src.OPD = (src.OPD_no_pupil)*src.mask
             else:
-                src.OPD_no_pupil = np.zeros(self.pupil.shape)
+                src.OPD_no_pupil = backend.zeros(self.pupil.shape)
             if src.scintillation is None:
-                src.scintillation_no_pupil = np.ones(self.pupil.shape)
+                src.scintillation_no_pupil = backend.ones(self.pupil.shape)
                 src.scintillation = (src.scintillation_no_pupil)*src.mask
             elif np.ndim(src.scintillation) == 2:
                 src.scintillation = (src.scintillation_no_pupil)*src.mask
             else:
-                src.scintillation_no_pupil = np.ones(self.pupil.shape)
-            src.var = np.var(src.phase[np.where(self.pupil == 1)])
+                src.scintillation_no_pupil = backend.ones(self.pupil.shape)
+            src.var = backend.var(src.phase[backend.where(src.mask == 1)])
             src.fluxMap = self.pupilReflectivity * src.nPhoton * self.samplingTime * (self.D / self.resolution) ** 2
         return
 
@@ -318,18 +320,19 @@ class Telescope:
             else:
                 raise OopaoError('The asterism contains sources with different wavelengths. Summing up PSFs with different wavelength is not implemented.')
             # check if the source interacted with a spatial filter
-            # (kept on numpy: input_source[i_src].intensity/phase come from
-            # Source, which has no cupy awareness, and self.pupil/
-            # pupilReflectivity are host too -- see the note in set_pupil)
+            # Source fields are device arrays only in explicit resident mode;
+            # the pupil and reflectivity maps remain public NumPy arrays.
             if input_source[i_src].phase_filtered is None:
-                amp_mask = np.sqrt(input_source[i_src].intensity)
+                field_backend = xp if input_source[i_src].gpu_resident else np
+                amp_mask = field_backend.sqrt(input_source[i_src].intensity)
                 phase = input_source[i_src].phase
             else:
-                amp_mask = input_source[i_src].amplitude_filtered
-                phase = input_source[i_src].phase_filtered
+                field_backend = xp if input_source[i_src].gpu_resident else np
+                amp_mask = field_backend.asarray(input_source[i_src].amplitude_filtered)
+                phase = field_backend.asarray(input_source[i_src].phase_filtered)
             # amp_mask = amp_mask * xp.sqrt(input_source[i_src].scintillation)
             # amplitude of the EM field:
-            amp = amp_mask*self.pupil*self.pupilReflectivity
+            amp = amp_mask*field_backend.asarray(self.pupil)*field_backend.asarray(self.pupilReflectivity)
             # add a Tip/Tilt for off-axis sources
             [Tip, Tilt] = np.meshgrid(np.linspace(-np.pi, np.pi, self.resolution, endpoint=False, dtype=self.precision()),
                                       np.linspace(-np.pi, np.pi, self.resolution, endpoint=False, dtype=self.precision()))
@@ -344,7 +347,7 @@ class Telescope:
             delta_Tilt = x_shift - delta_x*pixel_scale
             delta_Tip = y_shift - delta_y*pixel_scale
 
-            self.delta_TT = (delta_Tip*Tip + delta_Tilt*Tilt)*self.pupil*(self.D/input_source[i_src].wavelength)*(1/self.rad2arcsec)
+            self.delta_TT = field_backend.asarray((delta_Tip*Tip + delta_Tilt*Tilt)*self.pupil)*(self.D/input_source[i_src].wavelength)*(1/self.rad2arcsec)
 
             # axis in arcsec
             self.xPSF_arcsec = [-self.rad2arcsec*(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor),
@@ -549,7 +552,9 @@ class Telescope:
     @property
     def OPD(self):
         if np.ndim(self.src.OPD) == 2:
-            self.mean_removed_OPD = (self.src.OPD - np.mean(self.src.OPD[np.where(self.pupil == 1)]))*self.pupil
+            backend = get_array_module(self.src.OPD)
+            pupil = backend.asarray(self.pupil)
+            self.mean_removed_OPD = (self.src.OPD - backend.mean(self.src.OPD[backend.where(pupil == 1)]))*pupil
         return self.src.OPD
 
     @OPD.setter

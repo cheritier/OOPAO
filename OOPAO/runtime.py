@@ -34,10 +34,22 @@ def array_backend():
         if mode == "cuda":
             raise RuntimeError("CUDA backend requested but CuPy is unavailable") from error
         return np, False
-    if mode == "cuda":
-        try:
-            if cp.cuda.runtime.getDeviceCount() < 1:
-                raise RuntimeError("CUDA backend requested but no device is visible")
-        except cp.cuda.runtime.CUDARuntimeError as error:
+    try:
+        count = cp.cuda.runtime.getDeviceCount()
+    except cp.cuda.runtime.CUDARuntimeError as error:
+        if mode == "cuda":
             raise RuntimeError("CUDA backend requested but no device is usable") from error
+        return np, False
+    if count < 1:
+        if mode == "cuda":
+            raise RuntimeError("CUDA backend requested but no device is visible")
+        return np, False
     return cp, True
+
+
+def gpu_resident():
+    """Enable device-resident optical arrays only when explicitly requested."""
+    value = os.environ.get("OOPAO_GPU_RESIDENT", "0")
+    if value not in ("0", "1"):
+        raise ValueError("OOPAO_GPU_RESIDENT must be 0 or 1")
+    return value == "1" and array_backend()[1]

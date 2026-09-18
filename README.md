@@ -38,6 +38,26 @@ If GPU computation is available:
 cupy => GPU computation of the PWFS and SH code (Not required)
 ```
 
+### Runtime backend and precision
+
+`OOPAO_BACKEND=auto` (the default) uses CuPy when a CUDA device is usable and
+otherwise uses NumPy. Set `OOPAO_BACKEND=cpu` to force NumPy, or
+`OOPAO_BACKEND=cuda` to require a CUDA device and fail clearly when one is not
+available. CuPy is optional for CPU use.
+
+`OOPAO_PRECISION=32` or `64` selects the simulation precision for classes
+using the runtime setting. When unset, OOPAO retains its legacy precision file.
+Set these variables before importing OOPAO.
+
+`OOPAO_GPU_RESIDENT=1` enables device-resident optical arrays on CUDA. This is
+currently intended for the geometric atmosphere, DM, and unmodulated Pyramid
+path. Source OPD and intensity, atmosphere layers, DM OPD, and the Pyramid raw
+frame remain CuPy arrays between operations. Detector camera frames remain
+NumPy arrays for existing consumers. The default (`0`) preserves the existing
+public NumPy arrays. Off-axis/cone interpolation, modulated Pyramid paths, and
+noise models can still use the CPU. On a CPU backend, the residency flag has no
+effect.
+
 ## INSTALLATION 
 
 ### (Recommended) Creating a virtual environment
