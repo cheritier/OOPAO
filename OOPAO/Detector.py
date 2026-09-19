@@ -7,8 +7,14 @@ Created on Wed Apr  3 14:18:03 2024
 
 import numpy as np
 import time
+import weakref
+import zlib
 from OOPAO.tools.tools import set_binning, warning, OopaoError, get_array_module
-from OOPAO.runtime import array_backend
+from OOPAO.runtime import array_backend, gpu_resident
+
+# GPU random generators, one set per Detector. They are kept outside the objects because
+# CuPy generators hold a thread lock and cannot be deep-copied (deepcopy(wfs) must keep working).
+_GPU_RANDOM_STATES = weakref.WeakKeyDictionary()
 
 
 class Detector:
@@ -99,6 +105,9 @@ class Detector:
 
         '''
         self.gpu_available = array_backend()[1]
+        # keep GPU frames on the GPU (noise included) when GPU residency is enabled;
+        # otherwise GPU frames are brought back to the CPU as before
+        self.gpu_resident = self.gpu_available and gpu_resident()
         self.resolution = nRes
         self.integrationTime = integrationTime
         self.bits = bits
@@ -218,63 +227,91 @@ class Detector:
         frame = (frame * self.QE)
         return frame
 
+    def _random_state(self, name, frame):
+        """Random generator for one noise source, on the backend of `frame`.
+
+        CPU frames use the NumPy RandomState self.<name>, as before. GPU frames use a CuPy generator
+        seeded from that NumPy state (and from the noise name, so the noise sources stay independent):
+        seeding self.<name> therefore also makes the GPU noise reproducible, although the random
+        numbers differ from the CPU ones. Assigning a new NumPy state re-seeds the GPU generator.
+        """
+        cpu_state = getattr(self, name)
+        backend = get_array_module(frame)
+        if backend is np:
+            return cpu_state
+        states = _GPU_RANDOM_STATES.setdefault(self, {})
+        cached = states.get(name)
+        if cached is None or cached[0] is not cpu_state:
+            seed = (int(cpu_state.randint(0, 2**31 - 1)) + zlib.crc32(name.encode())) % (2**63)
+            cached = (cpu_state, backend.random.RandomState(seed))
+            states[name] = cached
+        return cached[1]
+
     def set_saturation(self, frame):
-        self.saturation = (100*frame.max()/self.FWC)
-        if frame.max() > self.FWC:
+        # one read-back of the frame maximum (needed for the warning)
+        frame_max = float(frame.max())
+        self.saturation = (100*frame_max/self.FWC)
+        if frame_max > self.FWC:
             warning('The detector is saturating, %.1f %%' %
                     self.saturation)
-        return np.clip(frame, a_min=0, a_max=self.FWC)
+        return get_array_module(frame).clip(frame, 0, self.FWC)
 
     def digitalization(self, frame):
+        backend = get_array_module(frame)
         if self.FWC is None:
             return (frame / frame.max() * 2**self.bits)
             self.quantification_noise = 0
         else:
             self.quantification_noise = self.FWC * \
                 2**(-self.bits) / np.sqrt(12)
-            self.saturation = (100*frame.max()/self.FWC)
-            if frame.max() > self.FWC:
+            # one read-back of the frame maximum (needed for the warning)
+            frame_max = float(frame.max())
+            self.saturation = (100*frame_max/self.FWC)
+            if frame_max > self.FWC:
                 warning('The ADC is saturating (gain applyed %i), %.1f %%' % (
                     self.gain, self.saturation))
             frame = (frame / self.FWC * (2**self.bits-1))
-            return np.clip(frame, a_min=max(frame.min(), self.clip_unsigned), a_max=2**self.bits-1)
+            return backend.clip(frame, backend.maximum(frame.min(), self.clip_unsigned), 2**self.bits-1)
 
     def set_photon_noise(self, frame):
         self.photon_noise = np.sqrt(self.signal)
-        return self.random_state_photon_noise.poisson(frame)
+        return self._random_state('random_state_photon_noise', frame).poisson(frame)
 
     def set_background_noise(self, frame):
         if hasattr(self, 'backgroundFlux') is False or self.backgroundFlux is None:
             raise OopaoError('The background map backgroundFlux is not properly set. A map of shape '+str(frame.shape)+' is expected')
         else:
-            self.backgroundNoiseAdded = self.random_state_background.poisson(
-                self.backgroundFlux)
+            backend = get_array_module(frame)
+            self.backgroundNoiseAdded = self._random_state('random_state_background_noise', frame).poisson(
+                backend.asarray(self.backgroundFlux))
             frame += self.backgroundNoiseAdded
             return frame
 
     def set_readout_noise(self, frame):
-        noise = (np.round(self.random_state_readout_noise.randn(
+        backend = get_array_module(frame)
+        noise = (backend.round(self._random_state('random_state_readout_noise', frame).randn(
             frame.shape[0], frame.shape[1])*self.readoutNoise)).astype(int)  # before np.int64(...)
         frame += noise
         return frame
 
     def set_dark_shot_noise(self, frame):
+        backend = get_array_module(frame)
         self.dark_shot_noise = np.sqrt(self.darkCurrent * self.integrationTime)
-        dark_current_map = np.ones(frame.shape) * (self.darkCurrent * self.integrationTime)
-        dark_shot_noise_map = self.random_state_dark_shot_noise.poisson(dark_current_map)
+        dark_current_map = backend.ones(frame.shape) * (self.darkCurrent * self.integrationTime)
+        dark_shot_noise_map = self._random_state('random_state_dark_shot_noise', frame).poisson(dark_current_map)
         frame += dark_shot_noise_map
         return frame
 
     def remove_bakground(self, frame):
         try:
-            frame -= self.backgroundMap
+            frame -= get_array_module(frame).asarray(self.backgroundMap)
             return frame
         except:
             raise OopaoError('The shape of the backgroung map does not match the detector frame resolution')
 
     def readout(self):
         backend = get_array_module(self.buffer_frame[0])
-        if backend is not np:
+        if backend is not np and not self.gpu_resident:
             # Preserve the CPU noise model and its NumPy random streams.
             quiet = (self.darkCurrent == 0 and self.FWC is None and
                      self.sensor != 'EMCCD' and self.binning == 1 and
@@ -301,7 +338,14 @@ class Detector:
             self.perfect_frame = backend.asnumpy(self.perfect_frame)
             self.flux_max_px = float(self.flux_max_px)
             self.signal = float(self.signal)
-        frame = np.sum(self.buffer_frame, axis=0)
+            backend = np
+        # From here on the frame stays on its backend: NumPy, or CuPy when GPU residency is enabled
+        if backend is np:
+            frame = np.sum(self.buffer_frame, axis=0)
+        elif len(self.buffer_frame) == 1:
+            frame = self.buffer_frame[0].copy()
+        else:
+            frame = backend.stack(self.buffer_frame).sum(axis=0)
 
         if self.darkCurrent != 0:
             frame = self.set_dark_shot_noise(frame)
@@ -312,12 +356,8 @@ class Detector:
 
         # If the sensor is EMCCD the applyed gain is before the analog-to-digital conversion
         if self.sensor == 'EMCCD':
-            frame = np.random.poisson(frame)  # EMCCD amplification noise
+            frame = np.random.poisson(frame) if backend is np else backend.random.poisson(frame)  # EMCCD amplification noise
             frame *= self.gain
-
-        # Simulate hardware binning of the detector
-        if self.binning != 1:
-            frame = set_binning(frame, self.binning)
 
         # Simulate hardware binning of the detector
         if self.binning != 1:
@@ -339,7 +379,7 @@ class Detector:
             frame = self.digitalization(frame)
 
         if self.log_scale:
-            frame = np.log10(frame)
+            frame = backend.log10(frame)
         frame = frame.astype(self.output_precision)
 
         # Remove the dark fromthe detector
@@ -360,7 +400,8 @@ class Detector:
 
     def integrate(self, frame):
         backend = get_array_module(frame)
-        if backend is not np and (self.photonNoise != 0 or self.backgroundNoise is True):
+        if backend is not np and not self.gpu_resident and (self.photonNoise != 0 or self.backgroundNoise is True):
+            # without GPU residency the noise is drawn on the CPU with the NumPy random streams
             frame = backend.asnumpy(frame)
         self.perfect_frame = frame.copy()
         self.flux_max_px = self.perfect_frame.max()
@@ -390,7 +431,7 @@ class Detector:
         if self.FWC is not None:
             self.SNR_max = self.FWC / np.sqrt(self.FWC)
         else:
-            self.SNR_max = np.NaN
+            self.SNR_max = np.nan
 
         self.SNR = self.signal / np.sqrt(self.quantification_noise**2 + self.photon_noise**2 + self.readoutNoise**2 + self.dark_shot_noise**2)
         print()
