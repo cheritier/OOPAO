@@ -20,6 +20,12 @@ from scipy.special import j1
 from scipy.signal.windows import tukey
 import math
 
+try:
+    from cupy import get_array_module
+except ImportError:
+    def get_array_module(*args):
+        return np
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% USEFUL FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -377,11 +383,16 @@ def bin_ndarray(ndarray, new_shape, operation='sum', ignore_zeros=False):
     ndarray = ndarray.reshape(reshaped_shape)
 
     if ignore_zeros and operation == 'mean':
+        # dispatch on the actual array backend (numpy or cupy) instead of
+        # hardcoding numpy, so this also works when ndarray lives on GPU
+        xp = get_array_module(ndarray)
         # Compute sum and count of nonzero elements
-        summed = np.sum(ndarray, axis=tuple(range(1, len(new_shape) * 2, 2)))
-        count_nonzero = np.count_nonzero(ndarray, axis=tuple(range(1, len(new_shape) * 2, 2)))
-        with np.errstate(divide='ignore', invalid='ignore'):  # avoid division by 0 problems
-            binned_array = np.where(count_nonzero > 0, summed / count_nonzero, 0)
+        summed = xp.sum(ndarray, axis=tuple(range(1, len(new_shape) * 2, 2)))
+        count_nonzero = xp.count_nonzero(ndarray, axis=tuple(range(1, len(new_shape) * 2, 2)))
+        # avoid division by 0 without relying on np.errstate (not available in cupy):
+        # divide by a safe denominator (>=1) then zero out the empty bins
+        safe_count = xp.where(count_nonzero > 0, count_nonzero, 1)
+        binned_array = xp.where(count_nonzero > 0, summed / safe_count, 0)
     else:
         # Apply regular sum or mean binning
         # getattr --> retrieves numpy method: ndarray.sum if operation = "sum" and ndarray.mean if operation = "mean"

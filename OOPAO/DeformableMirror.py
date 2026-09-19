@@ -8,6 +8,7 @@ Created on Thu Feb 20 11:32:10 2020
 import sys
 import time
 import numpy as np
+from .runtime import array_backend, gpu_resident, precision_bits
 try:
     import cupy as xp
     global_gpu_flag = True
@@ -17,7 +18,7 @@ except ImportError or ModuleNotFoundError:
 from joblib import Parallel, delayed
 from .MisRegistration import MisRegistration
 from .tools.interpolateGeometricalTransformation import interpolate_cube
-from .tools.tools import emptyClass, pol2cart, print_, OopaoError, warning
+from .tools.tools import emptyClass, pol2cart, print_, OopaoError, warning, get_array_module
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from .tools.displayTools import makeSquareAxes
@@ -191,7 +192,7 @@ class DeformableMirror:
         for i in OOPAO_path:
             l.append(len(i))
         path = OOPAO_path[np.argmin(l)]
-        precision = np.load(path+'/precision_oopao.npy')
+        precision = precision_bits()
         if precision == 64:
             self.precision = np.float64
         else:
@@ -425,6 +426,10 @@ class DeformableMirror:
 
         else:
             print_('Using M4 Influence Functions', print_dm_properties)
+        self.gpu_available = array_backend()[1]
+        self.gpu_resident = gpu_resident()
+        self._gpu_modes = None
+        self._gpu_modes_source = None
         if floating_precision == 32:
             self.coefs = np.zeros(self.nValidAct, dtype=np.float32)
         else:
@@ -445,7 +450,8 @@ class DeformableMirror:
             src.optical_path.append([self.tag, self])
 
             if np.ndim(src.OPD_no_pupil) > 2:
-                src.OPD_no_pupil = np.zeros([self.resolution, self.resolution])
+                src.OPD_no_pupil = get_array_module(src.OPD_no_pupil).zeros(
+                    [self.resolution, self.resolution])
 
             if self.altitude is not None:
                 dm_OPD = self.get_OPD_altitude(src)
@@ -453,7 +459,7 @@ class DeformableMirror:
                 dm_OPD = self.OPD
 
             if np.ndim(self.OPD) == 2:
-                src.OPD_no_pupil += dm_OPD
+                src.OPD_no_pupil += get_array_module(src.OPD_no_pupil).asarray(dm_OPD)
             else:
                 # case with multiple OPD (resets the current OPD by default)
                 src.OPD_no_pupil = dm_OPD
@@ -463,7 +469,7 @@ class DeformableMirror:
                 for i in range(src.OPD_no_pupil.shape[-1]):
                     src.OPD[:, :, i] = src.OPD[:, :, i] * src.mask
             else:
-                src.OPD = src.OPD_no_pupil * src.mask
+                src.OPD = src.OPD_no_pupil * get_array_module(src.OPD_no_pupil).asarray(src.mask)
     def apply_mis_registration(self,misRegistration_tmp):
         if hasattr(self,'name_system'):   
             from OOPAO.InfluenceFunctions import InfluenceFunctions
@@ -691,6 +697,19 @@ class DeformableMirror:
         makeSquareAxes(plt.gca())
         return
 
+    def _modes_times_coefs(self):
+        if not self.gpu_available:
+            try:
+                return np.matmul(self.modes, self._coefs)
+            except (TypeError, ValueError):
+                return self.modes @ self._coefs
+        import cupy as cp
+        if self._gpu_modes_source is not self.modes:
+            self._gpu_modes = cp.asarray(self.modes)
+            self._gpu_modes_source = self.modes
+        opd = self._gpu_modes @ cp.asarray(self._coefs)
+        return opd if self.gpu_resident else cp.asnumpy(opd)
+
     @property
     def coefs(self):
         return self._coefs
@@ -704,25 +723,19 @@ class DeformableMirror:
         if np.isscalar(val):
             if val == 0:
                 self._coefs = np.zeros(self.nValidAct, dtype=self.precision())
-                try:
-                    self.OPD = self.precision(np.reshape(np.matmul(self.modes, self._coefs), [self.resolution, self.resolution]))
-                except:
-                    self.OPD = self.precision(np.reshape(self.modes@self._coefs, [self.resolution, self.resolution]))
+                opd = self._modes_times_coefs()
+                self.OPD = get_array_module(opd).asarray(opd, dtype=self.precision).reshape(
+                    self.resolution, self.resolution)
             else:
                 print('Error: wrong value for the coefficients')
         else:
             if len(val) == self.nValidAct:
-                if np.ndim(val) == 1:  # case of a single mode at a time
-                    try:
-                        self.OPD = self.precision(np.reshape(np.matmul(self.modes, self._coefs), [self.resolution, self.resolution]))
-                    except:
-                        self.OPD = self.precision(np.reshape(self.modes@self._coefs, [self.resolution, self.resolution]))
-                else:                # case of multiple modes at a time
-                    try:
-                        self.OPD = self.precision(np.reshape(np.matmul(self.modes, self._coefs), [self.resolution, self.resolution, val.shape[1]]))
-                    except:
-                        self.OPD = self.precision(np.reshape(
-                            self.modes@self._coefs, [self.resolution, self.resolution, val.shape[1]]))
+                if np.ndim(val) == 1:
+                    shape = [self.resolution, self.resolution]
+                else:
+                    shape = [self.resolution, self.resolution, val.shape[1]]
+                opd = self._modes_times_coefs()
+                self.OPD = get_array_module(opd).asarray(opd, dtype=self.precision).reshape(shape)
             else:
                 print('Error: wrong value for the coefficients')
                 sys.exit(0)

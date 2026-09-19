@@ -14,12 +14,9 @@ from joblib import Parallel, delayed
 from .tools.tools import warning, OopaoError
 
 from .Detector import Detector
-try:
-    import cupy as xp
-    fft2 = xp.fft.fft2
-except:
-    import numpy as xp
-    fft2 = scipy.fft.fft2
+from .runtime import array_backend, gpu_resident, precision_bits
+xp, global_gpu_flag = array_backend()
+fft2 = xp.fft.fft2 if global_gpu_flag else scipy.fft.fft2
 
 
 class Pyramid:
@@ -173,43 +170,26 @@ class Pyramid:
             _ wfs.cam.backgroundNoise   : Background noise can be set to True or False. An Associated wfs.cam.backgroundNoiseMap of the detector frame size must be defined
 
         """
-        try:
-            import cupy as xp
-            self.gpu_available = True
+        self.gpu_available = global_gpu_flag
+        self.gpu_resident = gpu_resident()
+        if self.gpu_available:
             self.convert_for_gpu = xp.asarray
             self.convert_for_numpy = xp.asnumpy
             self.nJobs = 1
             self.mempool = xp.get_default_memory_pool()
             from .tools.tools import get_gpu_memory
             self.mem_gpu = get_gpu_memory()
-
             print('GPU available!')
             for i in range(len(self.mem_gpu)):
                 print('GPU device '+str(i)+' : ' +
                       str(self.mem_gpu[i]/1024) + 'GB memory')
-        except:
-            import numpy as xp
-
-            def no_function(input_matrix):
-                return input_matrix
-            self.gpu_available = False
-            self.convert_for_gpu = no_function
-            self.convert_for_numpy = no_function
-
-        OOPAO_path = [s for s in sys.path if "OOPAO" in s]
-        l = []
-        for i in OOPAO_path:
-            l.append(len(i))
-        path = OOPAO_path[np.argmin(l)]
-        precision = np.load(path+'/precision_oopao.npy')
-        if precision == 64:
-            self.precision = np.float64
         else:
-            self.precision = np.float32
-        if self.precision is xp.float32:
-            self.precision_complex = xp.complex64
-        else:
-            self.precision_complex = xp.complex128
+            self.convert_for_gpu = lambda input_matrix: input_matrix
+            self.convert_for_numpy = lambda input_matrix: input_matrix
+
+        precision = precision_bits()
+        self.precision = np.float64 if precision == 64 else np.float32
+        self.precision_complex = xp.complex128 if precision == 64 else xp.complex64
         # initialize the Pyramid Object
         # telescope attached to the wfs
         self.telescope = telescope
@@ -615,11 +595,11 @@ class Pyramid:
         # em field corresponding to phase_in
         if np.ndim(self.src.OPD) == 2 or type(self.src.OPD) is list:
             if self.modulation == 0:
-                em_field = self.maskAmplitude*np.exp(1j*(phase_in))
+                em_field = self.maskAmplitude*xp.exp(1j*(phase_in))
             else:
-                em_field = self.maskAmplitude * np.exp(1j*(self.convert_for_gpu(self.src.phase)+phase_in))
+                em_field = self.maskAmplitude * xp.exp(1j*(self.convert_for_gpu(self.src.phase)+phase_in))
         else:
-            em_field = self.maskAmplitude*np.exp(1j*phase_in)
+            em_field = self.maskAmplitude*xp.exp(1j*phase_in)
         # zero-padding for the FFT computation
         support[self.center-self.telescope.resolution//2:self.center+self.telescope.resolution//2,
                 self.center-self.telescope.resolution//2:self.center+self.telescope.resolution//2] = em_field
@@ -639,7 +619,8 @@ class Pyramid:
             intensity = xp.abs(em_field_pwfs)**2
         del support
         del em_field_pwfs
-        self.modulation_camera_em.append(self.convert_for_numpy(em_field_ft)/em_field_ft.shape[0])
+        camera_field = em_field_ft if self.gpu_resident and self.isCalibrated else self.convert_for_numpy(em_field_ft)
+        self.modulation_camera_em.append(camera_field/em_field_ft.shape[0])
 
         del em_field_ft
         del phase_in
@@ -671,7 +652,7 @@ class Pyramid:
         if phase_in is not None:
             self.src.phase = phase_in
         # mask amplitude for the light propagation
-        self.maskAmplitude = self.convert_for_gpu(np.sqrt((self.src.intensity)/self.nTheta))
+        self.maskAmplitude = xp.sqrt(self.convert_for_gpu(self.src.intensity)/self.nTheta)
 
         if self.spatialFilter is not None:
             if np.ndim(phase_in) == 2:
@@ -685,7 +666,8 @@ class Pyramid:
         self.modulation_camera_em = []
         if self.modulation == 0 and self.user_modulation_path is None:
             if np.ndim(phase_in) == 2:
-                self.raw_data = self.convert_for_numpy(self.pyramid_transform(self.convert_for_gpu(self.src.phase)))
+                propagated = self.pyramid_transform(self.convert_for_gpu(self.src.phase))
+                self.raw_data = propagated if self.gpu_resident and self.isCalibrated else self.convert_for_numpy(propagated)
                 if integrate:
                     self.signal_2D, self.signal = self.wfs_integrate()
             else:
@@ -1180,8 +1162,9 @@ class Pyramid:
             obj._integrated_time += self.telescope.samplingTime
             try:
                 if obj.is_focal_plane_camera:
-                    intensity = np.sum(
-                        np.abs(self.modulation_camera_em)**2, axis=0)
+                    camera_backend = xp if self.gpu_resident else np
+                    intensity = camera_backend.sum(
+                        camera_backend.abs(camera_backend.asarray(self.modulation_camera_em))**2, axis=0)
                     if obj.resolution > self.resolution:
                         frame = intensity
                         warning('Maximum resolution for focal plane camera is %i, cropping field to this dimension' % self.resolution)

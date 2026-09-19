@@ -7,7 +7,8 @@ Created on Wed Apr  3 14:18:03 2024
 
 import numpy as np
 import time
-from OOPAO.tools.tools import set_binning, warning, OopaoError
+from OOPAO.tools.tools import set_binning, warning, OopaoError, get_array_module
+from OOPAO.runtime import array_backend
 
 
 class Detector:
@@ -97,6 +98,7 @@ class Detector:
         None.
 
         '''
+        self.gpu_available = array_backend()[1]
         self.resolution = nRes
         self.integrationTime = integrationTime
         self.bits = bits
@@ -163,8 +165,8 @@ class Detector:
             if self.integrationTime < tel.samplingTime:
                 raise OopaoError('The Detector integration time is smaller than the AO loop sampling Time. ')
         self._integrated_time += tel.samplingTime
-        if np.ndim(tel.PSF) == 3:
-            self.integrate(np.sum(tel.PSF, axis=0))
+        if tel.PSF.ndim == 3:
+            self.integrate(get_array_module(tel.PSF).sum(tel.PSF, axis=0))
         else:
             self.integrate(tel.PSF)
 
@@ -271,6 +273,34 @@ class Detector:
             raise OopaoError('The shape of the backgroung map does not match the detector frame resolution')
 
     def readout(self):
+        backend = get_array_module(self.buffer_frame[0])
+        if backend is not np:
+            # Preserve the CPU noise model and its NumPy random streams.
+            quiet = (self.darkCurrent == 0 and self.FWC is None and
+                     self.sensor != 'EMCCD' and self.binning == 1 and
+                     self.readoutNoise == 0 and self.bits is None and
+                     not self.log_scale and self.backgroundMap is None)
+            if quiet:
+                frame = backend.sum(backend.stack(self.buffer_frame), axis=0)
+                self.set_output_precision()
+                frame = (frame * self.gain).astype(self.output_precision)
+                self.frame = backend.asnumpy(frame)
+                self.perfect_frame = backend.asnumpy(self.perfect_frame)
+                self.flux_max_px = float(self.flux_max_px)
+                self.signal = float(self.signal)
+                self.buffer = [backend.asnumpy(item) for item in self.buffer_frame]
+                if self.resolution is None:
+                    self.resolution = self.frame.shape[0]
+                if self.fov_arcsec is not None:
+                    self.pixel_size_rad = self.fov_rad/self.resolution
+                    self.pixel_size_arcsec = self.fov_arcsec/self.resolution
+                self.buffer_frame = []
+                self._integrated_time = 0
+                return
+            self.buffer_frame = [backend.asnumpy(item) for item in self.buffer_frame]
+            self.perfect_frame = backend.asnumpy(self.perfect_frame)
+            self.flux_max_px = float(self.flux_max_px)
+            self.signal = float(self.signal)
         frame = np.sum(self.buffer_frame, axis=0)
 
         if self.darkCurrent != 0:
@@ -329,6 +359,9 @@ class Detector:
         self._integrated_time = 0
 
     def integrate(self, frame):
+        backend = get_array_module(frame)
+        if backend is not np and (self.photonNoise != 0 or self.backgroundNoise is True):
+            frame = backend.asnumpy(frame)
         self.perfect_frame = frame.copy()
         self.flux_max_px = self.perfect_frame.max()
         self.signal = self.QE * self.flux_max_px

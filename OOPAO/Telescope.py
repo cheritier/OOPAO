@@ -8,13 +8,9 @@ Created on Wed Feb 19 10:23:18 2020
 import numpy as np
 import copy
 import sys
-try:
-    import cupy as xp
-    global_gpu_flag = True
-    xp = np  # for now
-except ImportError or ModuleNotFoundError:
-    xp = np
-from OOPAO.tools.tools import set_binning, warning, OopaoError
+from .runtime import array_backend, gpu_resident, precision_bits
+xp, global_gpu_flag = array_backend()
+from OOPAO.tools.tools import set_binning, warning, OopaoError, get_array_module
 
 
 class Telescope:
@@ -147,7 +143,7 @@ class Telescope:
         for i in OOPAO_path:
             l.append(len(i))
         path = OOPAO_path[np.argmin(l)]
-        precision = np.load(path+'/precision_oopao.npy')
+        precision = precision_bits()
         if precision == 64:
             self.precision = np.float64
         else:
@@ -156,6 +152,17 @@ class Telescope:
             self.precision_complex = xp.complex64
         else:
             self.precision_complex = xp.complex128
+        # bridge used only around the PropagateField call in computePSF (the
+        # FFT-heavy PSF hot path); everything else in this class stays numpy,
+        # see the notes in set_pupil and computePSF
+        self.gpu_available = global_gpu_flag
+        self.gpu_resident = gpu_resident()
+        if self.gpu_available:
+            self.convert_for_gpu = xp.asarray
+            self.convert_for_numpy = xp.asnumpy
+        else:
+            self.convert_for_gpu = lambda a: a
+            self.convert_for_numpy = lambda a: a
         self.isInitialized = False                        # Resolution of the telescope
         self.resolution = resolution                   # Resolution of the telescope
         self.D = diameter                     # Diameter in m
@@ -205,30 +212,36 @@ class Telescope:
         for src in self.src_list:
             src.optical_path.append([self.tag, self])
             src.tel = self
-            src.mask = self.pupil.copy()
+            backend = xp if src.gpu_resident else np
+            src.mask = backend.asarray(self.pupil).copy()
             if src.OPD is None:
-                src.OPD_no_pupil = np.zeros(self.pupil.shape)
+                src.OPD_no_pupil = backend.zeros(self.pupil.shape)
             if np.ndim(src.OPD) == 2:
                 src.OPD = (src.OPD_no_pupil)*src.mask
             else:
-                src.OPD_no_pupil = np.zeros(self.pupil.shape)
+                src.OPD_no_pupil = backend.zeros(self.pupil.shape)
             if src.scintillation is None:
-                src.scintillation_no_pupil = np.ones(self.pupil.shape)
+                src.scintillation_no_pupil = backend.ones(self.pupil.shape)
                 src.scintillation = (src.scintillation_no_pupil)*src.mask
             elif np.ndim(src.scintillation) == 2:
                 src.scintillation = (src.scintillation_no_pupil)*src.mask
             else:
-                src.scintillation_no_pupil = np.ones(self.pupil.shape)
-            src.var = np.var(src.phase[np.where(self.pupil == 1)])
+                src.scintillation_no_pupil = backend.ones(self.pupil.shape)
+            src.var = backend.var(src.phase[backend.where(src.mask == 1)])
             src.fluxMap = self.pupilReflectivity * src.nPhoton * self.samplingTime * (self.D / self.resolution) ** 2
         return
 
     def set_pupil(self):
+        # kept on numpy deliberately (not xp): tel.pupil/pupilReflectivity/
+        # pixelArea/pupilLogical are read all over the codebase (Source,
+        # Atmosphere, DeformableMirror, the WFS classes, ...) by code that has
+        # no cupy awareness -- only PropagateField's own local FFT hot path
+        # actually runs on GPU, see the get_array_module dispatch there
         # Case where the pupil is not input: circular pupil with central obstruction
         if self.user_defined_pupil is None:
             D = self.resolution+1
-            x = xp.linspace(-self.resolution/2, self.resolution/2, self.resolution, dtype=self.precision())
-            xx, yy = xp.meshgrid(x, x)
+            x = np.linspace(-self.resolution/2, self.resolution/2, self.resolution, dtype=self.precision())
+            xx, yy = np.meshgrid(x, x)
             circle = xx**2+yy**2
             obs = circle >= (self.centralObstruction*D/2)**2
             self.pupil = circle < (D/2)**2
@@ -240,9 +253,9 @@ class Telescope:
         # A non uniform reflectivity can be input by the user
         self.pupilReflectivity = (self.pupil*self.pupilReflectivity).astype(self.precision())
         # Total number of pixels in the pupil area
-        self.pixelArea = xp.sum(self.pupil)
+        self.pixelArea = np.sum(self.pupil)
         # index of valid pixels in the pupil
-        self.pupilLogical = xp.where(xp.reshape(self.pupil, self.resolution*self.resolution) > 0)
+        self.pupilLogical = np.where(np.reshape(self.pupil, self.resolution*self.resolution) > 0)
         self.pupil = self.pupil
 
     def computeCoronoPSF(self, zeroPaddingFactor=2, display=False, coronagraphDiameter=4.5):
@@ -269,30 +282,32 @@ class Telescope:
             input_source = self.src.src
             # check where is located the source in the focal plane
             if self.src.n_source > 1:
-                r = xp.squeeze(xp.asarray(self.src.coordinates))[:, 0]
-                theta = xp.squeeze(xp.asarray(self.src.coordinates))[:, 1]
-                x_max = max(xp.abs(r * xp.cos(np.deg2rad(theta))))
-                y_max = max(xp.abs(r * xp.sin(np.deg2rad(theta))))
+                r = np.squeeze(np.asarray(self.src.coordinates))[:, 0]
+                theta = np.squeeze(np.asarray(self.src.coordinates))[:, 1]
+                x_max = max(np.abs(r * np.cos(np.deg2rad(theta))))
+                y_max = max(np.abs(r * np.sin(np.deg2rad(theta))))
             else:
-                r = xp.squeeze(xp.asarray(self.src.coordinates))[0]
-                theta = xp.squeeze(xp.asarray(self.src.coordinates))[1]
-                x_max = (xp.abs(r * xp.cos(np.deg2rad(theta))))
-                y_max = (xp.abs(r * xp.sin(np.deg2rad(theta))))
+                r = np.squeeze(np.asarray(self.src.coordinates))[0]
+                theta = np.squeeze(np.asarray(self.src.coordinates))[1]
+                x_max = (np.abs(r * np.cos(np.deg2rad(theta))))
+                y_max = (np.abs(r * np.sin(np.deg2rad(theta))))
         else:
             input_source = [self.src]
-            r = xp.squeeze(xp.asarray(self.src.coordinates))[0]
-            theta = xp.squeeze(xp.asarray(self.src.coordinates))[1]
-            x_max = (xp.abs(r * xp.cos(np.deg2rad(theta))))
-            y_max = (xp.abs(r * xp.sin(np.deg2rad(theta))))
+            r = np.squeeze(np.asarray(self.src.coordinates))[0]
+            theta = np.squeeze(np.asarray(self.src.coordinates))[1]
+            x_max = (np.abs(r * np.cos(np.deg2rad(theta))))
+            y_max = (np.abs(r * np.sin(np.deg2rad(theta))))
         pixel_scale = self.rad2arcsec*(input_source[0].wavelength/self.D)/zeroPaddingFactor  # in arcsec
         maximum_fov = pixel_scale*img_resolution/2
         n_extra = np.abs(np.floor((maximum_fov - max(x_max, y_max))/pixel_scale) - img_resolution//2)
         n_pix = np.ceil(max(int(img_resolution/2 + n_extra)*2, img_resolution)).astype('int')
+        detector_gpu = detector is not None and getattr(detector, 'gpu_available', False)
+        psf_backend = xp if detector_gpu else np
         if self.apply_off_axis_tip_tilt:
-            self.support_PSF = np.zeros([n_pix, n_pix])
+            self.support_PSF = psf_backend.zeros([n_pix, n_pix])
         else:
             n_pix = img_resolution
-            self.support_PSF = np.zeros([img_resolution, img_resolution])
+            self.support_PSF = psf_backend.zeros([img_resolution, img_resolution])
         center = self.support_PSF.shape[0]//2
 
         input_wavelenght = input_source[0].wavelength
@@ -305,22 +320,26 @@ class Telescope:
             else:
                 raise OopaoError('The asterism contains sources with different wavelengths. Summing up PSFs with different wavelength is not implemented.')
             # check if the source interacted with a spatial filter
+            # Source fields are device arrays only in explicit resident mode;
+            # the pupil and reflectivity maps remain public NumPy arrays.
             if input_source[i_src].phase_filtered is None:
-                amp_mask = xp.sqrt(input_source[i_src].intensity)
+                field_backend = xp if input_source[i_src].gpu_resident else np
+                amp_mask = field_backend.sqrt(input_source[i_src].intensity)
                 phase = input_source[i_src].phase
             else:
-                amp_mask = input_source[i_src].amplitude_filtered
-                phase = input_source[i_src].phase_filtered
+                field_backend = xp if input_source[i_src].gpu_resident else np
+                amp_mask = field_backend.asarray(input_source[i_src].amplitude_filtered)
+                phase = field_backend.asarray(input_source[i_src].phase_filtered)
             # amp_mask = amp_mask * xp.sqrt(input_source[i_src].scintillation)
             # amplitude of the EM field:
-            amp = amp_mask*self.pupil*self.pupilReflectivity
+            amp = amp_mask*field_backend.asarray(self.pupil)*field_backend.asarray(self.pupilReflectivity)
             # add a Tip/Tilt for off-axis sources
-            [Tip, Tilt] = xp.meshgrid(xp.linspace(-xp.pi, xp.pi, self.resolution, endpoint=False, dtype=self.precision()),
-                                      xp.linspace(-xp.pi, xp.pi, self.resolution, endpoint=False, dtype=self.precision()))
+            [Tip, Tilt] = np.meshgrid(np.linspace(-np.pi, np.pi, self.resolution, endpoint=False, dtype=self.precision()),
+                                      np.linspace(-np.pi, np.pi, self.resolution, endpoint=False, dtype=self.precision()))
             r = (input_source[i_src].coordinates[0])
             # X/Y shift inversion to match convention for atmosphere
-            x_shift = r*xp.sin(np.deg2rad(input_source[i_src].coordinates[1]))  # in arcsec
-            y_shift = r*xp.cos(np.deg2rad(input_source[i_src].coordinates[1]))  # in arcsec
+            x_shift = r*np.sin(np.deg2rad(input_source[i_src].coordinates[1]))  # in arcsec
+            y_shift = r*np.cos(np.deg2rad(input_source[i_src].coordinates[1]))  # in arcsec
             # shift in pixel of the PSF
             delta_x = int(factor*np.floor(np.abs(x_shift)/pixel_scale)*np.sign(x_shift))
             delta_y = int(factor*np.floor(np.abs(y_shift)/pixel_scale)*np.sign(y_shift))
@@ -328,7 +347,7 @@ class Telescope:
             delta_Tilt = x_shift - delta_x*pixel_scale
             delta_Tip = y_shift - delta_y*pixel_scale
 
-            self.delta_TT = (delta_Tip*Tip + delta_Tilt*Tilt)*self.pupil*(self.D/input_source[i_src].wavelength)*(1/self.rad2arcsec)
+            self.delta_TT = field_backend.asarray((delta_Tip*Tip + delta_Tilt*Tilt)*self.pupil)*(self.D/input_source[i_src].wavelength)*(1/self.rad2arcsec)
 
             # axis in arcsec
             self.xPSF_arcsec = [-self.rad2arcsec*(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor),
@@ -341,11 +360,18 @@ class Telescope:
                              (input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor)]
             self.yPSF_rad = [-(input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor),
                              (input_source[i_src].wavelength/self.D) * (n_pix/2/zeroPaddingFactor)]
-            # propagate the EM Field
-            self.PropagateField(amplitude=amp,
-                                phase=phase+self.delta_TT*factor,
+            # propagate the EM Field -- amp/phase are numpy at this point (see
+            # above); upload them here so the FFT in PropagateField (the
+            # dominant cost) runs on GPU when available. PropagateField itself
+            # is backend-agnostic (dispatches on whatever it's given, via
+            # get_array_module), which is what lets LiFT.py call it directly
+            # with its own choice of backend without going through here at all.
+            self.PropagateField(amplitude=self.convert_for_gpu(amp),
+                                phase=self.convert_for_gpu(phase+self.delta_TT*factor),
                                 zeroPaddingFactor=zeroPaddingFactor,
                                 img_resolution=img_resolution)
+            if not detector_gpu:
+                self.PSF = self.convert_for_numpy(self.PSF)
             # normalized PSF
             self.PSF_norma = self.PSF/self.PSF.max()
             output_PSF.append(self.PSF.copy())
@@ -357,9 +383,22 @@ class Telescope:
             output_PSF_norma = output_PSF_norma[0]
         self.PSF = self.support_PSF
         self.PSF_norma = self.PSF/self.PSF.max()
+        if detector_gpu:
+            self.PSF_norma = self.convert_for_numpy(self.PSF_norma)
+        if detector_gpu:
+            if isinstance(output_PSF, list):
+                output_PSF = [self.convert_for_numpy(frame) for frame in output_PSF]
+            else:
+                output_PSF = self.convert_for_numpy(output_PSF)
         self.PSF_list = output_PSF
 
     def PropagateField(self, amplitude, phase, zeroPaddingFactor, img_resolution=None):
+        # dispatch on whatever backend `amplitude` actually is, not on the
+        # module-level xp: this is what lets computePSF upload numpy amp/phase
+        # to run this on GPU, while LiFT.py can call this method directly with
+        # its own choice of backend (see its `xp = cp if self.gpu else np`) and
+        # get a matching-backend result back, with no coupling between the two
+        xp_ = get_array_module(amplitude)
         oversampling = 1
         resolution = self.pupil.shape[0]
         if oversampling is not None:
@@ -369,41 +408,49 @@ class Telescope:
                 raise OopaoError('Error: image has too many pixels for this pupil sampling. Try using a pupil mask with more pixels')
         else:
             img_resolution = zeroPaddingFactor * resolution
-        # If PSF is undersampled apply the integer oversampling
+        # sizes/paddings are plain scalars, not pixel data -- computed on numpy
+        # regardless of xp_ so they stay ordinary python/numpy ints, safe to
+        # use as pad widths and slice bounds on either backend
         if zeroPaddingFactor * oversampling < 2:
-            oversampling = (xp.ceil(2.0 / zeroPaddingFactor)).astype('int')
-        img_size = xp.ceil(img_resolution * oversampling).astype('int')
-        N = xp.fix(zeroPaddingFactor * oversampling * resolution).astype('int')
-        pad_width = xp.ceil((N - resolution) / 2).astype('int')
-        supportPadded = xp.pad(amplitude * xp.exp(1j * phase), pad_width=((pad_width, pad_width), (pad_width, pad_width)), constant_values=0).astype(self.precision_complex())
+            oversampling = int(np.ceil(2.0 / zeroPaddingFactor))
+        img_size = int(np.ceil(img_resolution * oversampling))
+        N = int(np.fix(zeroPaddingFactor * oversampling * resolution))
+        pad_width = int(np.ceil((N - resolution) / 2))
+        supportPadded = xp_.pad(amplitude * xp_.exp(1j * phase), pad_width=((pad_width, pad_width), (pad_width, pad_width)), constant_values=0).astype(self.precision_complex())
         # make sure the number of pxels is correct after the padding
         N = supportPadded.shape[0]
         # case considering a coronograph
         if self.coronagraph_diameter is not None:
-            [xx, yy] = xp.meshgrid(xp.linspace(0, N-1, N, dtype=self.precision()), xp.linspace(0, N-1, N, dtype=self.precision()))
+            # self.pupil lives on numpy (see set_pupil); bridge it here rather
+            # than changing what backend it lives on everywhere else
+            pupil_ = xp_.asarray(self.pupil) if xp_ is not np else self.pupil
+            [xx, yy] = xp_.meshgrid(xp_.linspace(0, N-1, N, dtype=self.precision()), xp_.linspace(0, N-1, N, dtype=self.precision()))
             xxc = xx - (N-1)/2
             yyc = yy - (N-1)/2
-            self.apodiser = xp.sqrt(xxc**2 + yyc**2) < self.resolution/2
-            self.pupilSpiderPadded = xp.pad(self.pupil, pad_width=((pad_width, pad_width), (pad_width, pad_width)), constant_values=0).astype(self.precision_complex())
-            self.focalMask = xp.sqrt(xxc**2 + yyc**2) > self.coronagraph_diameter/2 * zeroPaddingFactor
-            self.lyotStop = ((xp.sqrt((xxc-1.0)**2 + (yyc-1.0)**2) < N/2 * 0.9) * self.pupilSpiderPadded)
+            self.apodiser = xp_.sqrt(xxc**2 + yyc**2) < self.resolution/2
+            self.pupilSpiderPadded = xp_.pad(pupil_, pad_width=((pad_width, pad_width), (pad_width, pad_width)), constant_values=0).astype(self.precision_complex())
+            self.focalMask = xp_.sqrt(xxc**2 + yyc**2) > self.coronagraph_diameter/2 * zeroPaddingFactor
+            self.lyotStop = ((xp_.sqrt((xxc-1.0)**2 + (yyc-1.0)**2) < N/2 * 0.9) * self.pupilSpiderPadded)
             # PSF computation
-            [xx, yy] = xp.meshgrid(xp.linspace(0, N - 1, N, dtype=self.precision()), xp.linspace(0, N - 1, N, dtype=self.precision()), copy=False)
-            phasor = xp.exp(-1j * xp.pi / N * (xx + yy) * (1 - img_resolution % 2)).astype(self.precision_complex)
+            [xx, yy] = xp_.meshgrid(xp_.linspace(0, N - 1, N, dtype=self.precision()), xp_.linspace(0, N - 1, N, dtype=self.precision()), copy=False)
+            phasor = xp_.exp(-1j * xp_.pi / N * (xx + yy) * (1 - img_resolution % 2)).astype(self.precision_complex)
             #                                                        ^--- this is to account odd/even number of pixels
             # Propagate with Fourier shifting
-            EMF = xp.fft.fftshift(1 / N * xp.fft.fft2(xp.fft.ifftshift(supportPadded * phasor*self.apodiser)))
+            EMF = xp_.fft.fftshift(1 / N * xp_.fft.fft2(xp_.fft.ifftshift(supportPadded * phasor*self.apodiser)))
             self.B = EMF * self.focalMask * phasor
-            self.C = xp.fft.fftshift(1 * xp.fft.ifft2(xp.fft.ifftshift(self.B))).astype(self.precision_complex) * self.lyotStop * phasor
-            EMF = (xp.fft.fftshift(1 * xp.fft.fft2(xp.fft.ifftshift(self.C)))).astype(self.precision_complex)
+            self.C = xp_.fft.fftshift(1 * xp_.fft.ifft2(xp_.fft.ifftshift(self.B))).astype(self.precision_complex) * self.lyotStop * phasor
+            EMF = (xp_.fft.fftshift(1 * xp_.fft.fft2(xp_.fft.ifftshift(self.C)))).astype(self.precision_complex)
         else:
             # PSF computation
-            [xx, yy] = xp.meshgrid(xp.linspace(0, N - 1, N, dtype=self.precision()), xp.linspace(0, N - 1, N, dtype=self.precision()), copy=False)
-            self.phasor = xp.exp(-1j * xp.pi * (N + 1) / N * (xx + yy) * (1 - img_resolution % 2)).astype(self.precision_complex())
+            [xx, yy] = xp_.meshgrid(xp_.linspace(0, N - 1, N, dtype=self.precision()), xp_.linspace(0, N - 1, N, dtype=self.precision()), copy=False)
+            self.phasor = xp_.exp(-1j * xp_.pi * (N + 1) / N * (xx + yy) * (1 - img_resolution % 2)).astype(self.precision_complex())
             #                                                        ^--- this is to account odd/even number of pixels
             # Propagate with Fourier shifting
-            EMF = xp.fft.fftshift(1 / N * xp.fft.fft2(xp.fft.ifftshift(supportPadded * self.phasor))).astype(self.precision_complex())
-            EMF = (1 / N * xp.fft.fft2((supportPadded * self.phasor))).astype(self.precision_complex())
+            # (a leftover line here used to compute an fftshift'd EMF that was
+            # never read before being immediately overwritten by this one --
+            # a full extra FFT + fftshift/ifftshift round-trip discarded every
+            # single call; removed, see git history for the introducing commit)
+            EMF = (1 / N * xp_.fft.fft2((supportPadded * self.phasor))).astype(self.precision_complex())
         # Again, this is to properly crop a PSF with the odd/even number of pixels
         if N % 2 == img_size % 2:
             shift_pix = 0
@@ -412,36 +459,40 @@ class Telescope:
                 shift_pix = 1
             else:
                 shift_pix = -1
-        # Support only rectangular PSFs
-        ids = xp.array([xp.ceil(N / 2) - img_size // 2 + (1 - N % 2) - 1, xp.ceil(N / 2) + img_size // 2 + shift_pix]).astype(xp.int32)
-        EMF = EMF[ids[0]:ids[1], ids[0]:ids[1]]
+        # Support only rectangular PSFs -- plain python ints (not xp_), same
+        # reasoning as the sizes/paddings above: these are slice bounds
+        id0 = int(np.ceil(N / 2) - img_size // 2 + (1 - N % 2) - 1)
+        id1 = int(np.ceil(N / 2) + img_size // 2 + shift_pix)
+        EMF = EMF[id0:id1, id0:id1]
         self.focal_EMF = EMF
         if oversampling != 1:
-            self.PSF = set_binning(xp.abs(EMF) ** 2, oversampling)
+            self.PSF = set_binning(xp_.abs(EMF) ** 2, oversampling)
         else:
-            self.PSF = xp.abs(EMF) ** 2
+            self.PSF = xp_.abs(EMF) ** 2
         return oversampling
 
     def apply_spiders(self, angle, thickness_spider, offset_X=None, offset_Y=None):
+        # kept on numpy throughout, same reasoning as set_pupil: this builds
+        # tel.pupil, read everywhere with no cupy awareness
         self.isInitialized = False
         if thickness_spider > 0:
             self.set_pupil()
-            pup = xp.copy(self.pupil)
+            pup = np.copy(self.pupil)
             max_offset = self.centralObstruction*self.D/2 - thickness_spider/2
             if offset_X is None:
-                offset_X = xp.zeros(len(angle))
+                offset_X = np.zeros(len(angle))
             if offset_Y is None:
-                offset_Y = xp.zeros(len(angle))
+                offset_Y = np.zeros(len(angle))
 
-            if xp.max(xp.abs(offset_X)) >= max_offset or xp.max(xp.abs(offset_Y)) > max_offset:
+            if np.max(np.abs(offset_X)) >= max_offset or np.max(np.abs(offset_Y)) > max_offset:
                 warning('The spider offsets are too large! Weird things could happen!')
             for i in range(len(angle)):
                 angle_val = (angle[i]+90) % 360
-                x = xp.linspace(-self.D/2, self.D/2, self.resolution, dtype=self.precision())
-                [X, Y] = xp.meshgrid(x, x)
+                x = np.linspace(-self.D/2, self.D/2, self.resolution, dtype=self.precision())
+                [X, Y] = np.meshgrid(x, x)
                 X += offset_X[i]
                 Y += offset_Y[i]
-                map_dist = xp.abs(X*xp.cos(xp.deg2rad(angle_val)) + Y*xp.sin(xp.deg2rad(-angle_val)))
+                map_dist = np.abs(X*np.cos(np.deg2rad(angle_val)) + Y*np.sin(np.deg2rad(-angle_val)))
                 if 0 <= angle_val < 90:
                     map_dist[:self.resolution//2, :] = thickness_spider
                 if 90 <= angle_val < 180:
@@ -489,18 +540,21 @@ class Telescope:
 
     @pupil.setter
     def pupil(self, val):
+        # numpy throughout, same reasoning as set_pupil
         self._pupil = val.astype(bool)
-        self.pixelArea = xp.sum(self._pupil)
-        tmp = xp.reshape(self._pupil, self.resolution**2)
-        self.pupilLogical = xp.where(tmp > 0)
+        self.pixelArea = np.sum(self._pupil)
+        tmp = np.reshape(self._pupil, self.resolution**2)
+        self.pupilLogical = np.where(tmp > 0)
         self.pupilReflectivity = self.pupil.astype(self.precision())
         if self.isInitialized:
             warning('A new pupil is now considered, its reflectivity is considered to be uniform. Assign the proper reflectivity map to tel.pupilReflectivity if required.')
 
     @property
     def OPD(self):
-        if xp.ndim(self.src.OPD) == 2:
-            self.mean_removed_OPD = (self.src.OPD - xp.mean(self.src.OPD[xp.where(self.pupil == 1)]))*self.pupil
+        if np.ndim(self.src.OPD) == 2:
+            backend = get_array_module(self.src.OPD)
+            pupil = backend.asarray(self.pupil)
+            self.mean_removed_OPD = (self.src.OPD - backend.mean(self.src.OPD[backend.where(pupil == 1)]))*pupil
         return self.src.OPD
 
     @OPD.setter
@@ -533,7 +587,7 @@ class Telescope:
                         tel_tmp.OPD_no_pupil = self.OPD_no_pupil[i_obj]
                         self.src.src[i_obj]*tel_tmp*obj[i_obj]
                         wfs_signal.append(obj[i_obj].signal)
-                    obj[i_obj].signal = xp.mean(wfs_signal, axis=0)
+                    obj[i_obj].signal = np.mean(wfs_signal, axis=0)
                 else:
                     raise OopaoError('Error! There is a mis-match between the number of Sources ('+str(
                         len(self.OPD))+') and the number of WFS ('+str(len(obj))+')')
