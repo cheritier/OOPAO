@@ -63,7 +63,7 @@ def compute_ao_model_pyramid(param, loc='C:/diskb/cheritier/GHOST/'):
     from OOPAO.MisRegistration import MisRegistration
     misRegistration_tmp = MisRegistration(param)
     from OOPAO.mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
-    dm = applyMisRegistration(tel = tel, misRegistration_tmp = misRegistration_tmp, dm_input=dm)
+    dm = dm.apply_mis_registration(misRegistration_tmp)
     
     #%% -----------------------     PYRAMID WFS   ----------------------------------
     from OOPAO.Pyramid import Pyramid

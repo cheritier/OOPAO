@@ -531,7 +531,7 @@ src**atm*tel*src_cam
 nLoop = 500  # number of iterations
 gainCL = 0.4  # integrator gain
 wfs.cam.photonNoise = False  # enable photon noise on the WFS camera
-display = True  # enable the display
+display = False  # enable the display
 frame_delay = 2  # number of frame delay
 
 # variables used to to save closed-loop data data
@@ -636,7 +636,7 @@ for i in range(nLoop):
     # store the slopes after computing the commands <=> 2 frames delay
     if frame_delay == 2:
         wfsSignal = wfs.signal
-    # print('Elapsed time: ' + str(time.time()-a) + ' s')
+    print('Elapsed time: ' + str(time.time()-a) + ' s')
 
     # update displays if required
     if display and i > 1:

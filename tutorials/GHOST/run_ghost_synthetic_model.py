@@ -55,7 +55,7 @@ exp_imat[np.isinf(exp_imat)] = 0
 #%% SPRINT estimation
 
 # index of the KL modes used to estimate the parameters (for the first estimation pick a few middle-order within the first 100 KL modes -- avoid high order modes)
-index_modes = 80
+index_modes = 10
 
 # modal basis considered
 from OOPAO.tools.tools import emptyClass
@@ -83,12 +83,17 @@ mis_registration_zero_point = None  # mis-registration starting point. if None, 
 Sprint = SPRINT(obj                         = obj,\
                 basis                       = basis,\
                 n_mis_reg                   = n_mis_reg,\
-                mis_registration_zero_point = None,\
+                mis_registration_zero_point = mis_registration_zero_point,\
                 recompute_sensitivity       = True)
 
     
+#%%
 # estimate the parameters
-Sprint.estimate(obj, input_imat[:,index_modes],n_iteration=6,n_update_zero_point=1)   
+Sprint.estimate(obj, 
+                input_imat[:,index_modes],
+                n_iteration=10,
+                n_update_zero_point=0,
+                tolerance=100)
 #%%
 
 # print the identified value: 
@@ -105,7 +110,7 @@ plt.plot(dm.initial_coordinates[:,0],dm.initial_coordinates[:,1],'+')
 plt.close('all')
 from OOPAO.mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
 
-dm_ghost = applyMisRegistration(tel,Sprint.mis_registration_out,dm_input=dm)
+dm = dm.apply_mis_registration(Sprint.mis_registration_out)
 
 input_imat = get_imat_ghost(param['location_data']+'hadamard_IM_slopes_15_no_residual.npy', wfs, M2C=M2C[:,:400])
 
@@ -140,7 +145,7 @@ stroke = 1e-9
 calib = InteractionMatrix(  ngs            = ngs,\
                             atm            = atm,\
                             tel            = tel,\
-                            dm             = dm_ghost,\
+                            dm             = dm,\
                             wfs            = wfs,\
                             M2C            = np.eye(492),\
                             stroke         = stroke,\
@@ -271,8 +276,8 @@ plot_obj = cl_plot(list_fig=[atm.OPD,  # list of data for the different subplots
                                None,
                                None,
                                ['Time', 'WFE [nm]'],
-                               ['NGS PSF@' + str(ngs.coordinates[0]) + '" -- FOV: ' + str(np.round(ngs_cam.fov_arcsec, 2)) + '"', ''],
-                               ['SRC PSF@' + str(src.coordinates[0]) + '" -- FOV: ' + str(np.round(src_cam.fov_arcsec, 2)) + '"', '']],
+                               ['NGS PSF@' + str(ngs.coordinates[0]), ''],
+                               ['SRC PSF@' + str(src.coordinates[0]), '']],
                    n_subplot=[4, 2],
                    list_display_axis=[None,  # list of the subplot for which axis are displayed
                                       None,

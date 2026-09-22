@@ -43,17 +43,21 @@ from OOPAO.tools.tools import OopaoError
 # data available : https://nuage.osupytheas.fr/s/YRbHrHSQA9ZSiQP
 
 # interaction matrix from the bench
-IM_rama_full = fits.getdata(param['path_data']+'IMFull.fits')
+# IM_rama_full = fits.getdata(param['path_data']+'IMFull.fits')
+IM_rama_full = np.load(param['path_data']+'IM.npy')
+IM_rama_full = np.load(param['path_data']+'IM.npy')
+
 # valid pixels used for the reconstruction
-valid_pix_full = np.load(param['path_data']+'valid_pixel.npy').astype(bool)
+valid_pix_full = np.load(param['path_data']+'valid_pup_20260707.npy').astype(bool)
 # valid pixels used by DAO (larger)
-valid_pix_dao_full = np.load(param['path_data']+'valid_pixel_dao.npy').astype(bool)
+valid_pix_dao_full = np.load(param['path_data']+'valid_pix_dao_20260707.npy').astype(bool)
 
 
 sub_valid_pixel = valid_pix_dao_full[valid_pix_full]
 # mode 2 command matrix
 M2C = np.load(param['path_data']+'M2C.npy')
 
+M2C = np.eye(97)
 
 #%% reduce the size of the valid pixel
 from rama_tools import compress_rama_data, compute_rama_frame
@@ -82,14 +86,14 @@ Ramatwin.check_pwfs_pupils(valid_pixel_map = valid_pix,correct=True)
 imat_variance_map = compute_rama_frame(signal=np.var(IM_rama_full,axis=1),valid_signal = valid_pix_dao)
 
 # threshold it
-imat_variance_map = imat_variance_map>0.005*imat_variance_map.max()
+imat_variance_map = imat_variance_map>0.001*imat_variance_map.max()
 
 plt.figure()
 plt.imshow(imat_variance_map)
 
 #% optimize PWFS pupil position based on the valid pixels provided by DAO
 
-Ramatwin.check_pwfs_pupils(valid_pixel_map = imat_variance_map,correct=True)
+Ramatwin.check_pwfs_pupils(valid_pixel_map = imat_variance_map,correct=False)
 
 
 #%% illustrate a few modes
@@ -97,11 +101,25 @@ Ramatwin.check_pwfs_pupils(valid_pixel_map = imat_variance_map,correct=True)
 plt.close('all')
 ngs**tel*wfs
 wfs.modulation = 0   
-delta = 10
+delta = 38
+ind = 0
+
+from OOPAO.FieldTransformer import FieldTransformer
+
+tf = FieldTransformer(ngs, rotation_angle=[40],order=3)
+dm.coefs = M2C[:,delta+ind]*1e-9
+ngs**tel*dm
+
+plt.figure(2)
+plt.imshow(ngs.OPD)
+ngs**tel*dm*tf
+
+plt.figure(3)
+plt.imshow(ngs.OPD)
 for ind in range(3):
     
     dm.coefs = M2C[:,delta+ind]*1e-9
-    ngs**tel*dm*wfs
+    ngs**tel*dm*tf*wfs
     
     
     plt.figure(1)
@@ -110,12 +128,17 @@ for ind in range(3):
     plt.imshow(dm.OPD)
     
     plt.subplot(3,3,2+ind*3)
-    plt.imshow(wfs.signal_2D*valid_pix_dao)
+    plt.imshow(wfs.signal_2D*valid_pix)
     
     plt.subplot(3,3,3+ind*3)
 
-    plt.imshow(compute_rama_frame(signal=IM_rama_full[:,delta+ind],valid_signal = valid_pix_dao)*valid_pix_dao)
+    plt.imshow(compute_rama_frame(signal=IM_rama_full[:,delta+ind],valid_signal = valid_pix_dao)*valid_pix)
 
+
+#%%
+# ind = np.rang
+plt.figure()
+plt.imshow(compute_rama_frame(signal=np.sum(IM_rama_full[:,:],axis=1),valid_signal = valid_pix_dao))
 
 
 
@@ -164,7 +187,7 @@ wfs.modulation = 0
 from OOPAO.calibration.CalibrationVault import CalibrationVault
 
 # truncate to a given number of modes before the inversion
-end_mode    = 83 
+end_mode    = 70 
 
 # closed loop data
 M2C_CL      = M2C[:,:end_mode]  # modes-to-command matrix used in closed loop

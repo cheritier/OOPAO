@@ -14,7 +14,7 @@ from numpy.random import RandomState
 def initializeParameterFile():
     # initialize the dictionaries
     param = dict()
-    param['location_data'] = 'C:/Users/cheritier/Documents/oopao_private/ghost/ghost_simulation/'
+    param['location_data'] = 'C:/Users/cheritier/Documents/CODES/oopao_private/ghost/ghost_simulation/'
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
@@ -33,7 +33,7 @@ def initializeParameterFile():
     
     param['telescope_diameter'                ] = 6.9                                             # diameter in [mm]
     param['wfs_n_subaperture'                 ] = 36                                             # number of PWFS subaperture along the telescope diameter
-    param['wfs_n_pixel_per_subaperture'       ] = 1                                            # sampling of the PWFS subapertures
+    param['wfs_n_pixel_per_subaperture'       ] = 2                                            # sampling of the PWFS subapertures
     param['wfs_n_extra_subaperture'           ] = 6                                            # extra subaperture to pad the pupils (even number required)   
     param['telescope_sampling_time'           ] = 1/1000                                         # loop sampling time in [s]
     param['telescope_central_obstruction'     ] = 0                                              # central obstruction in percentage of the diameter
@@ -64,10 +64,11 @@ def initializeParameterFile():
     # mis-registrations                                                             
     param['shiftX'                  ] = 0                                              # shift X of the DM in pixel size units ( tel.D/tel.resolution ) 
     param['shiftY'                  ] = 0                                              # shift Y of the DM in pixel size units ( tel.D/tel.resolution )
-    param['rotationAngle'           ] = 5                                              # rotation angle of the DM in [degrees]
+    param['rotationAngle'           ] = 0                                              # rotation angle of the DM in [degrees]
     param['anamorphosisAngle'       ] = 0                                              # anamorphosis angle of the DM in [degrees]
-    param['radialScaling'           ] = -0.02                                            # radial scaling in percentage of diameter
-    param['tangentialScaling'       ] = -0.02                                            # tangential scaling in percentage of diameter
+    param['radialScaling'           ] = 0                                            # radial scaling in percentage of diameter
+    param['tangentialScaling'       ] = 0                                            # tangential scaling in percentage of diameter
+    param['magnification'       ] = -0.02                                            # magnification in percentage of diameter
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     param['pyramid_modulation'              ] = 3                                             # modulation radius in ratio of wavelength over telescope diameter

@@ -157,7 +157,7 @@ class Ekarus:
         
 
             
-        Sprint = SPRINT(self, basis,dm_input=dm,n_mis_reg=3,recompute_sensitivity=True )
+        Sprint = SPRINT(self, basis,dm_input=dm,n_mis_reg=5,recompute_sensitivity=True )
         Sprint.estimate(self, on_sky_slopes = input_im[:,index_modes],n_iteration=1,n_update_zero_point=2,tolerance=100)
         from OOPAO.mis_registration_identification_algorithm.applyMisRegistration import applyMisRegistration
         dm_tmp = dm.apply_mis_registration(Sprint.mis_registration_out)
@@ -220,37 +220,77 @@ class Ekarus:
         y_t = a * np.sin(phi) * np.cos(t) - b * np.cos(phi) * np.sin(t)
         
         return x_t, y_t, a, b, e
-    
-def compress_ekarus_data(frame_,n_pix,n_pix_crop = None,offset_X = 0, offset_Y = 0):
-    
-    frame = np.zeros(frame_.shape)    
-    
-    if offset_X!=0:
-        if np.sign(offset_X)==1:
-            frame[offset_X:,:] = frame_[:-offset_X,:]
-        else:
-            frame[:offset_X,:] = frame_[-offset_X:,:]
-            
-    if offset_Y!=0:
-        if np.sign(offset_Y)==1:
-            frame[:,offset_Y:] = frame[:,:-offset_Y]        
-        else:
-            frame[:,:offset_Y] = frame[:,-offset_Y:]        
-    sum_input = frame.sum()
-    
-    Q1 = frame[:n_pix,:n_pix]
-    Q2 = frame[:n_pix,-n_pix:]
-    Q3 = frame[-n_pix:,:n_pix]
-    Q4 = frame[-n_pix:,-n_pix:]
-    output_frame =  np.vstack((np.hstack((Q1,Q2)),np.hstack((Q3,Q4))))
-    if n_pix_crop is not None:
-        output_frame = output_frame[n_pix_crop:-n_pix_crop,n_pix_crop:-n_pix_crop]
 
-    # if output_frame.sum()!=sum_input:
-    #     print(output_frame.sum())
-    #     print(sum_input)        
-    #     raise OopaoError('You are missing valid pixel! select a larger n_pix_crop or n_pix value')
+def _shift(arr, offset, axis):
+    """Shift along `axis` (0 or 1), zero-padding. Works for 2D frames and
+    (n_pix, n_pix, n_im) cubes."""
+    if offset == 0:
+        return arr
+    out = np.zeros_like(arr)
+    src = [slice(None)] * arr.ndim
+    dst = [slice(None)] * arr.ndim
+    if offset > 0:
+        dst[axis] = slice(offset, None)
+        src[axis] = slice(None, -offset)
+    else:
+        dst[axis] = slice(None, offset)
+        src[axis] = slice(-offset, None)
+    out[tuple(dst)] = arr[tuple(src)]
+    return out
+
+
+def compress_ekarus_data(frame_, n_pix, n_pix_crop=None, offset_X=0, offset_Y=0):
+    """
+    frame_ : (N, N) or (N, N, n_im)
+    Returns the four corner quadrants stacked into a (2*n_pix, 2*n_pix[, n_im]) block.
+    """
+    frame = np.asarray(frame_, dtype=float)
+    frame = _shift(frame, offset_X, axis=0)
+    frame = _shift(frame, offset_Y, axis=1)
+
+    Q1 = frame[:n_pix, :n_pix]
+    Q2 = frame[:n_pix, -n_pix:]
+    Q3 = frame[-n_pix:, :n_pix]
+    Q4 = frame[-n_pix:, -n_pix:]
+
+    top = np.concatenate((Q1, Q2), axis=1)
+    bottom = np.concatenate((Q3, Q4), axis=1)
+    output_frame = np.concatenate((top, bottom), axis=0)
+
+    if n_pix_crop is not None:
+        output_frame = output_frame[n_pix_crop:-n_pix_crop, n_pix_crop:-n_pix_crop]
     return output_frame
+
+
+def decompress_ekarus_data(output_frame, shape, n_pix, n_pix_crop=None,
+                           offset_X=0, offset_Y=0, undo_offset=True):
+    """
+    Reverse of compress_ekarus_data.
+    shape : full frame/cube shape, e.g. (N, N) or (N, N, n_im).
+    """
+    output_frame = np.asarray(output_frame, dtype=float)
+    frame = np.zeros(shape, dtype=float)
+
+    # 1. undo the crop
+    if n_pix_crop is not None:
+        stacked = np.zeros((2 * n_pix, 2 * n_pix) + tuple(shape[2:]), dtype=float)
+        stacked[n_pix_crop:-n_pix_crop, n_pix_crop:-n_pix_crop] = output_frame
+    else:
+        stacked = output_frame
+
+    # 2. unstack the four quadrants back into the corners
+    frame[:n_pix, :n_pix]   = stacked[:n_pix, :n_pix]
+    frame[:n_pix, -n_pix:]  = stacked[:n_pix, n_pix:]
+    frame[-n_pix:, :n_pix]  = stacked[n_pix:, :n_pix]
+    frame[-n_pix:, -n_pix:] = stacked[n_pix:, n_pix:]
+
+    if not undo_offset:
+        return frame
+
+    # 3. undo the offsets in reverse order
+    frame = _shift(frame, -offset_Y, axis=1)
+    frame = _shift(frame, -offset_X, axis=0)
+    return frame
 
 
 def compute_ekarus_frame(signal,valid_signal):

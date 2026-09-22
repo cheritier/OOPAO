@@ -140,5 +140,7 @@ for i in range(n_lgs):
     fig.colorbar(im, ax=axes[1, i])
 
 
+plt.show()
+
 
 

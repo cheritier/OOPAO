@@ -10,7 +10,7 @@ def initializeParameterFile():
     # initialize the dictionaries
     param = dict()
     # location of the calibration data
-    param['path_data'] = 'C:/Users/cheritier/Documents/RAMA/'        
+    param['path_data'] = 'C:/Users/cheritier/Documents/PROJECTS/RAMA/'        
     warning('Make sure that you downloaded the RAMA data here: https://nuage.osupytheas.fr/s/YRbHrHSQA9ZSiQP')
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     param['r0'                   ] = 0.1                                            # value of r0 in the visibile in [m]
@@ -54,8 +54,9 @@ def initializeParameterFile():
     param['shiftX'               ] = 0                                           # shift X of the DM in pixel size units ( tel.D/tel.resolution ) 
     param['shiftY'               ] = - param['dm_pitch']/3  # shift Y of the DM in pixel size units ( tel.D/tel.resolution )
     param['anamorphosisAngle'    ] = 0                                           # anamorphosis angle of the DM in [degrees]
-    param['tangentialScaling'    ] = 0.12                                        # tangential scaling in percentage of diameter
-    param['radialScaling'        ] = 0.12                                        # radial scaling in percentage of diameter
+    param['tangentialScaling'    ] = 0                                        # tangential scaling in percentage of diameter
+    param['radialScaling'        ] = 0                                        # radial scaling in percentage of diameter
+    param['magnification'        ] = 0.12                                        # radial scaling in percentage of diameter
 
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     param['size_quadrant_ramatwin'] = 60

@@ -17,7 +17,6 @@ from compute_ramatwin import compute_rama_model
 from parameter_files.parameterFile_ramatwin import initializeParameterFile
 from OOPAO.tools.interpolateGeometricalTransformation import interpolate_cube
 from OOPAO.MisRegistration import MisRegistration
-from OOPAO.tools.tools import OopaoError
 
 class Rama:
 

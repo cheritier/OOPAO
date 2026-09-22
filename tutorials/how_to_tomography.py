@@ -318,7 +318,7 @@ science**atm*tel*science_cam
 n_loop = 500  # number of iterations
 gain_cl = 0.4  # integrator gain
 wfs.cam.photonNoise = False  # enable photon noise on the WFS camera
-display = True  # enable the display
+display = False  # enable the display
 frame_delay = 1  # number of frame delay
 
 # variables used to to save closed-loop data data

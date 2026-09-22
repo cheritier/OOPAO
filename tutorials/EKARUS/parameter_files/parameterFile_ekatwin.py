@@ -20,14 +20,14 @@ def initializeParameterFile():
                               
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% M1 PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
-    param['nSubaperture'         ] = 38                                                                                 # number of PWFS subaperture along the telescope diameter
-    param['nExtraSubaperture'    ] = 6                                                                                  # extra subaperture on the edges
+    param['nSubaperture'         ] = 37                                                                                 # number of PWFS subaperture along the telescope diameter
+    param['nExtraSubaperture'    ] = 9                                                                                  # extra subaperture on the edges
     param['diameter'             ] = 1.82                                                                               # diameter in [m]
     param['ratio'                ] = 1                                                                                  # ratio factor for binned case
     param['nPixelPerSubap'       ] = 2                                                                                  # sampling of the PWFS subapertures in pix
     param['resolution'           ] = param['nSubaperture']*param['nPixelPerSubap']                                    # resolution of the telescope driven by the PWFS
     param['sizeSubaperture'      ] = param['diameter']/param['nSubaperture']                                          # size of a sub-aperture projected in the M1 space
-    param['samplingTime'         ] = 1/1000                                                                             # loop sampling time in [s]
+    param['samplingTime'         ] = 1/500                                                                             # loop sampling time in [s]
     param['m1_reflectivity'      ] = 1                                                                                  # reflectivity of the pupil
     
     
@@ -42,19 +42,28 @@ def initializeParameterFile():
     param['nActuator'            ] = 24                                          # number of actuators 
     param['mechanicalCoupling'   ] = 0.4                                        # Mechanical coupling of the DM influence functions
     param['dm_coordinates'       ] = None                                        # tag for the deformable mirror class
-    param['dm_inf_funct_factor'  ] = -1                                           # factor to account for the influence functions deformation in DM units
-    param['dm_inf_funct_location'] =  'C:/Users/cheritier/Documents/oopao_private/ekarus/EKARUS_DM468/' # files available here: https://drive.google.com/drive/folders/1hbWyCq_AX1r32JB4jyVfZ-Ss3bVuRInE
+    param['dm_inf_funct_factor'  ] = -1*2                                           # factor to account for the influence functions deformation in DM units -- factor 2 since DM is in transmission in OOPAO and in reflection on EKARUS
+    param['dm_inf_funct_location'] =  'C:/Users/cheritier/Documents/Codes/oopao_private/ekarus/EKARUS_DM468/' # files available here: https://drive.google.com/drive/folders/1hbWyCq_AX1r32JB4jyVfZ-Ss3bVuRInE
     param['dm_pitch'             ] = param['diameter'] * 1.5e-3 *param['diameter']/33e-3                                         # factor to account for the influence functions deformation in DM units
     param['flip_lr'              ] = False
     param['flip_ud'              ] = True
 
     # mis-registrations                                                             
-    param['rotationAngle'        ] = 92.341                                       # rotation angle of the DM in [degrees]    
-    param['shiftX'               ] = 0                                           # shift X of the DM in pixel size units ( tel.D/tel.resolution ) 
-    param['shiftY'               ] = 0   # shift Y of the DM in pixel size units ( tel.D/tel.resolution )
+    param['rotationAngle'        ] = 90.432                                       # rotation angle of the DM in [degrees]    
+    param['shiftX'               ] = -0.001                                           # shift X of the DM in pixel size units ( tel.D/tel.resolution ) 
+    param['shiftY'               ] = -0.001   # shift Y of the DM in pixel size units ( tel.D/tel.resolution )
     param['anamorphosisAngle'    ] = 0                                           # anamorphosis angle of the DM in [degrees]
-    param['tangentialScaling'    ] = -0.1                                        # tangential scaling in percentage of diameter
-    param['radialScaling'        ] = -0.1                                        # radial scaling in percentage of diameter
+    param['tangentialScaling'    ] =  -0.178                                        # tangential scaling in percentage of diameter
+    param['radialScaling'        ] =  -0.167                                       # radial scaling in percentage of diameter
+    param['magnification'        ] = -0.0                                        # radial scaling in percentage of diameter
+    # # mis-registrations                                                             
+    # param['rotationAngle'        ] = 0                                       # rotation angle of the DM in [degrees]    
+    # param['shiftX'               ] = 0                                           # shift X of the DM in pixel size units ( tel.D/tel.resolution ) 
+    # param['shiftY'               ] = 0   # shift Y of the DM in pixel size units ( tel.D/tel.resolution )
+    # param['anamorphosisAngle'    ] = 0                                           # anamorphosis angle of the DM in [degrees]
+    # param['tangentialScaling'    ] =  0.                                        # tangential scaling in percentage of diameter
+    # param['radialScaling'        ] =  0.                                        # radial scaling in percentage of diameter
+    # param['magnification'        ] = 0.                                        # radial scaling in percentage of diameter
 
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% WFS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
@@ -64,8 +73,8 @@ def initializeParameterFile():
     param['psfCentering'          ] = False                                         # centering of the FFT and of the PWFS mask on the 4 central pixels
     param['lightThreshold'        ] = 0.3                                           # light threshold to select the valid pixels
     param['postProcessing'        ] = 'fullFrame_sum_flux'                          # post-processing of the PWFS signals 'slopesMaps' ou 'fullFrame'
-    param['pwfs_pupils_shift_x'   ] =[ 0.28720562, -1.19844949, -2.34081022,  1.34475824]                                       # shift X of the PWFS pupils on the detector
-    param['pwfs_pupils_shift_y'   ] = [ 0.49381866,  3.30762039, -4.06388001, -1.71582312]                                       # shift Y of the PWFS pupils on the detector
+    param['pwfs_pupils_shift_x'   ] =[-0.75314029,  0.54324766, -0.80918396, -0.32103534]# [0.28720562, -1.19844949, -2.34081022,  1.34475824]                                       # shift X of the PWFS pupils on the detector
+    param['pwfs_pupils_shift_y'   ] = [ 2.87875012,  5.45764232, -5.28554292, -3.34809722]#[ 0.49381866,  3.30762039, -4.06388001, -1.71582312]                                       # shift Y of the PWFS pupils on the detector
     param['pwfs_rooftop'          ] = 0                                             # size of the PWFS "rooftop" in lambda/D
 
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% OUTPUT DATA %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
