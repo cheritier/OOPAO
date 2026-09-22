@@ -255,10 +255,12 @@ m_input.shiftY = dm.pitch/2
 m_input.rotationAngle = 1
 
 # create a mis-registered DM
-dm_mis_registered = applyMisRegistration(tel=tel, misRegistration_tmp = m_input, dm_input = dm,print_dm_properties=False)
+dm_mis_registered =dm.apply_mis_registration(m_input)
 
 # Apply SPRINT modal basis on it
 dm_mis_registered.coefs = Sprint.basis.modes * 1e-9
+
+dm_mis_registered.display_dm()
 
 # Acquire corresponding WFS signals 
 ngs**tel*dm_mis_registered*wfs
@@ -281,7 +283,7 @@ from OOPAO.tools.displayTools import interactive_show,display_wfs_signals
 
 a = display_wfs_signals(wfs, input_wfs_signals,returnOutput=True)
 b = display_wfs_signals(wfs, Sprint.calib_last.D,returnOutput=True)
-b = display_wfs_signals(wfs, Sprint.calib_0.D,returnOutput=True)
+# b = display_wfs_signals(wfs, Sprint.calib_0.D,returnOutput=True)
 
 a[np.isinf(a)] = 0
 b[np.isinf(b)] = 0
