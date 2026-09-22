@@ -5,20 +5,18 @@ Created on Thu Feb 20 11:32:10 2020
 @author: cheritie
 """
 
+import copy
 import sys
 import time
 import numpy as np
+import skimage.transform as sk
 from .runtime import array_backend, gpu_resident, precision_bits
-try:
-    import cupy as xp
-    global_gpu_flag = True
-    xp = np  # for now
-except ImportError or ModuleNotFoundError:
-    xp = np
+xp, global_gpu_flag = array_backend()
+from .runtime import backend_of as _backend_of, to_backend as _to_backend
 from joblib import Parallel, delayed
 from .MisRegistration import MisRegistration
 from .tools.interpolateGeometricalTransformation import interpolate_cube
-from .tools.tools import emptyClass, pol2cart, print_, OopaoError, warning, get_array_module
+from .tools.tools import emptyClass, pol2cart, print_, OopaoError, warning
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from .tools.displayTools import makeSquareAxes
@@ -92,7 +90,7 @@ class DeformableMirror:
         misReg : TYPE, optional
             A Mis-Registration object (See the Mis-Registration class) can be input to apply some geometrical transformations
             to the Deformable Mirror. When using user-defined influence functions, this parameter is ignored.
-            Consider to use the function applyMisRegistration in OOPAO/mis_registration_identification_algorithm/ to perform interpolations.
+            To generate a mis-registered copy of an existing DM (any kind of influence functions), use dm.apply_mis_registration.
             The default is None.
         M4_param : Parameter File, optional
             Parameter File for M4 computation. The default is None.
@@ -187,11 +185,6 @@ class DeformableMirror:
         tel.OPD contains a cube of 2D maps for each actuator
 
         """
-        OOPAO_path = [s for s in sys.path if "OOPAO" in s]
-        l = []
-        for i in OOPAO_path:
-            l.append(len(i))
-        path = OOPAO_path[np.argmin(l)]
         precision = precision_bits()
         if precision == 64:
             self.precision = np.float64
@@ -356,43 +349,19 @@ class DeformableMirror:
             self.validAct = validAct.astype(int)
             self.nValidAct = self.nAct
 
-        #  initial coordinates
-        xIF0 = self.xIF0[self.validAct]
-        yIF0 = self.yIF0[self.validAct]
-        self.nIF = len(xIF0)
-        self.initial_coordinates = np.zeros([self.nIF, 2])
-        self.initial_coordinates[:, 0] = xIF0
-        self.initial_coordinates[:, 1] = yIF0
-        # anamorphosis
-        xIF3, yIF3 = self.anamorphosis_coordinates(xIF0,
-                                                   yIF0,
-                                                   self.misReg.anamorphosisAngle * np.pi/180,
-                                                   self.misReg.tangentialScaling,
-                                                   self.misReg.radialScaling)
-        # rotation
-        xIF4, yIF4 = self.rotate_coordinates(xIF3,
-                                             yIF3,
-                                             self.misReg.rotationAngle*np.pi/180)
-        # shifts
-        xIF = xIF4-self.misReg.shiftX
-        yIF = yIF4-self.misReg.shiftY
-        self.xIF = xIF
-        self.yIF = yIF
-        # corresponding coordinates on the pixel grid
-        u0x = self.resolution/2+xIF*self.resolution/self.D
-        u0y = self.resolution/2+yIF*self.resolution/self.D
-        # store the coordinates
-        self.coordinates = np.zeros([self.nIF, 2])
-        self.coordinates[:, 0] = xIF
-        self.coordinates[:, 1] = yIF
+        #  initial coordinates (no mis-registration applied)
+        self.initial_coordinates = np.stack([self.xIF0[self.validAct], self.yIF0[self.validAct]], axis=1).astype(float)
+        self.nIF = self.initial_coordinates.shape[0]
+        # mis-registered coordinates (xIF, yIF, coordinates) and their position on the pixel grid
+        u0x, u0y = self._set_mis_registered_coordinates()
+        # user-defined modes (without InfluenceFunctions), used by apply_mis_registration
+        self._reference_modes = None
+        self._reference_mis_registration = None
         if self.isM4 is False:
             print_('Generating a Deformable Mirror: ', print_dm_properties)
             if modes is None:
                 print_('Computing the 2D zonal modes...', print_dm_properties)
-                def joblib_construction():
-                    Q = Parallel(n_jobs=8, prefer='threads')(delayed(self.modesComputation)(i, j) for i, j in zip(u0x, u0y))
-                    return Q
-                self.modes = np.squeeze(np.moveaxis(np.asarray(joblib_construction()), 0, -1))
+                self._compute_gaussian_modes(u0x, u0y)
                 if np.isscalar(self.actuator_selection):
                     print_('Filtering valid actuators based on pupil influence functions std...', print_dm_properties)
                     # Calculate std only within the illuminated pupil
@@ -404,14 +373,17 @@ class DeformableMirror:
                     self.nValidAct = len(self.validAct)
                     self.nIF = self.nValidAct
 
-                    # Update coordinates
+                    # Update coordinates (the initial ones too, so that the selection is kept
+                    # when a mis-registration is applied)
+                    self.initial_coordinates = self.initial_coordinates[self.validAct, :]
                     self.xIF = self.xIF[self.validAct]
                     self.yIF = self.yIF[self.validAct]
                     self.coordinates = self.coordinates[self.validAct, :]
 
             else:
                 print_('Loading the 2D zonal modes...', print_dm_properties)
-                try:
+                if hasattr(modes, 'influence_function_2D'):
+                    # InfluenceFunctions object: can be recomputed for any mis-registration
                     self.modes = modes.influence_function_2D
                     self.name_system = modes.name_system
                     self.flip_lr = modes.flip_lr
@@ -419,14 +391,18 @@ class DeformableMirror:
                     self.loc = modes.loc
                     self.sign = modes.sign
                     self.specific_parameters = modes.specific_parameters
-                except:
+                else:
                     self.modes = modes * self.sign
+                    # the input modes are taken as the DM at self.misReg: other mis-registrations
+                    # are obtained by interpolation (see apply_mis_registration)
+                    self._reference_modes = self.modes
+                    self._reference_mis_registration = MisRegistration(self.misReg)
                 self.nValidAct = self.modes.shape[1]
                 print_('Done!', print_dm_properties)
 
         else:
             print_('Using M4 Influence Functions', print_dm_properties)
-        self.gpu_available = array_backend()[1]
+        self.gpu_available = global_gpu_flag
         self.gpu_resident = gpu_resident()
         self._gpu_modes = None
         self._gpu_modes_source = None
@@ -450,7 +426,7 @@ class DeformableMirror:
             src.optical_path.append([self.tag, self])
 
             if np.ndim(src.OPD_no_pupil) > 2:
-                src.OPD_no_pupil = get_array_module(src.OPD_no_pupil).zeros(
+                src.OPD_no_pupil = _backend_of(src.OPD_no_pupil).zeros(
                     [self.resolution, self.resolution])
 
             if self.altitude is not None:
@@ -459,58 +435,163 @@ class DeformableMirror:
                 dm_OPD = self.OPD
 
             if np.ndim(self.OPD) == 2:
-                src.OPD_no_pupil += get_array_module(src.OPD_no_pupil).asarray(dm_OPD)
+                # the DM shape is added on the backend of the source (it is moved there if needed)
+                src.OPD_no_pupil += _to_backend(dm_OPD, _backend_of(src.OPD_no_pupil))
             else:
-                # case with multiple OPD (resets the current OPD by default)
+                # case with multiple OPD (resets the current OPD by default); the cube stays where the DM computed it
                 src.OPD_no_pupil = dm_OPD
 
+            # the pupil mask is moved to the backend of the OPD (NumPy and CuPy arrays cannot be mixed)
+            mask = _to_backend(src.mask, _backend_of(src.OPD_no_pupil))
             if len(src.OPD_no_pupil.shape) > 2:
-                src.OPD = src.OPD_no_pupil.copy()
-                for i in range(src.OPD_no_pupil.shape[-1]):
-                    src.OPD[:, :, i] = src.OPD[:, :, i] * src.mask
+                src.OPD = src.OPD_no_pupil * (mask[:, :, None] if np.ndim(mask) == 2 else mask)
             else:
-                src.OPD = src.OPD_no_pupil * get_array_module(src.OPD_no_pupil).asarray(src.mask)
-    def apply_mis_registration(self,misRegistration_tmp):
-        if hasattr(self,'name_system'):   
+                src.OPD = src.OPD_no_pupil * mask
+    # ------------------------------------------------------------------------------------------
+    # Mis-registrations
+    # ------------------------------------------------------------------------------------------
+
+    def _set_mis_registered_coordinates(self):
+        """Apply self.misReg to self.initial_coordinates.
+
+        Sets xIF, yIF and coordinates [m] and returns the positions (u0x, u0y) on the grid of modesComputation.
+        """
+        x0, y0 = self.initial_coordinates[:, 0], self.initial_coordinates[:, 1]
+        # anamorphosis
+        x, y = self.anamorphosis_coordinates(x0, y0,
+                                             self.misReg.anamorphosisAngle * np.pi/180,
+                                             self.misReg.radialScaling,
+                                             self.misReg.tangentialScaling)
+        # rotation
+        x, y = self.rotate_coordinates(x, y, self.misReg.rotationAngle * np.pi/180)
+        # shifts
+        self.xIF = x - self.misReg.shiftX
+        self.yIF = y - self.misReg.shiftY
+        self.coordinates = np.stack([self.xIF, self.yIF], axis=1)
+        # corresponding coordinates on the pixel grid
+        u0x = self.resolution/2 + self.xIF*self.resolution/self.D
+        u0y = self.resolution/2 + self.yIF*self.resolution/self.D
+        return u0x, u0y
+
+    def _compute_gaussian_modes(self, u0x, u0y):
+        """Gaussian influence functions centered on (u0x, u0y), using self.misReg for their shape."""
+        Q = Parallel(n_jobs=8, prefer='threads')(delayed(self.modesComputation)(i, j) for i, j in zip(u0x, u0y))
+        self.modes = np.squeeze(np.moveaxis(np.asarray(Q), 0, -1))
+
+    def _pixel_transform(self, mis_registration):
+        """Mapping (column, row) of the initial geometry -> mis-registered geometry, on the grid of the modes.
+
+        Built with anamorphosis_coordinates / rotate_coordinates so that it follows exactly the
+        conventions used for the actuator coordinates.
+        """
+        linear = np.zeros([2, 2])
+        for i_axis, (x, y) in enumerate([(1., 0.), (0., 1.)]):
+            x, y = self.anamorphosis_coordinates(x, y,
+                                                 mis_registration.anamorphosisAngle * np.pi/180,
+                                                 mis_registration.radialScaling,
+                                                 mis_registration.tangentialScaling)
+            linear[:, i_axis] = self.rotate_coordinates(x, y, mis_registration.rotationAngle * np.pi/180)
+        # grid of modesComputation: pixel k <-> x = (k - center) * D / (resolution - 1)
+        meter_per_pixel = self.D / (self.resolution - 1)
+        center = np.full(2, (self.resolution - 1) / 2)
+        shift = -np.array([mis_registration.shiftX, mis_registration.shiftY]) / meter_per_pixel
+        matrix = np.eye(3)
+        matrix[:2, :2] = linear
+        matrix[:2, 2] = center - linear @ center + shift
+        return sk.AffineTransform(matrix=matrix)
+
+    def _interpolate_modes(self, modes, mis_registration_modes, mis_registration):
+        """Interpolate modes [n_pix**2, n] given at mis_registration_modes to mis_registration."""
+        # output pixel -> initial geometry -> geometry of the input modes
+        inverse_map = self._pixel_transform(mis_registration).inverse + self._pixel_transform(mis_registration_modes)
+        cube = np.asarray(modes).T.reshape(-1, self.resolution, self.resolution)
+
+        def warp(image):
+            return sk.warp(image, inverse_map, order=3, mode='constant', cval=0, preserve_range=True).reshape(-1)
+        warped = Parallel(n_jobs=8, prefer='threads')(delayed(warp)(image) for image in cube)
+        return np.stack(warped, axis=1).astype(np.asarray(modes).dtype, copy=False)
+
+    def apply_mis_registration(self, mis_registration):
+        """Return a copy of the DM with mis_registration applied.
+
+        The mis-registration is absolute: it replaces self.misReg and is applied to the initial
+        (not mis-registered) geometry. Everything else is inherited from self (pitch, mechanical
+        coupling, valid actuators, floating precision, altitude, flips, sign, ...), so that
+        dm.apply_mis_registration(dm.misReg) reproduces dm. The influence functions are:
+            - Gaussian (default): recomputed at the new actuator positions
+            - InfluenceFunctions object: recomputed by InfluenceFunctions for the mis-registration
+            - user-defined modes: interpolated, the input modes being the DM at its misReg at creation
+            - M4: recomputed with the M4 model
+
+        Parameters
+        ----------
+        mis_registration : MisRegistration
+
+        Returns
+        -------
+        DeformableMirror
+        """
+        mis_registration = MisRegistration(mis_registration)
+
+        if self.isM4:
+            dm = DeformableMirror(telescope=self.telescope,
+                                  nSubap=self.nAct,
+                                  mechCoupling=self.mechCoupling,
+                                  pitch=self.pitch,
+                                  misReg=mis_registration,
+                                  M4_param=self.M4_param,
+                                  floating_precision=self.floating_precision,
+                                  altitude=self.altitude,
+                                  print_dm_properties=False)
+            if dm.nValidAct != self.nValidAct:
+                warning('The M4 valid actuator selection changed with the mis-registration ('
+                        + str(self.nValidAct) + ' -> ' + str(dm.nValidAct) + ' actuators).')
+            return dm
+
+        dm = copy.copy(self)
+        dm.misReg = mis_registration
+        dm.print_dm_properties = False
+        if getattr(self, 'altitude_layer', None) is not None:
+            dm.altitude_layer = copy.deepcopy(self.altitude_layer)
+
+        if getattr(self, 'name_system', None) is not None:
             from OOPAO.InfluenceFunctions import InfluenceFunctions
             IF = InfluenceFunctions(name_system=self.name_system,
                                     diameter=self.D,
                                     resolution=self.resolution,
-                                    specific_parameters = self.specific_parameters,
-                                    loc = self.loc,
-                                    mis_registration = misRegistration_tmp,
+                                    specific_parameters=self.specific_parameters,
+                                    loc=self.loc,
+                                    mis_registration=mis_registration,
                                     flip_lr=self.flip_lr,
                                     flip_ud=self.flip_ud,
-                                    sign = self.sign)
-        
-            dm_tmp=DeformableMirror(telescope    = self.telescope,
-                                    nSubap       = self.nAct,
-                                    mechCoupling = self.mechCoupling,
-                                    misReg       = misRegistration_tmp,
-                                    coordinates  = IF.coordinates,
-                                    pitch        = self.pitch,
-                                    modes        = IF,
-                                    print_dm_properties=False)
+                                    sign=self.sign)
+            dm.modes = IF.influence_function_2D
+            dm.coordinates = np.asarray(IF.coordinates, dtype=float)
+            dm.xIF, dm.yIF = dm.coordinates[:, 0], dm.coordinates[:, 1]
+        elif self._reference_modes is not None:
+            dm._set_mis_registered_coordinates()
+            dm.modes = self._interpolate_modes(self._reference_modes, self._reference_mis_registration, mis_registration)
         else:
-            dm_tmp = DeformableMirror(telescope=self.telescope,
-                                      nSubap=self.nAct-1,
-                                      mechCoupling=self.mechCoupling,
-                                      coordinates=self.initial_coordinates,
-                                      pitch=self.pitch,
-                                      misReg=misRegistration_tmp,
-                                      flip=self.flip_,
-                                      flip_lr=self.flip_lr,
-                                      sign=self.sign,
-                                      print_dm_properties=False)
-        return dm_tmp
-    
+            dm._compute_gaussian_modes(*dm._set_mis_registered_coordinates())
+
+        n_modes = dm.modes.shape[1] if np.ndim(dm.modes) == 2 else 1
+        if n_modes != self.nValidAct:
+            raise OopaoError('apply_mis_registration changed the number of actuators ('
+                             + str(self.nValidAct) + ' -> ' + str(n_modes) + ').')
+
+        # own copy of the commands / OPD (the attributes of self are shared after copy.copy)
+        dm.reset_gpu_modes()
+        dm.coefs = np.zeros(dm.nValidAct, dtype=np.float32 if dm.floating_precision == 32 else dm.precision())
+        return dm
 
     def set_pupil_footprint(self):
         if len(self.src_list) == 1:
-            [x_z, y_z] = pol2cart(self.altitude_layer.altitude * xp.tan(self.src_list[0].coordinates[0] / self.rad2arcsec) * self.altitude_layer.resolution / self.altitude_layer.D, xp.deg2rad(self.src_list[0].coordinates[1]))
+            [x_z, y_z] = pol2cart(self.altitude_layer.altitude * np.tan(self.src_list[0].coordinates[0] / self.rad2arcsec) * self.altitude_layer.resolution / self.altitude_layer.D, np.deg2rad(self.src_list[0].coordinates[1]))
             center_x = int(y_z) + self.altitude_layer.resolution // 2
             center_y = int(x_z) + self.altitude_layer.resolution // 2
-            self.altitude_layer.pupil_footprint = xp.zeros([self.altitude_layer.resolution, self.altitude_layer.resolution], dtype=self.precision())
+            self.altitude_layer.center_x = center_x
+            self.altitude_layer.center_y = center_y
+            self.altitude_layer.pupil_footprint = np.zeros([self.altitude_layer.resolution, self.altitude_layer.resolution], dtype=self.precision())
             self.altitude_layer.pupil_footprint[center_x - self.telescope.resolution // 2:center_x + self.telescope.resolution // 2, center_y - self.telescope.resolution // 2:center_y + self.telescope.resolution // 2] = 1
         else:
             self.altitude_layer.pupil_footprint = []
@@ -520,14 +601,14 @@ class DeformableMirror:
             self.altitude_layer.center_y = []
 
             for src in self.src_list:
-                [x_z, y_z] = pol2cart(self.altitude_layer.altitude * xp.tan(src.coordinates[0] / self.rad2arcsec)
-                                      * self.altitude_layer.resolution / self.altitude_layer.D, xp.deg2rad(src.coordinates[1]))
+                [x_z, y_z] = pol2cart(self.altitude_layer.altitude * np.tan(src.coordinates[0] / self.rad2arcsec)
+                                      * self.altitude_layer.resolution / self.altitude_layer.D, np.deg2rad(src.coordinates[1]))
                 self.altitude_layer.extra_sx.append(int(x_z) - x_z)
                 self.altitude_layer.extra_sy.append(int(y_z) - y_z)
                 center_x = int(y_z) + self.altitude_layer.resolution // 2
                 center_y = int(x_z) + self.altitude_layer.resolution // 2
 
-                pupil_footprint = xp.zeros([self.altitude_layer.resolution, self.altitude_layer.resolution], dtype=self.precision())
+                pupil_footprint = np.zeros([self.altitude_layer.resolution, self.altitude_layer.resolution], dtype=self.precision())
                 pupil_footprint[center_x - self.telescope.resolution // 2:center_x + self.telescope.resolution // 2, center_y - self.telescope.resolution // 2:center_y + self.telescope.resolution // 2] = 1
                 self.altitude_layer.pupil_footprint.append(pupil_footprint)
                 self.altitude_layer.center_x.append(center_x)
@@ -541,18 +622,20 @@ class DeformableMirror:
         # gather properties of the atmosphere
         layer.altitude = altitude
         # Diameter and resolution of the layer including the Field Of View and the number of extra pixels
-        layer.D_fov = telescope.D+2*xp.tan(telescope.fov_rad/2)*layer.altitude
-        layer.resolution_fov = int(xp.ceil((telescope.resolution/telescope.D)*layer.D_fov))
+        layer.D_fov = telescope.D+2*np.tan(telescope.fov_rad/2)*layer.altitude
+        layer.resolution_fov = int(np.ceil((telescope.resolution/telescope.D)*layer.D_fov))
         # 4 pixels are added as a margin for the edges
         layer.resolution = layer.resolution_fov + 4
         layer.D = layer.resolution * telescope.D / telescope.resolution
         layer.center = layer.resolution//2
 
         if telescope.src.tag == 'source':
-            [x_z, y_z] = pol2cart(layer.altitude*xp.tan(telescope.src.coordinates[0]/self.rad2arcsec) * layer.resolution / layer.D, xp.deg2rad(telescope.src.coordinates[1]))
+            [x_z, y_z] = pol2cart(layer.altitude*np.tan(telescope.src.coordinates[0]/self.rad2arcsec) * layer.resolution / layer.D, np.deg2rad(telescope.src.coordinates[1]))
             center_x = int(y_z)+layer.resolution//2
             center_y = int(x_z)+layer.resolution//2
-            layer.pupil_footprint = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
+            layer.center_x = center_x
+            layer.center_y = center_y
+            layer.pupil_footprint = np.zeros([layer.resolution, layer.resolution], dtype=self.precision())
             layer.pupil_footprint[center_x-telescope.resolution//2:center_x+telescope.resolution // 2, center_y-telescope.resolution//2:center_y+telescope.resolution//2] = 1
         else:
 
@@ -562,13 +645,13 @@ class DeformableMirror:
             layer.center_x = []
             layer.center_y = []
             for i in range(telescope.src.n_source):
-                [x_z, y_z] = pol2cart(layer.altitude*xp.tan(telescope.src.coordinates[i][0]/self.rad2arcsec) * layer.resolution / layer.D, xp.deg2rad(telescope.src.coordinates[i][1]))
+                [x_z, y_z] = pol2cart(layer.altitude*np.tan(telescope.src.coordinates[i][0]/self.rad2arcsec) * layer.resolution / layer.D, np.deg2rad(telescope.src.coordinates[i][1]))
                 layer.extra_sx.append(int(x_z)-x_z)
                 layer.extra_sy.append(int(y_z)-y_z)
                 center_x = int(y_z)+layer.resolution//2
                 center_y = int(x_z)+layer.resolution//2
 
-                pupil_footprint = xp.zeros([layer.resolution, layer.resolution], dtype=self.precision())
+                pupil_footprint = np.zeros([layer.resolution, layer.resolution], dtype=self.precision())
                 pupil_footprint[center_x-telescope.resolution//2:center_x+telescope.resolution // 2, center_y-telescope.resolution//2:center_y+telescope.resolution//2] = 1
                 layer.pupil_footprint.append(pupil_footprint)
                 layer.center_x.append(center_x)
@@ -576,18 +659,26 @@ class DeformableMirror:
 
         return layer
 
+    def _footprint_slices(self, src):
+        """Rows and columns of the altitude layer seen by `src` (the pupil footprint is a square block)."""
+        layer = self.altitude_layer
+        n = self.telescope.resolution
+        if isinstance(layer.center_x, list):
+            # one footprint per source of the asterism, indexed by the source's own position in it
+            center_x, center_y = layer.center_x[src.ast_idx], layer.center_y[src.ast_idx]
+        else:
+            center_x, center_y = layer.center_x, layer.center_y
+        return slice(center_x - n//2, center_x + n//2), slice(center_y - n//2, center_y + n//2)
+
     def get_OPD_altitude(self, src):
         self.set_pupil_footprint()
-        if np.ndim(self.OPD) == 2:
-            if src.inAsterism:
-                OPD = np.reshape(self.OPD[np.where(self.altitude_layer.pupil_footprint[self.src.ast_idx] == 1)], [self.telescope.resolution, self.telescope.resolution])
-            else:
-                OPD = np.reshape(self.OPD[np.where(self.altitude_layer.pupil_footprint == 1)], [self.telescope.resolution, self.telescope.resolution])
-        else:
-            OPD = np.reshape(self.OPD[self.altitude_layer.center_x[self.src.ast_idx]-self.telescope.resolution//2:self.altitude_layer.center_x[self.src.ast_idx]+self.telescope.resolution//2,
-                                      self.altitude_layer.center_y[self.src.ast_idx] - self.telescope.resolution//2:self.altitude_layer.center_y[self.src.ast_idx]+self.telescope.resolution//2, :],
-                                     [self.telescope.resolution, self.telescope.resolution, self.OPD.shape[2]])
+        # crop the part of the layer seen by the source: plain slicing, so the OPD stays on its backend (NumPy or CuPy)
+        rows, cols = self._footprint_slices(src)
+        OPD = self.OPD[rows, cols]
         if ~np.isinf(src.altitude):
+            # cone effect: the interpolation runs on the CPU, the result is moved back to the backend of the DM OPD
+            backend = _backend_of(OPD)
+            OPD = _to_backend(OPD, np)
             if np.ndim(self.OPD) == 2:
                 sub_im = np.atleast_3d(OPD)
             else:
@@ -602,6 +693,7 @@ class DeformableMirror:
             pixel_size_out = pixel_size_in*magnification_cone_effect
             resolution_out = self.telescope.resolution
             OPD = np.asarray(np.squeeze(interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out)).T)
+            OPD = _to_backend(OPD, backend)
 
         return OPD
 
@@ -663,29 +755,31 @@ class DeformableMirror:
         ax = plt.subplot(gs[0, 0])
         if input_opd is None:
             input_opd = np.reshape(np.sum(self.modes**5, axis=1), [self.resolution, self.resolution])
+        # matplotlib needs NumPy arrays (e.g. when a GPU-resident dm.OPD is given)
+        input_opd = _to_backend(input_opd, np)
         ax.imshow(input_opd, extent=[-self.D/2, self.D/2, -self.D/2, self.D/2])
         center = self.telescope.D/2
-        [x_tel, y_tel] = pol2cart(self.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+        [x_tel, y_tel] = pol2cart(self.D/2, np.linspace(0, 2*np.pi, 100, endpoint=True))
         cm = plt.get_cmap('gist_rainbow')
         col = []
         for i_source in range(len(list_src)):
             col.append(cm(1.*i_source/len(list_src)))
-            [x_c, y_c] = pol2cart(self.telescope.initial_D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+            [x_c, y_c] = pol2cart(self.telescope.initial_D/2, np.linspace(0, 2*np.pi, 100, endpoint=True))
             if self.altitude is None:
                 h = list_src[i_source].altitude
             else:
                 h = list_src[i_source].altitude-self.altitude
-            if xp.isinf(h):
+            if np.isinf(h):
                 r = self.telescope.initial_D/2
             else:
                 r = (h/list_src[i_source].altitude)*self.telescope.initial_D/2
-            [x_cone, y_cone] = pol2cart(r, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+            [x_cone, y_cone] = pol2cart(r, np.linspace(0, 2*np.pi, 100, endpoint=True))
             if self.altitude is None:
                 [x_z, y_z] = [0, 0]
             else:
-                [x_z, y_z] = pol2cart(self.altitude*xp.tan((list_src[i_source].coordinates[0])/self.rad2arcsec), -xp.deg2rad(list_src[i_source].coordinates[1]))
+                [x_z, y_z] = pol2cart(self.altitude*np.tan((list_src[i_source].coordinates[0])/self.rad2arcsec), -np.deg2rad(list_src[i_source].coordinates[1]))
             center = 0
-            [x_c, y_c] = pol2cart(self.D/2, xp.linspace(0, 2*xp.pi, 100, endpoint=True))
+            [x_c, y_c] = pol2cart(self.D/2, np.linspace(0, 2*np.pi, 100, endpoint=True))
             nm = (list_src[i_source].type) + '@' + str(list_src[i_source].coordinates[0])+'"'
             ax.plot(x_cone+x_z+center, y_cone+y_z+center, '-', color=col[i_source], label=nm)
             ax.fill(x_cone+x_z+center, y_cone+y_z+center, y_z+center, alpha=0.1, color=col[i_source])
@@ -698,17 +792,29 @@ class DeformableMirror:
         return
 
     def _modes_times_coefs(self):
+        """DM shape (flattened) = modes @ coefs.
+
+        On the CPU the product uses self.modes directly. On the GPU a copy of the modes, at the working
+        precision, is uploaded once and reused; it is uploaded again whenever self.modes is replaced by a new
+        array (call reset_gpu_modes() after editing self.modes in place). The coefficients can be NumPy or
+        CuPy arrays. The result stays on the GPU with GPU residency and is copied back to the CPU otherwise.
+        """
         if not self.gpu_available:
             try:
                 return np.matmul(self.modes, self._coefs)
             except (TypeError, ValueError):
                 return self.modes @ self._coefs
-        import cupy as cp
         if self._gpu_modes_source is not self.modes:
-            self._gpu_modes = cp.asarray(self.modes)
+            self._gpu_modes = None  # free the previous copy before uploading the new one
+            self._gpu_modes = xp.asarray(self.modes, dtype=self.precision)
             self._gpu_modes_source = self.modes
-        opd = self._gpu_modes @ cp.asarray(self._coefs)
-        return opd if self.gpu_resident else cp.asnumpy(opd)
+        opd = self._gpu_modes @ xp.asarray(self._coefs, dtype=self.precision)
+        return opd if self.gpu_resident else xp.asnumpy(opd)
+
+    def reset_gpu_modes(self):
+        """Drop the GPU copy of the modes: it is uploaded again at the next update of dm.coefs."""
+        self._gpu_modes = None
+        self._gpu_modes_source = None
 
     @property
     def coefs(self):
@@ -717,14 +823,15 @@ class DeformableMirror:
     @coefs.setter
     def coefs(self, val):
         if self.floating_precision == 32:
-            self._coefs = np.float32(val)
+            # astype keeps CuPy arrays on the GPU (np.float32 would force an implicit, forbidden, conversion)
+            self._coefs = val.astype(np.float32) if hasattr(val, 'astype') else np.float32(val)
         else:
             self._coefs = val
         if np.isscalar(val):
             if val == 0:
                 self._coefs = np.zeros(self.nValidAct, dtype=self.precision())
                 opd = self._modes_times_coefs()
-                self.OPD = get_array_module(opd).asarray(opd, dtype=self.precision).reshape(
+                self.OPD = _backend_of(opd).asarray(opd, dtype=self.precision).reshape(
                     self.resolution, self.resolution)
             else:
                 print('Error: wrong value for the coefficients')
@@ -735,7 +842,7 @@ class DeformableMirror:
                 else:
                     shape = [self.resolution, self.resolution, val.shape[1]]
                 opd = self._modes_times_coefs()
-                self.OPD = get_array_module(opd).asarray(opd, dtype=self.precision).reshape(shape)
+                self.OPD = _backend_of(opd).asarray(opd, dtype=self.precision).reshape(shape)
             else:
                 print('Error: wrong value for the coefficients')
                 sys.exit(0)

@@ -8,6 +8,7 @@ Created on Fri Nov  8 09:31:46 2024
 import numpy as np
 from numpy.fft import fftn, fftshift, ifftn, fft2, ifft2
 from .tools.tools import OopaoError
+from .runtime import to_numpy
 
 
 class GainSensingCamera:
@@ -17,6 +18,8 @@ class GainSensingCamera:
         Class gain sensing camera. Allows to compute optical gains using focal
         plane images of the modulated PSF combined with a convolutional based
         analytical model. This class is made to work with the Pyramid class.
+        The computation runs on the CPU with NumPy: the Pyramid mask and the
+        focal-plane frames are brought to the host if they live on the GPU.
         Reference: Chambouleyron et al. 2021, A&A
 
         Parameters
@@ -67,8 +70,9 @@ class GainSensingCamera:
         plane camera
 
         """
-        self.mask = mask
-        self.basis = basis
+        # wfs.mask is a CuPy array whenever a GPU is available: work on host copies
+        self.mask = to_numpy(mask)
+        self.basis = to_numpy(basis)
         self.n_modes = self.basis.shape[-1]
         self.n_jobs = n_jobs
         self.calibration_ready = False
@@ -84,6 +88,7 @@ class GainSensingCamera:
         frame : np.array
             frame from the focal plane camera.
         """
+        frame = to_numpy(frame)
         frame = frame/frame.sum()
         print('\nGain Scheduling camera calibration:')
         self.basis_product = split_basis_product(
@@ -114,6 +119,7 @@ class GainSensingCamera:
         if self.calibration_ready is False:
             raise OopaoError('Optical gains must be initialized first!')
         else:
+            frame = to_numpy(frame)
             frame = frame/frame.sum()
             self.IR_sky = impulse_response(self.mask, frame)
             self.og = optical_gains(
@@ -127,7 +133,7 @@ class GainSensingCamera:
         else:
             prop = f'{"Calibrated":<25}|{str(self.calibration_ready):^9}\n'
             prop += f'{"Number of modes":<25}|{self.n_modes:^9}\n'
-            n_char = max(len(max(self.detector_properties.values())),
+            n_char = max(len(max(self.detector_properties.values(), key=len)),
                          len(max(prop.split('\n'), key=len)))
             for i in range(len(self.detector_properties.values())):
                 prop += list(self.detector_properties.values())[i] + '\n'

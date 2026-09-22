@@ -4,7 +4,6 @@ Created on Fri Aug 14 10:59:02 2020
 
 @author: cheritie
 """
-import sys
 import json
 import time
 import jsonpickle
@@ -15,10 +14,18 @@ import matplotlib.gridspec as gridspec
 from .phaseStats import ft_phase_screen, ft_sh_phase_screen, makeCovarianceMatrix
 from .tools.displayTools import makeSquareAxes
 from .tools.interpolateGeometricalTransformation import interpolate_cube, interpolate_image
-from .tools.tools import createFolder, emptyClass, globalTransformation, pol2cart, translationImageMatrix, OopaoError, warning, get_array_module
+from .tools.tools import createFolder, emptyClass, globalTransformation, pol2cart, translationImageMatrix, OopaoError, warning
 from .runtime import array_backend, gpu_resident, precision_bits
 from .tools.gpuTransforms import translate_cubic
 xp, global_gpu_flag = array_backend()
+from .runtime import backend_of as _backend_of, to_backend as _to_backend
+
+
+def _flat_view(array):
+    """Writable 1D view of a C-contiguous array (a[idx] = v on it writes into `array`)."""
+    if not array.flags.c_contiguous:
+        raise OopaoError('Internal error: expected a C-contiguous phase-screen support.')
+    return array.reshape(-1)
 
 
 class Atmosphere:
@@ -153,11 +160,6 @@ class Atmosphere:
         """
         self.tag = 'atmosphere'      # Tag of the object
         # detect the simulation precision requested
-        OOPAO_path = [s for s in sys.path if "OOPAO" in s]
-        l_ = []
-        for i in OOPAO_path:
-            l_.append(len(i))
-        path = OOPAO_path[np.argmin(l_)]
         precision = precision_bits()
         if precision == 64:
             self.precision = np.float64
@@ -167,8 +169,6 @@ class Atmosphere:
             self.precision_complex = np.complex64
         else:
             self.precision_complex = np.complex128
-        # GPU mode keeps the frozen-flow support on the device. The cubic
-        # translation reproduces skimage's interpolation and clipping rules.
         self.gpu_available = global_gpu_flag
         self.gpu_resident = gpu_resident()
         if self.gpu_available:
@@ -178,6 +178,9 @@ class Atmosphere:
             self.convert_for_gpu = lambda a: a
             self.convert_for_numpy = lambda a: a
         self.hasNotBeenInitialized = True
+        # caches: pupil masks on the working backend (CPU/GPU), angular-spectrum kernels
+        self._mask_cache = {}
+        self._asm_cache = {}
         # Elevation initialization
         self.angular_spectrum_propagation = angular_spectrum_propagation
         self.geometric_phase_backup = geometric_phase_backup
@@ -263,18 +266,8 @@ class Atmosphere:
                 tmp_layer.randomState = RandomState(42+i_layer*1000)
                 # reset the boiling noise seed counter for reproducibility
                 tmp_layer.boiling_seed = 100000 + i_layer * 100000
-                # reset the covariance matrices value
-                # tmp_layer.OPD here is freshly generated numpy (from
-                # initial_OPD); tmp_layer.A/B/masks/mapShift may be
-                # GPU-resident (see buildLayer) -- upload the small vectors
-                # needed for the matmul rather than downloading A/B
-                xp_ = get_array_module(tmp_layer.A)
-                OPD_gpu = xp_.asarray(tmp_layer.OPD)
-                Z = OPD_gpu[tmp_layer.innerMask[1:-1, 1:-1] != 0]
-                rand_vec = xp_.asarray(tmp_layer.randomState.normal(size=tmp_layer.B.shape[1]))
-                X = tmp_layer.A@Z + tmp_layer.B@rand_vec
-                tmp_layer.mapShift[tmp_layer.outerMask != 0] = X
-                tmp_layer.mapShift[tmp_layer.outerMask == 0] = xp_.reshape(OPD_gpu, tmp_layer.resolution*tmp_layer.resolution)
+                # reset the phase-screen support from the initial OPD
+                self._reset_map_shift(tmp_layer)
                 # set back the flag to its default value
                 tmp_layer.notDoneOnce = True
                 # attribute to each layer the modified layer
@@ -315,18 +308,8 @@ class Atmosphere:
         layer.center = layer.resolution//2
         # diameter of the layer in [m]
         layer.D = layer.resolution * self.telescope.D / self.telescope.resolution
-        layer.pupil_footprint = []
-        layer.extra_sx = []
-        layer.extra_sy = []
-        for i_src in range(len(self.src_list)):
-            [x_z, y_z] = pol2cart(layer.altitude*np.tan(self.src_list[i_src].coordinates[0]/self.rad2arcsec) * layer.resolution / layer.D, np.deg2rad(self.src_list[i_src].coordinates[1]))
-            layer.extra_sx.append(int(x_z)-x_z)
-            layer.extra_sy.append(int(y_z)-y_z)
-            center_x = int(y_z)+layer.resolution//2
-            center_y = int(x_z)+layer.resolution//2
-            pupil_footprint_support = np.zeros([layer.resolution, layer.resolution], dtype=self.precision())
-            pupil_footprint_support[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution//2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
-            layer.pupil_footprint.append(pupil_footprint_support)
+        # pupil footprint of each source in the layer (no chromatic shift at creation)
+        self._compute_footprints(layer, i_layer, [0] * len(self.src_list))
         # layer pixel size in [m]
         layer.pixel_size = layer.D/layer.resolution
         # number of extra pixel for the phase screens computation
@@ -383,13 +366,8 @@ class Atmosphere:
             layer.mapShift[layer.outerMask == 0] = np.reshape(layer.OPD, layer.resolution*layer.resolution)
             layer.notDoneOnce = True
             layer.A = layer.A.astype(self.precision())
-            layer.B = layer.A.astype(self.precision())
+            layer.B = layer.B.astype(self.precision())
             print('Done!')
-            # A/B/outerMask/innerMask/mapShift are used only inside add_row /
-            # updateLayer (no other class reads them), so it's safe to keep
-            # them GPU-resident for the whole life of the layer rather than
-            # re-uploading every frame; the covariance-matrix math above that
-            # builds them runs once at setup and stays on numpy, unchanged
             if self.gpu_available:
                 layer.A = self.convert_for_gpu(layer.A)
                 layer.B = self.convert_for_gpu(layer.B)
@@ -416,7 +394,7 @@ class Atmosphere:
             return False
         dt = self.telescope.samplingTime
         alpha = float(np.exp(-dt / t_b))
-        # alpha == 1 means perfect correlation (frozen). Skip the expensive screen
+        # alpha == 1 means perfect correlation (frozen). Skip the screen
         # generation when the per-step decorrelation is negligible (t_boiling >> dt).
         if alpha >= 1.0 - 1e-6:
             return False
@@ -425,59 +403,103 @@ class Atmosphere:
         layer.boiling_seed += 1
         screen_resolution = layer.mapShift.shape[0]
         pixel_size = layer.D / layer.resolution
+        backend = _backend_of(layer.mapShift)
         if self.mode == 2:
-            phi_boiling = ft_sh_phase_screen(self, screen_resolution, pixel_size, seed=layer.boiling_seed)
+            phi_boiling = ft_sh_phase_screen(self, screen_resolution, pixel_size, seed=layer.boiling_seed, backend=backend)
         else:
-            phi_boiling = ft_phase_screen(self, screen_resolution, pixel_size, seed=layer.boiling_seed)
-        # ft_sh_phase_screen/ft_phase_screen (phaseStats.py) are numpy-only;
-        # bridge here since layer.mapShift may be GPU-resident (see buildLayer)
-        phi_boiling = get_array_module(layer.mapShift).asarray(phi_boiling)
+            phi_boiling = ft_phase_screen(self, screen_resolution, pixel_size, seed=layer.boiling_seed, backend=backend)
         layer.mapShift = (alpha * layer.mapShift + beta * phi_boiling).astype(self.precision())
         return True
+
+    def _support_indices(self, layer):
+        """Flat indices of the inner ring, outer ring and centre of the phase-screen support.
+
+        Boolean-mask indexing forces a GPU synchronization at every call (the size of the result must be
+        read back); these integer indices are computed once per layer, on the backend of the masks.
+        """
+        cache = getattr(layer, '_support_idx', None)
+        if cache is None or cache['outer'] is not layer.outerMask or cache['inner'] is not layer.innerMask:
+            backend = _backend_of(layer.outerMask)
+            inner = _to_backend(layer.innerMask, np)
+            outer = _to_backend(layer.outerMask, np)
+            cache = {'outer': layer.outerMask, 'inner': layer.innerMask,
+                     'inner_idx': backend.asarray(np.flatnonzero(inner[1:-1, 1:-1] != 0)),
+                     'outer_idx': backend.asarray(np.flatnonzero(outer != 0)),
+                     'center_idx': backend.asarray(np.flatnonzero(outer == 0))}
+            layer._support_idx = cache
+        return cache
+
+    def _reset_map_shift(self, layer, cast_random=False):
+        """Rebuild the phase-screen support from layer.OPD: the OPD fills the centre and the outer ring is extruded."""
+        backend = _backend_of(layer.A)
+        idx = self._support_indices(layer)
+        opd = backend.asarray(layer.OPD).ravel()
+        rand = layer.randomState.normal(size=layer.B.shape[1])
+        if cast_random:
+            rand = rand.astype(self.precision())
+        X = layer.A@opd[idx['inner_idx']] + layer.B@backend.asarray(rand)
+        flat = _flat_view(layer.mapShift)
+        flat[idx['outer_idx']] = X
+        flat[idx['center_idx']] = opd
 
     def add_row(self, layer, stepInPixel, map_full=None):
         if map_full is None:
             map_full = layer.mapShift
-        # dispatch on map_full's actual backend (layer.A/B/outerMask/innerMask
-        # are uploaded together in buildLayer, so they always match it)
-        xp_ = get_array_module(map_full)
+        xp_ = _backend_of(map_full)
         if self.gpu_available:
             shifted = translate_cubic(map_full, stepInPixel)
         else:
             shiftMatrix = translationImageMatrix(map_full, stepInPixel)
             shifted = globalTransformation(map_full, shiftMatrix)
         onePixelShiftedPhaseScreen = shifted[1:-1, 1:-1]
-        Z = onePixelShiftedPhaseScreen[layer.innerMask[1:-1, 1:-1] != 0]
+        idx = self._support_indices(layer)
+        Z = onePixelShiftedPhaseScreen.ravel()[idx['inner_idx']]
         rand_vec = xp_.asarray(layer.randomState.normal(size=layer.B.shape[1]).astype(self.precision()))
         X = layer.A@Z + layer.B@rand_vec
-        map_full[layer.outerMask != 0] = X
-        map_full[layer.outerMask == 0] = xp_.reshape(
-            onePixelShiftedPhaseScreen, layer.resolution*layer.resolution)
+        flat = _flat_view(map_full)
+        flat[idx['outer_idx']] = X
+        flat[idx['center_idx']] = onePixelShiftedPhaseScreen.ravel()
         return onePixelShiftedPhaseScreen
+
+    def _compute_footprints(self, layer, i_layer, chromatic_shifts):
+        """Pupil footprint of each source in `layer`: sub-pixel shift, centre and crop slices.
+        The footprint is a square block of the layer, so the part of the layer seen by a source is a plain slice
+        (layer.footprint_slices), which works on both backends. The boolean maps (layer.pupil_footprint) are kept
+        for backward compatibility. Nothing is recomputed while the sources and their shifts are unchanged.
+        """
+        key = tuple((tuple(float(c) for c in src.coordinates), float(cs)) for src, cs in zip(self.src_list, chromatic_shifts))
+        if getattr(layer, '_footprint_key', None) == key:
+            return
+        n = self.telescope.resolution
+        layer.pupil_footprint = []
+        layer.extra_sx = []
+        layer.extra_sy = []
+        layer.footprint_slices = []
+        for src, chromatic_shift in zip(self.src_list, chromatic_shifts):
+            [x_z, y_z] = pol2cart(layer.altitude*np.tan((src.coordinates[0]+chromatic_shift)/self.rad2arcsec) * layer.resolution / layer.D, np.deg2rad(src.coordinates[1]))
+            layer.extra_sx.append(int(x_z)-x_z)
+            layer.extra_sy.append(int(y_z)-y_z)
+            center_x = int(y_z)+layer.resolution//2
+            center_y = int(x_z)+layer.resolution//2
+            pupil_footprint_support = np.zeros([layer.resolution, layer.resolution], dtype=self.precision())
+            pupil_footprint_support[center_x-n//2:center_x+n//2, center_y-n//2:center_y+n//2] = 1
+            layer.pupil_footprint.append(pupil_footprint_support)
+            layer.footprint_slices.append((slice(center_x-n//2, center_x+n//2), slice(center_y-n//2, center_y+n//2)))
+        layer._footprint_key = key
 
     def set_pupil_footprint(self):
         for i_layer in range(self.nLayer):
             layer = getattr(self, 'layer_'+str(i_layer+1))
-            layer.pupil_footprint = []
-            layer.extra_sx = []
-            layer.extra_sy = []
-            for i_src in range(len(self.src_list)):
-                src = self.src_list[i_src]
+            chromatic_shifts = []
+            for src in self.src_list:
                 if src.chromatic_shift is not None:
                     if len(src.chromatic_shift) == self.nLayer:
-                        chromatic_shift = src.chromatic_shift[i_layer]
+                        chromatic_shifts.append(src.chromatic_shift[i_layer])
                     else:
                         raise OopaoError('The chromatic_shift property is expected to be the same length as the number of atmospheric layer. ')
                 else:
-                    chromatic_shift = 0
-                [x_z, y_z] = pol2cart(layer.altitude*np.tan((src.coordinates[0]+chromatic_shift)/self.rad2arcsec) * layer.resolution / layer.D, np.deg2rad(src.coordinates[1]))
-                layer.extra_sx.append(int(x_z)-x_z)
-                layer.extra_sy.append(int(y_z)-y_z)
-                center_x = int(y_z)+layer.resolution//2
-                center_y = int(x_z)+layer.resolution//2
-                pupil_footprint_support = np.zeros([layer.resolution, layer.resolution], dtype=self.precision())
-                pupil_footprint_support[center_x-self.telescope.resolution//2:center_x+self.telescope.resolution//2, center_y-self.telescope.resolution//2:center_y+self.telescope.resolution//2] = 1
-                layer.pupil_footprint.append(pupil_footprint_support)
+                    chromatic_shifts.append(0)
+            self._compute_footprints(layer, i_layer, chromatic_shifts)
 
     def updateLayer(self, layer, shift=None):
         if self.compute_covariance is False:
@@ -496,20 +518,18 @@ class Atmosphere:
                 # No wind: the screen still evolves through boiling only. Deliver the boiled
                 # screen by re-extracting the interior of the (just updated) support.
                 # Preserve a device layer in explicit GPU-resident mode.
-                layer_opd = layer.mapShift[layer.outerMask == 0].reshape(layer.resolution, layer.resolution)
+                layer_opd = layer.mapShift.ravel()[self._support_indices(layer)['center_idx']].reshape(layer.resolution, layer.resolution)
                 layer.OPD = layer_opd if self.gpu_resident else self.convert_for_numpy(layer_opd)
             else:
                 layer.OPD = layer.OPD
-
         else:
             if layer.notDoneOnce:
                 layer.notDoneOnce = False
                 layer.ratio = np.zeros(2)
+                layer.buff = np.zeros(2)
+            if shift is None:
                 layer.ratio[0] = ps_turb_x/layer.pixel_size
                 layer.ratio[1] = ps_turb_y/layer.pixel_size
-                layer.buff = np.zeros(2)
-
-            if shift is None:
                 ratio = layer.ratio
             else:
                 ratio = shift    # shift in pixels
@@ -517,36 +537,29 @@ class Atmosphere:
             tmpRatio[np.isinf(tmpRatio)] = 0
             nScreens = (tmpRatio)
             nScreens = nScreens.astype('int')
-
             stepInPixel = np.zeros(2)
             stepInSubPixel = np.zeros(2)
-
             for i in range(nScreens.min()):
                 stepInPixel[0] = 1
                 stepInPixel[1] = 1
                 stepInPixel = stepInPixel*np.sign(ratio)
                 layer.OPD = self.add_row(layer, stepInPixel)
-
             for j in range(nScreens.max()-nScreens.min()):
                 stepInPixel[0] = 1
                 stepInPixel[1] = 1
                 stepInPixel = stepInPixel*np.sign(ratio)
                 stepInPixel[np.where(nScreens == nScreens.min())] = 0
                 layer.OPD = self.add_row(layer, stepInPixel)
-
             stepInSubPixel[0] = (np.abs(ratio[0]) % 1)*np.sign(ratio[0])
             stepInSubPixel[1] = (np.abs(ratio[1]) % 1)*np.sign(ratio[1])
-
             layer.buff += stepInSubPixel
             if np.abs(layer.buff[0]) >= 1 or np.abs(layer.buff[1]) >= 1:
                 stepInPixel[0] = 1*np.sign(layer.buff[0])
                 stepInPixel[1] = 1*np.sign(layer.buff[1])
                 stepInPixel[np.where(np.abs(layer.buff) < 1)] = 0
                 layer.OPD = self.add_row(layer, stepInPixel)
-
             layer.buff[0] = (np.abs(layer.buff[0]) % 1)*np.sign(layer.buff[0])
             layer.buff[1] = (np.abs(layer.buff[1]) % 1)*np.sign(layer.buff[1])
-
             if self.gpu_available:
                 shifted = translate_cubic(layer.mapShift, layer.buff)
                 layer.OPD = shifted[1:-1, 1:-1] if self.gpu_resident else self.convert_for_numpy(shifted[1:-1, 1:-1])
@@ -581,7 +594,8 @@ class Atmosphere:
             self.src_list = src.src
             self.asterism = src
         if self.is_user_defined_opd:
-            OPD_support = [self.user_defined_opd]*len(self.src_list)
+            backend = xp if self.gpu_resident else np
+            OPD_support = [_to_backend(self.user_defined_opd, backend)]*len(self.src_list)
             warning('User-Defined OPD are only propagated once in the Atmosphere class.')
             self.set_OPD(OPD_support)
             self.is_user_defined_opd = False
@@ -629,82 +643,85 @@ class Atmosphere:
         return OPD_support
 
     def fill_OPD_support(self, tmp_layer, OPD_support, i_layer):
+        backend = xp if self.gpu_resident else np
         for i_src in range(len(self.src_list)):
-            if self.src_list[i_src].altitude <= tmp_layer.altitude:
-                raise OopaoError('The source altitude ('+str(self.src_list[i_src].altitude[i_src])+' m) is below or at the same altitude as the atmosphere layer ('+str(tmp_layer.altitude)+' m)')
-            backend = xp if self.gpu_resident else np
-            _im = backend.asarray(tmp_layer.OPD).copy()
-            if tmp_layer.extra_sx[i_src] != 0 or tmp_layer.extra_sy[i_src] != 0:
-                # The general off-axis interpolation still uses the CPU helper.
-                _im = self.convert_for_numpy(_im)
-                pixel_size_in = 1
-                pixel_size_out = 1
-                resolution_out = _im.shape[0]
-                _im = np.squeeze(interpolate_image(_im, pixel_size_in, pixel_size_out,
-                                 resolution_out, shift_x=tmp_layer.extra_sx[i_src], shift_y=tmp_layer.extra_sy[i_src]))
-            interpolate_cone_effect = False
-            if self.src_list[i_src].altitude != np.inf:
-                _im = self.convert_for_numpy(_im)
-                sub_im = np.reshape(_im[np.where(tmp_layer.pupil_footprint[i_src] == 1)], [self.telescope.resolution, self.telescope.resolution])
-                h = self.src_list[i_src].altitude-tmp_layer.altitude
-                if np.isinf(h):
-                    # magnification due to cone effect not considered
-                    magnification_cone_effect = 1
-                else:
-                    # magnification due to cone effect considered
-                    magnification_cone_effect = (h)/self.src_list[i_src].altitude
-                    interpolate_cone_effect = True
-                    pixel_size_in = 1
-                    pixel_size_out = pixel_size_in*magnification_cone_effect
-                    resolution_out = self.telescope.resolution
-                    cube_in = np.atleast_3d(sub_im).T
-            if interpolate_cone_effect:
-                _im = np.squeeze(interpolate_cube(cube_in, pixel_size_in, pixel_size_out, resolution_out)).T
+            src = self.src_list[i_src]
+            if src.altitude <= tmp_layer.altitude:
+                raise OopaoError('The source altitude ('+str(src.altitude)+' m) is below or at the same altitude as the atmosphere layer ('+str(tmp_layer.altitude)+' m)')
+            rows, cols = tmp_layer.footprint_slices[i_src]
+            off_axis_shift = tmp_layer.extra_sx[i_src] != 0 or tmp_layer.extra_sy[i_src] != 0
+            cone_effect = src.altitude != np.inf
+            if off_axis_shift or cone_effect:
+                # the general sub-pixel shift and the cone-effect interpolation use CPU helpers
+                _im = _to_backend(tmp_layer.OPD, np)
+                if off_axis_shift:
+                    _im = np.squeeze(interpolate_image(_im, 1, 1, _im.shape[0],
+                                                       shift_x=tmp_layer.extra_sx[i_src], shift_y=tmp_layer.extra_sy[i_src]))
+                _im = _im[rows, cols]
+                if cone_effect:
+                    # magnification due to cone effect
+                    magnification_cone_effect = (src.altitude-tmp_layer.altitude)/src.altitude
+                    _im = np.squeeze(interpolate_cube(np.atleast_3d(_im).T, 1, magnification_cone_effect, self.telescope.resolution)).T
+                _im = backend.asarray(_im)
             else:
-                footprint = backend.asarray(tmp_layer.pupil_footprint[i_src] == 1)
-                _im = backend.asarray(_im)[footprint].reshape(self.telescope.resolution, self.telescope.resolution)
-            _im = backend.asarray(_im)
-            _im *= self.wavelength/2/np.pi
-            _im *= np.sqrt(self.fractionalR0[i_layer])
-            OPD_support[i_src] += _im
+                # on-axis NGS: plain crop, on the device that holds the layer
+                _im = _to_backend(tmp_layer.OPD, backend)[rows, cols]
+            # (not in place: _im can be a view of the layer)
+            _im = _im * (self.wavelength/2/np.pi)
+            _im = _im * np.sqrt(self.fractionalR0[i_layer])
+            OPD_support[i_src] += _to_backend(_im, _backend_of(OPD_support[i_src]))
         return OPD_support
+
+    def _mask_on(self, mask, backend):
+        """src.mask on `backend`, uploaded once per mask object (NumPy and CuPy arrays cannot be mixed)."""
+        if np.isscalar(mask) or _backend_of(mask) is backend:
+            return mask
+        cached = self._mask_cache.get(id(mask))
+        if cached is None or cached[0] is not mask or _backend_of(cached[1]) is not backend:
+            # Telescope.relay gives each source a new mask at every propagation: keep only the masks of the
+            # current sources (and the telescope pupil) so that old copies are released
+            if len(self._mask_cache) >= 2*len(self.src_list) + 2:
+                self._mask_cache.clear()
+            cached = (mask, _to_backend(mask, backend))
+            self._mask_cache[id(mask)] = cached
+        return cached[1]
 
     def set_OPD(self, OPD_support):
         for i, src in enumerate(self.src_list):
             src.OPD_no_pupil = OPD_support[i]
-            src.OPD = src.OPD_no_pupil*src.mask
+            src.OPD = src.OPD_no_pupil*self._mask_on(src.mask, _backend_of(src.OPD_no_pupil))
         backend = xp if self.gpu_resident else np
-        self.OPD = backend.squeeze(backend.stack(OPD_support))
+        self.OPD = backend.squeeze(backend.stack([_to_backend(opd, backend) for opd in OPD_support]))
         return
 
     def set_scintillation(self, scintillation_support):
         for i, src in enumerate(self.src_list):
             src.scintillation_no_pupil = scintillation_support[i]
-            src.scintillation = src.scintillation_no_pupil*src.mask
+            src.scintillation = src.scintillation_no_pupil*self._mask_on(src.mask, _backend_of(src.scintillation_no_pupil))
         backend = xp if self.gpu_resident else np
-        self.scintillation_map = backend.squeeze(backend.stack(scintillation_support))
+        self.scintillation_map = backend.squeeze(backend.stack([_to_backend(m, backend) for m in scintillation_support]))
         return
 
     def initialize_scintillation_support(self):
         scintillation_support = []
         for i in range(len(self.src_list)):
-            scintillation_support.append(np.ones([self.telescope.resolution, self.telescope.resolution], dtype=self.precision_complex))
+            scintillation_support.append((xp if self.gpu_resident else np).ones([self.telescope.resolution, self.telescope.resolution], dtype=self.precision_complex))
         return scintillation_support
 
     def fill_scintillation_support(self, tmp_layer, scintillation_support, distance, i_layer):
-        n_pix = self.telescope.resolution
         if hasattr(self.telescope, 'pixelSize'):
             pxl_scale = self.telescope.pixelSize
         else:
             pxl_scale = self.telescope.D / self.telescope.resolution
         # extract the geometric OPD for this layer only
-        temp_zeros = [np.zeros((n_pix, n_pix), dtype=self.precision()) for _ in range(len(self.src_list))]
-        layer_opd = self.fill_OPD_support(tmp_layer, temp_zeros, i_layer)
+        # (on the working backend: GPU with GPU residency)
+        layer_opd = self.fill_OPD_support(tmp_layer, self.initialize_OPD_support(), i_layer)
         for i_src, src in enumerate(self.src_list):
             wvl = src.wavelength
+            backend = _backend_of(scintillation_support[i_src])
             # apply phase screen
-            phi = layer_opd[i_src] * (2 * np.pi / wvl)
-            scintillation_support[i_src] = scintillation_support[i_src] * np.exp(1j * phi)
+            phi = _to_backend(layer_opd[i_src], backend) * (2 * np.pi / wvl)
+            scintillation_support[i_src] = scintillation_support[i_src] * backend.exp(1j * phi)
             # propagate using angular spectrum
             if distance > 1e-6:
                 scintillation_support[i_src] = self.ASM(
@@ -716,8 +733,9 @@ class Atmosphere:
         for i, src in enumerate(self.src_list):
             E_field = scintillation_support[i]
             wvl = src.wavelength
+            backend = _backend_of(E_field)
             # Extract intensity
-            intensity = np.abs(E_field)**2
+            intensity = backend.abs(E_field)**2
             intensity_support.append(intensity)
             # --- Phase Extraction Routing ---
             if self.geometric_phase_backup:
@@ -726,18 +744,18 @@ class Atmosphere:
             elif self.unwrap_diffractive_phase:
                 # Case 2: Hybrid geometric guide + diffractive perturbation
                 # Convert geometric OPD to phase [rad]
-                phi_geo = OPD_support[i] * (2 * np.pi / wvl)
+                phi_geo = _to_backend(OPD_support[i], backend) * (2 * np.pi / wvl)
 
                 # Extract the wrapped diffractive residual (delta)
-                delta = np.angle(E_field * np.exp(-1j * phi_geo))
+                delta = backend.angle(E_field * backend.exp(-1j * phi_geo))
 
                 # Safety check: warn if the residual itself wraps inside the pupil
-                pupil_mask = self.telescope.pupil > 0  # Ensure boolean masking
+                pupil_mask = self._mask_on(self.telescope.pupil, backend) > 0  # Ensure boolean masking
                 delta_pupil = delta[pupil_mask]
 
                 if delta_pupil.size > 0:  # Safeguard
-                    min_delta = np.min(delta_pupil)
-                    max_delta = np.max(delta_pupil)
+                    min_delta = float(delta_pupil.min())
+                    max_delta = float(delta_pupil.max())
                     C = max_delta - min_delta
                     if C > 1.9 * np.pi:
                         warning(f"Diffractive residual wrapped inside the pupil! (C = {C:.2f} rad). Scintillation is too strong for perfect unwrapping.")
@@ -747,7 +765,7 @@ class Atmosphere:
                 OPD_support[i] = final_phase * (wvl / (2 * np.pi))
             else:
                 # Case 3: Standard ASM phase
-                final_phase = np.angle(E_field)
+                final_phase = backend.angle(E_field)
                 OPD_support[i] = final_phase * (wvl / (2 * np.pi))
         # Route to the final setters
         self.set_scintillation(intensity_support)
@@ -848,14 +866,8 @@ class Atmosphere:
             # re-seed the boiling noise stream so a regenerated screen boils reproducibly
             tmp_layer.boiling_seed = 100000 + seed + i_layer * 100000
             if self.compute_covariance:
-                # same bridging as initializeAtmosphere's reset branch above
-                xp_ = get_array_module(tmp_layer.A)
-                OPD_gpu = xp_.asarray(tmp_layer.OPD)
-                Z = OPD_gpu[tmp_layer.innerMask[1:-1, 1:-1] != 0]
-                rand_vec = xp_.asarray(tmp_layer.randomState.normal(size=tmp_layer.B.shape[1]))
-                X = tmp_layer.A@Z + tmp_layer.B@rand_vec
-                tmp_layer.mapShift[tmp_layer.outerMask != 0] = X
-                tmp_layer.mapShift[tmp_layer.outerMask == 0] = xp_.reshape(OPD_gpu, tmp_layer.resolution*tmp_layer.resolution)
+                # same as initializeAtmosphere's reset branch above
+                self._reset_map_shift(tmp_layer)
                 tmp_layer.notDoneOnce = True
 
             setattr(self, 'layer_'+str(i_layer+1), tmp_layer)
@@ -932,7 +944,7 @@ class Atmosphere:
 
         for i_l, ax in enumerate(axis_list):
             tmp_layer = getattr(self, 'layer_'+str(layer_index[i_l]+1))
-            ax.imshow(tmp_layer.OPD, extent=[-tmp_layer.D/2, tmp_layer.D/2, -tmp_layer.D/2, tmp_layer.D/2])
+            ax.imshow(_to_backend(tmp_layer.OPD, np), extent=[-tmp_layer.D/2, tmp_layer.D/2, -tmp_layer.D/2, tmp_layer.D/2])
             center = tmp_layer.D/2
             [x_tel, y_tel] = pol2cart(tmp_layer.D_fov/2, np.linspace(0, 2*np.pi, 100, endpoint=True))
             cm = plt.get_cmap('gist_rainbow')
@@ -944,7 +956,7 @@ class Atmosphere:
                 if np.isinf(h):
                     r = self.telescope.D/2
                 else:
-                    r = (h)/self.src.altitude[i_source]*self.telescope.D/2
+                    r = (h)/list_src[i_source].altitude*self.telescope.D/2
                 [x_cone, y_cone] = pol2cart(
                     r, np.linspace(0, 2*np.pi, 100, endpoint=True))
                 if list_src[i_source].chromatic_shift is not None:
@@ -989,40 +1001,58 @@ class Atmosphere:
             elif self._rytov_var <= 0.3:
                 self._saturation_warned = False
 
-    def ASM(self, input_field, wavelength, input_pitch, output_pitch, distance):
-        if distance == 0:
-            return input_field
-        N = input_field.shape[0]
+    def _asm_kernels(self, backend, N, dtype, wavelength, input_pitch, output_pitch, distance):
+        """Chirps and transfer kernel of the angular-spectrum propagation, computed once per configuration."""
+        key = (backend.__name__, N, np.dtype(dtype).str, wavelength, input_pitch, output_pitch, distance)
+        kernels = self._asm_cache.get(key)
+        if kernels is not None:
+            return kernels
+        # one kernel set per (layer distance, wavelength) is in use at a time: when the configuration changes
+        # (elevation, sources, telescope...) the kernels of the previous one are released
+        if len(self._asm_cache) >= (self.nLayer + 1) * max(1, len(self.src_list)):
+            self._asm_cache.clear()
         k = 2 * np.pi / wavelength
         # spatial frequency grids
         delta_f = 1.0 / (N * input_pitch)
-        vals = np.arange(-N/2, N/2, dtype=input_field.real.dtype) * delta_f
-        fx, fy = np.meshgrid(vals, vals, copy=False)
+        vals = backend.arange(-N/2, N/2, dtype=dtype) * delta_f
+        fx, fy = backend.meshgrid(vals, vals)
         f_sq = fx**2 + fy**2
         # spatial grids
-        vals_r = np.arange(-N/2, N/2, dtype=input_field.real.dtype) * input_pitch
-        x, y = np.meshgrid(vals_r, vals_r, copy=False)
+        vals_r = backend.arange(-N/2, N/2, dtype=dtype) * input_pitch
+        x, y = backend.meshgrid(vals_r, vals_r)
         r_sq = x**2 + y**2
         m = output_pitch / input_pitch
         # input chirp
         if m != 1.0:
-            phase_1 = np.exp(1j * k/2 * (1-m)/distance * r_sq)
+            phase_1 = backend.exp(1j * k/2 * (1-m)/distance * r_sq)
         else:
             phase_1 = 1.0
-        # transfer kernel
-        phase_2 = np.exp(-1j * np.pi * wavelength * distance / m * f_sq)
+        # transfer kernel (stored ifftshift-ed: multiplying the unshifted spectrum by it is the same as
+        # shifting, multiplying by the centred kernel and shifting back)
+        phase_2 = backend.fft.ifftshift(backend.exp(-1j * np.pi * wavelength * distance / m * f_sq))
         # output chirp
         if m != 1.0:
-            vals_out = np.arange(-N/2, N/2, dtype=input_field.real.dtype) * output_pitch
-            x_out, y_out = np.meshgrid(vals_out, vals_out, copy=False)
+            vals_out = backend.arange(-N/2, N/2, dtype=dtype) * output_pitch
+            x_out, y_out = backend.meshgrid(vals_out, vals_out)
             r_out_sq = x_out**2 + y_out**2
-            phase_3 = np.exp(1j * k/2 * (m-1)/(m*distance) * r_out_sq)
+            phase_3 = backend.exp(1j * k/2 * (m-1)/(m*distance) * r_out_sq)
         else:
             phase_3 = 1.0
+        kernels = (phase_1, phase_2, phase_3, m)
+        self._asm_cache[key] = kernels
+        return kernels
+
+    def ASM(self, input_field, wavelength, input_pitch, output_pitch, distance):
+        """Angular-spectrum propagation over `distance`, on the backend of input_field (NumPy or CuPy)."""
+        if distance == 0:
+            return input_field
+        backend = _backend_of(input_field)
+        N = input_field.shape[0]
+        phase_1, phase_2, phase_3, m = self._asm_kernels(backend, N, input_field.real.dtype,
+                                                         wavelength, input_pitch, output_pitch, distance)
         # fft operations
-        field_freq = np.fft.fft2(np.fft.ifftshift(input_field * phase_1))
-        field_filtered = np.fft.ifftshift(np.fft.fftshift(field_freq) * phase_2)
-        field_out = np.fft.fftshift(np.fft.ifft2(field_filtered))
+        field_freq = backend.fft.fft2(backend.fft.ifftshift(input_field * phase_1))
+        field_out = backend.fft.fftshift(backend.fft.ifft2(field_freq * phase_2))
         return field_out * phase_3 / m
 
     def check_fresnel_sampling(self):
@@ -1085,11 +1115,7 @@ class Atmosphere:
                     tmp_layer.ZXt_r0 = tmp_layer.ZXt*(self.r0_def/self.r0)**(5/3)
                     tmp_layer.XXt_r0 = tmp_layer.XXt*(self.r0_def/self.r0)**(5/3)
                     tmp_layer.ZZt_inv_r0 = tmp_layer.ZZt_inv / ((self.r0_def/self.r0)**(5/3))
-                    # tmp_layer.A may be GPU-resident (see buildLayer); the
-                    # rest of this covariance update is freshly-computed numpy
-                    # -- bridge around the matmul and re-upload B afterward so
-                    # it stays consistent with A/mapShift/masks for add_row
-                    xp_ = get_array_module(tmp_layer.A)
+                    xp_ = _backend_of(tmp_layer.A)
                     BBt = tmp_layer.XXt_r0 - self.convert_for_numpy(xp_.matmul(tmp_layer.A, xp_.asarray(tmp_layer.ZXt_r0)))
                     tmp_layer.B = self.convert_for_gpu(np.linalg.cholesky(BBt).astype(self.precision()))
         self.update_rytov_variance()
@@ -1123,7 +1149,7 @@ class Atmosphere:
                 raise OopaoError('Wrong value for the wind-speed! Make sure that you inpute a wind-speed for each layer')
             else:
                 print('Updating the wind speed...')
-                self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5)  # computation of equivalent wind speed, Roddier 1982
+                self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed)**(5/3)))**(3/5)  # computation of equivalent wind speed, Roddier 1982
                 self.tau0 = 0.31 * self.r0 / self.V0  # Coherence time of atmosphere, Roddier 1981
                 for i_layer in range(self.nLayer):
                     tmp_layer = getattr(self, 'layer_'+str(i_layer+1))
@@ -1132,8 +1158,10 @@ class Atmosphere:
                     tmp_layer.vX = tmp_layer.windSpeed * np.sin(np.deg2rad(tmp_layer.direction))
                     ps_turb_x = tmp_layer.vX*self.telescope.samplingTime
                     ps_turb_y = tmp_layer.vY*self.telescope.samplingTime
-                    tmp_layer.ratio[0] = ps_turb_x/tmp_layer.pixel_size
-                    tmp_layer.ratio[1] = ps_turb_y/tmp_layer.pixel_size
+                    # (before the first update the ratio does not exist yet: updateLayer computes it)
+                    if hasattr(tmp_layer, 'ratio'):
+                        tmp_layer.ratio[0] = ps_turb_x/tmp_layer.pixel_size
+                        tmp_layer.ratio[1] = ps_turb_y/tmp_layer.pixel_size
                     setattr(self, 'layer_'+str(i_layer+1), tmp_layer)
 
     @property
@@ -1156,8 +1184,10 @@ class Atmosphere:
                     tmp_layer.vX = tmp_layer.windSpeed * np.sin(np.deg2rad(tmp_layer.direction))
                     ps_turb_x = tmp_layer.vX*self.telescope.samplingTime
                     ps_turb_y = tmp_layer.vY*self.telescope.samplingTime
-                    tmp_layer.ratio[0] = ps_turb_x/tmp_layer.pixel_size
-                    tmp_layer.ratio[1] = ps_turb_y/tmp_layer.pixel_size
+                    # (before the first update the ratio does not exist yet: updateLayer computes it)
+                    if hasattr(tmp_layer, 'ratio'):
+                        tmp_layer.ratio[0] = ps_turb_x/tmp_layer.pixel_size
+                        tmp_layer.ratio[1] = ps_turb_y/tmp_layer.pixel_size
                     setattr(self, 'layer_'+str(i_layer+1), tmp_layer)
 
     @property
@@ -1187,7 +1217,7 @@ class Atmosphere:
                                  ' If you want to change the number of layer, re-generate a new atmosphere object.')
             else:
                 print('Updating the fractional R0...BEWARE COMPLETE THE RECOMPUTATION...NOT ONLY V0 and Tau0 !')
-                self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed))**(5/3))**(3/5)  # computation of equivalent wind speed, Roddier 1982
+                self.V0 = (np.sum(np.asarray(self.fractionalR0) * np.asarray(self.windSpeed)**(5/3)))**(3/5)  # computation of equivalent wind speed, Roddier 1982
                 self.tau0 = 0.31 * self.r0 / self.V0  # Coherence time of atmosphere, Roddier 1981
         self.update_rytov_variance()
 

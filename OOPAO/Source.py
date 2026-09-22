@@ -7,7 +7,6 @@ Created on Wed Feb 19 10:32:15 2020
 import numpy as np
 from .runtime import array_backend, gpu_resident, precision_bits
 from .tools.tools import OopaoError
-import sys
 
 
 class Source:
@@ -93,11 +92,6 @@ class Source:
         src = Source(opticalBand = 'H', magnitude = 8)
         src*tel
         """
-        OOPAO_path = [s for s in sys.path if "OOPAO" in s]
-        l = []
-        for i in OOPAO_path:
-            l.append(len(i))
-        path = OOPAO_path[np.argmin(l)]
         precision = precision_bits()
 
         if precision == 64:
@@ -166,6 +160,8 @@ class Source:
         # Variables that indicate if this source belongs to an asterism and its index if it does.
         self.inAsterism = False
         self.ast_idx = -1
+        self.offset_x = 0
+        self.offset_y = 0
 
     def __pow__(self, obj):
         # Re-propagation function. Same as .* in OOMAO

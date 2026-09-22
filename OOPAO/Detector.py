@@ -259,8 +259,8 @@ class Detector:
     def digitalization(self, frame):
         backend = get_array_module(frame)
         if self.FWC is None:
-            return (frame / frame.max() * 2**self.bits)
             self.quantification_noise = 0
+            return (frame / frame.max() * 2**self.bits)
         else:
             self.quantification_noise = self.FWC * \
                 2**(-self.bits) / np.sqrt(12)

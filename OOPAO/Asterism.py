@@ -7,6 +7,30 @@ Created on Tue Aug 23 14:35:32 2022
 import numpy as np
 import matplotlib.pyplot as plt
 from OOPAO.tools.displayTools import makeSquareAxes
+from OOPAO.runtime import array_backend
+
+_xp, _gpu_flag = array_backend()
+
+
+def _on_gpu(items):
+    return _gpu_flag and any(isinstance(item, _xp.ndarray) for item in items)
+
+
+def _stack(items):
+    """np.array(items), or a CuPy stack when the sources hold GPU-resident arrays (np.array would refuse them)."""
+    if _on_gpu(items):
+        return _xp.stack([_xp.asarray(item) for item in items])
+    return np.array(items)
+
+
+def _object_array(items):
+    """np.array(items, dtype=object); with GPU-resident arrays, a 1D object array holding them."""
+    if _on_gpu(items):
+        out = np.empty(len(items), dtype=object)
+        for i, item in enumerate(items):
+            out[i] = item
+        return out
+    return np.array(items, dtype=object)
 
 
 class Asterism:
@@ -132,21 +156,21 @@ class Asterism:
         _OPD = []
         for src in self.src:
             _OPD.append(src.OPD)
-        return np.array(_OPD)
+        return _stack(_OPD)
 
     @property
     def OPD_no_pupil(self):
         _OPD_no_pupil = []
         for src in self.src:
             _OPD_no_pupil.append(src.OPD_no_pupil)
-        return np.array(_OPD_no_pupil)
+        return _stack(_OPD_no_pupil)
     
     @property
     def scintillation(self):
         _scintillation = []
         for src in self.src:
             _scintillation.append(getattr(src, 'scintillation', None))
-        return np.array(_scintillation, dtype=object)
+        return _object_array(_scintillation)
 
     @scintillation.setter
     def scintillation(self, val):
@@ -158,7 +182,7 @@ class Asterism:
         _scintillation_no_pupil = []
         for src in self.src:
             _scintillation_no_pupil.append(getattr(src, 'scintillation_no_pupil', None))
-        return np.array(_scintillation_no_pupil, dtype=object)
+        return _object_array(_scintillation_no_pupil)
 
     @property
     def intensity(self):
@@ -171,7 +195,7 @@ class Asterism:
         _intensity = []
         for src in self.src:
             _intensity.append(getattr(src, 'intensity', None))
-        return np.array(_intensity, dtype=object)
+        return _object_array(_intensity)
 
     @intensity.setter
     def intensity(self, val):
@@ -185,7 +209,6 @@ class Asterism:
 
     def __pow__(self, obj):
         # Re-propagation function. Same as .* in OOMAO
-
         obj.src = self
         for src in self.src:
             src.optical_path = [[src.type + '('+src.optBand+')', src]]

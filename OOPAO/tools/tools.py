@@ -439,10 +439,20 @@ def bin_ndarray(ndarray, new_shape, operation='sum', ignore_zeros=False):
 #     return ndarray
 
 def get_gpu_memory():
-    command = "nvidia-smi --query-gpu=memory.free --format=csv"
-    memory_free_info = subprocess.check_output(command.split()).decode('ascii').split('\n')[:-1][1:]
-    memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
-    return memory_free_values
+    """Free GPU memory in MiB, as a list.
+
+    Uses the CUDA runtime for the device CuPy is working on (no external tool required). Falls back to
+    nvidia-smi, which lists every GPU of the machine, when CuPy cannot answer.
+    """
+    try:
+        import cupy as cp
+        free_bytes = cp.cuda.runtime.memGetInfo()[0]
+        return [int(free_bytes // 2**20)]
+    except Exception:
+        command = "nvidia-smi --query-gpu=memory.free --format=csv"
+        memory_free_info = subprocess.check_output(command.split()).decode('ascii').split('\n')[:-1][1:]
+        memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
+        return memory_free_values
 
 
 def compute_fourier_mode(pupil,spatial_frequency,angle_deg,zeropadding = 2):

@@ -21,9 +21,12 @@ class InfluenceFunctions:
 
     Attributes
     ----------
-    influence_function_2D : np.ndarray
+    influence_function_3D : np.ndarray
         Influence-function cube of shape [n_act, resolution, resolution],
         with flips and sign applied.
+    influence_function_2D : np.ndarray
+        The same influence functions as a [resolution**2, n_act] matrix (the
+        DeformableMirror modes).
     coordinates : np.ndarray
         Actuator coordinates computed as the centroids of the (flipped)
         influence functions.

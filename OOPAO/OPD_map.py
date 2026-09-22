@@ -4,6 +4,7 @@ Created on Mon Mar 20 16:56:25 2023
 
 @author: cheritier
 """
+from .runtime import backend_of, to_backend
 
 
 class OPD_map:
@@ -24,6 +25,15 @@ class OPD_map:
         """
         self.OPD = OPD
         self.tag = 'OPD_map'
+        self._opd_cache = None
+
+    def _opd_on(self, backend):
+        """self.OPD on `backend` (uploaded once, and again only when self.OPD is replaced)."""
+        cache = self._opd_cache
+        if cache is None or cache[0] is not self.OPD or cache[1] is not backend:
+            cache = (self.OPD, backend, to_backend(self.OPD, backend))
+            self._opd_cache = cache
+        return cache[2]
 
     def relay(self, src):
         self.src = src
@@ -33,4 +43,9 @@ class OPD_map:
             self.src_list = src.src
         for src in self.src_list:
             src.optical_path.append([self.tag, self])
-            src.OPD_no_pupil += self.OPD
+            # added on the backend of the source (NumPy, or CuPy with GPU residency); for a cube of OPDs
+            # (e.g. interaction matrix) the static map is added to every frame
+            opd = self._opd_on(backend_of(src.OPD_no_pupil))
+            if src.OPD_no_pupil.ndim == 3 and opd.ndim == 2:
+                opd = opd[:, :, None]
+            src.OPD_no_pupil = src.OPD_no_pupil + opd

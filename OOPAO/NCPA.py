@@ -5,6 +5,7 @@ Created on Sat Dec  3 13:22:10 2022
 @author: cheritier -- astriffl
 """
 import numpy as np
+from .runtime import backend_of, to_backend, to_numpy
 
 
 class NCPA:
@@ -28,6 +29,7 @@ class NCPA:
         ************************** OPTIONAL PARAMETERS **************************
 
         _ modal_basis            : str, 'KL' (default), 'Zernike', or 'M2C' to import from an M2C matrix, as modal basis for NCPA generation
+                                   (the DM commands are restored after the basis is computed)
         _ coefficients           : a list of coefficients of chosen modal basis. The coefficients are normalized to 1 m.
         _ f2                     : a list of 3 elements [amplitude, start mode, end mode, cutoff_freq] which will follow 1/f2 law
         _ seed                   : pseudo-random value to create the NCPA with repeatability
@@ -64,23 +66,28 @@ class NCPA:
         self.dm = dm
         self.seed = seed
         self.M2C = M2C
+        self._opd_cache = None
 
         if f2 is None:
             if coefficients is None:
-                self.OPD = self.tel.pupil.astype(float)
-
-            if coefficients is not None:
-                if type(coefficients) is list:
-                    if self.basis == 'KL':
-                        self.B = self.KL_basis()[:, :, :len(coefficients)]
-
-                    if self.basis == 'Zernike':
-                        n_max = len(coefficients)
-                        self.B = self.Zernike_basis(n_max)
-                else:
+                # blank NCPA (to be set by the user through ncpa.OPD)
+                self.OPD = np.zeros(self.tel.pupil.shape)
+            else:
+                if type(coefficients) is not list:
                     raise TypeError(
                         'The zernike coefficients should be input as a list.')
-            self.OPD = np.matmul(self.B, np.asarray(coefficients))
+                if self.basis == 'KL':
+                    self.B = self.KL_basis()[:, :, :len(coefficients)]
+                elif self.basis == 'Zernike':
+                    n_max = len(coefficients)
+                    self.B = self.Zernike_basis(n_max)
+                elif self.basis == 'M2C':
+                    if self.M2C is None:
+                        raise TypeError('M2C should not be None if modal_basis is set to \'M2C\'')
+                    self.B = self.M2C_basis(self.M2C)[:, :, :len(coefficients)]
+                else:
+                    raise TypeError("modal_basis should be 'KL', 'Zernike' or 'M2C'")
+                self.OPD = np.matmul(self.B, np.asarray(coefficients))
 
         else:
             self.NCPA_f2_law(f2)
@@ -113,6 +120,14 @@ class NCPA:
             raise TypeError(
                 'f2 should be a list containing [amplitude, start_mode, end_mode, cutoff]')
 
+    def _opd_on(self, backend):
+        """self.OPD on `backend` (uploaded once, and again only when self.OPD is replaced)."""
+        cache = self._opd_cache
+        if cache is None or cache[0] is not self.OPD or cache[1] is not backend:
+            cache = (self.OPD, backend, to_backend(self.OPD, backend))
+            self._opd_cache = cache
+        return cache[2]
+
     def relay(self, src):
         self.src = src
         if src.tag == 'source':
@@ -121,33 +136,43 @@ class NCPA:
             self.src_list = src.src
         for src in self.src_list:
             src.optical_path.append([self.tag, self])
-            src.OPD_no_pupil += self.OPD
+            # added on the backend of the source (NumPy, or CuPy with GPU residency); for a cube of OPDs
+            # (e.g. interaction matrix) the NCPA is added to every frame
+            opd = self._opd_on(backend_of(src.OPD_no_pupil))
+            if src.OPD_no_pupil.ndim == 3 and opd.ndim == 2:
+                opd = opd[:, :, None]
+            src.OPD_no_pupil = src.OPD_no_pupil + opd
+
+    def _dm_basis(self, M2C):
+        """OPD of the DM for each column of M2C (NumPy cube), leaving the DM commands as they were."""
+        coefs = self.dm.coefs.copy()
+        try:
+            self.dm.coefs = M2C
+            self.tel*self.dm
+            B = to_numpy(self.tel.OPD)
+        finally:
+            self.dm.coefs = coefs
+        return B
 
     def KL_basis(self):
         from OOPAO.calibration.compute_KL_modal_basis import compute_KL_basis
         M2C_KL = compute_KL_basis(self.tel, self.atm, self.dm, lim=1e-2)
-        self.dm.coefs = M2C_KL
-        self.tel*self.dm
-        B = self.tel.OPD
-        return B
+        return self._dm_basis(M2C_KL)
 
     def Zernike_basis(self, n_max):
         from OOPAO.Zernike import Zernike
         self.Z = Zernike(self.tel, J=n_max)
         self.Z.computeZernike(self.tel)
-        B = self.Z.modesFullRes
+        B = to_numpy(self.Z.modesFullRes)
         return B
 
     def M2C_basis(self, M2C):
-        self.dm.coefs = M2C
-        self.tel*self.dm
-        B = self.tel.OPD
-        return B
+        return self._dm_basis(M2C)
 
     def properties(self) -> dict:
         self.prop = dict()
         self.prop['basis'] = f"{'Modal basis':<20s}|{self.basis:^9s}"
-        self.prop['amplitude'] = f"{'Amplitude [nm RMS]':<20s}|{np.std(self.OPD[np.where(self.tel.pupil > 0)])*1e9:^9.1f}"
+        self.prop['amplitude'] = f"{'Amplitude [nm RMS]':<20s}|{float(np.std(to_numpy(self.OPD)[np.where(self.tel.pupil > 0)]))*1e9:^9.1f}"
         return self.prop
 
     def __repr__(self):

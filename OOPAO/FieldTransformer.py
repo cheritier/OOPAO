@@ -9,6 +9,7 @@ Created on February 2026
 import numpy as np
 from OOPAO.tools.interpolateGeometricalTransformation import interpolate_image
 from OOPAO.tools.tools import OopaoError
+from OOPAO.runtime import to_numpy
 
 
 class FieldTransformer:
@@ -119,13 +120,16 @@ class FieldTransformer:
 
         for src in self.src_list:
             src.optical_path.append([self.tag, self])
-            
-            # shift the EM field amplitude (fluxMap)
-            input_energy_intensity = np.sqrt(np.sum(src.intensity))
-            src.intensity = interpolate_image(image_in=src.fluxMap.copy(),
+
+            # transform the field intensity (fluxMap * scintillation) once, as a single array, so that the
+            # energy is conserved (see Source.intensity). The interpolation runs on the CPU: host copies are
+            # used, and the Source setters move the results back to its backend.
+            intensity_in = to_numpy(src.intensity).copy()
+            input_energy = np.sum(intensity_in)
+            intensity_out = interpolate_image(image_in=intensity_in,
                                             pixel_size_in=1.0,
                                             pixel_size_out=1.0,
-                                            resolution_out=len(src.fluxMap.copy()),
+                                            resolution_out=len(intensity_in),
                                             rotation_angle=self.rotation_angle[src.ast_idx],
                                             shift_x=self.shift_x[src.ast_idx],
                                             shift_y=self.shift_y[src.ast_idx],
@@ -134,36 +138,15 @@ class FieldTransformer:
                                             radialScaling=self.radialScaling[src.ast_idx],
                                             shape_out=None,
                                             order=self.order)
-            src.intensity *= input_energy_intensity/np.sqrt(np.sum(src.intensity))
+            # renormalise to the input energy (ratio of the sums: intensity is an energy, not an amplitude)
+            src.intensity = intensity_out * (input_energy/np.sum(intensity_out))
 
-            # pupil mask containing only the pixels fully illuminated (no "gray" pixels)
-            pupil_mask = src.fluxMap == np.max(src.fluxMap)
-
-            # # shift the scintillation map
-            # input_energy_scintillation = np.sqrt(np.sum(src.scintillation))
-
-            # # by updating the OPD, the phase (and OPD_no_pupil) will be also updated accordingly automatically
-            # src.scintillation = interpolate_image(image_in=src.scintillation.copy(),
-            #                             pixel_size_in=1.0,
-            #                             pixel_size_out=1.0,
-            #                             resolution_out=len(src.OPD.copy()),
-            #                             rotation_angle=self.rotation_angle[src.ast_idx],
-            #                             shift_x=self.shift_x[src.ast_idx],
-            #                             shift_y=self.shift_y[src.ast_idx],
-            #                             anamorphosisAngle=self.anamorphosisAngle[src.ast_idx],
-            #                             tangentialScaling=self.tangentialScaling[src.ast_idx],
-            #                             radialScaling=self.radialScaling[src.ast_idx],
-            #                             shape_out=None,
-            #                             order=self.order)
-            # src.scintillation *= input_energy_scintillation/np.sqrt(np.sum(src.scintillation))
-
-            
-            # shift the EM OPD and phase
-            # by updating the OPD, the phase (and OPD_no_pupil) will be also updated accordingly automatically
-            src.OPD = interpolate_image(image_in=src.OPD.copy(),
+            # transform the OPD (and therefore the phase). Note: src.OPD_no_pupil is left untransformed
+            opd_in = to_numpy(src.OPD).copy()
+            src.OPD = interpolate_image(image_in=opd_in,
                                         pixel_size_in=1.0,
                                         pixel_size_out=1.0,
-                                        resolution_out=len(src.OPD.copy()),
+                                        resolution_out=len(opd_in),
                                         rotation_angle=self.rotation_angle[src.ast_idx],
                                         shift_x=self.shift_x[src.ast_idx],
                                         shift_y=self.shift_y[src.ast_idx],
@@ -172,14 +155,6 @@ class FieldTransformer:
                                         radialScaling=self.radialScaling[src.ast_idx],
                                         shape_out=None,
                                         order=self.order)
-
-            # removing possible "edge artifacts" due to sub-pixel shifts after the EM field transformation
-            # this allows removing "gray" zones near the pupil borders or central obstruction
-            # if self.remove_edge_effects:
-            #     src.fluxMap *= pupil_mask
-            #     src.OPD *= pupil_mask
-            #     src.scintillation *= pupil_mask
-                # src.mask *=pupil_mask
 
     def properties(self) -> dict:
         self.prop = dict()

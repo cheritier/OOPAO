@@ -7,7 +7,6 @@ Created on Wed Feb 19 10:23:18 2020
 
 import numpy as np
 import copy
-import sys
 from .runtime import array_backend, gpu_resident, precision_bits
 xp, global_gpu_flag = array_backend()
 from OOPAO.tools.tools import set_binning, warning, OopaoError, get_array_module
@@ -138,11 +137,6 @@ class Telescope:
 
         """
 
-        OOPAO_path = [s for s in sys.path if "OOPAO" in s]
-        l = []
-        for i in OOPAO_path:
-            l.append(len(i))
-        path = OOPAO_path[np.argmin(l)]
         precision = precision_bits()
         if precision == 64:
             self.precision = np.float64
@@ -237,6 +231,9 @@ class Telescope:
         # Atmosphere, DeformableMirror, the WFS classes, ...) by code that has
         # no cupy awareness -- only PropagateField's own local FFT hot path
         # actually runs on GPU, see the get_array_module dispatch there
+        # the pupil setter resets tel.pupilReflectivity to the binary pupil: keep the requested reflectivity
+        # (constructor value, or current map when called again e.g. by apply_spiders) to apply it afterwards
+        requested_reflectivity = self.pupilReflectivity
         # Case where the pupil is not input: circular pupil with central obstruction
         if self.user_defined_pupil is None:
             D = self.resolution+1
@@ -250,13 +247,8 @@ class Telescope:
             warning('User-defined pupil, the central obstruction will not be taken into account...')
             self.pupil = self.user_defined_pupil.copy().astype(self.precision())
 
-        # A non uniform reflectivity can be input by the user
-        self.pupilReflectivity = (self.pupil*self.pupilReflectivity).astype(self.precision())
-        # Total number of pixels in the pupil area
-        self.pixelArea = np.sum(self.pupil)
-        # index of valid pixels in the pupil
-        self.pupilLogical = np.where(np.reshape(self.pupil, self.resolution*self.resolution) > 0)
-        self.pupil = self.pupil
+        # A non uniform reflectivity can be input by the user (applied after the pupil setter, see above)
+        self.pupilReflectivity = (self.pupil*requested_reflectivity).astype(self.precision())
 
     def computeCoronoPSF(self, zeroPaddingFactor=2, display=False, coronagraphDiameter=4.5):
         raise OopaoError("The method computeCoronoPSF has been deprecated and is now integrated within the computePSF method setting the tel.coronograph_diameter property (default value is None and means no coronograph considered)")

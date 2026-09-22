@@ -132,7 +132,7 @@ def makeCovarianceMatrix(rho1, rho2, atm):
     return out
 
 
-def ift2(G, delta_f):
+def ift2(G, delta_f, backend=np):
     """
      ------------ Function adapted from aotools ----------------------
 
@@ -145,12 +145,12 @@ def ift2(G, delta_f):
     """
 
 #    g = np.fft.fftshift( np.fft.fft2( np.fft.fftshift(G) ) ) * (N * delta_f)**2
-    g = np.fft.fftshift(np.fft.fft2(np.fft.fftshift(G)))
+    g = backend.fft.fftshift(backend.fft.fft2(backend.fft.fftshift(G)))
 
     return g
 
 
-def ft_phase_screen(atm, N, delta, l0=1e-10, seed=None, return_PSD = False):
+def ft_phase_screen(atm, N, delta, l0=1e-10, seed=None, return_PSD = False, backend=np):
     '''
         ------------ Function adapted from aotools ----------------------
 
@@ -164,8 +164,12 @@ def ft_phase_screen(atm, N, delta, l0=1e-10, seed=None, return_PSD = False):
         L0 (float): Size of outer-scale in metres
         l0 (float): inner scale in metres
 
+        backend (module): array module used for the computation (numpy by default, or cupy).
+            The random draws are always made on the CPU with numpy, so a given seed gives
+            the same screen with either backend.
+
     Returns:
-        ndarray: np array representing phase screen
+        ndarray: np array representing phase screen (on `backend`)
     '''
     delta = float(delta)
     r0 = float(atm.r0)
@@ -177,28 +181,30 @@ def ft_phase_screen(atm, N, delta, l0=1e-10, seed=None, return_PSD = False):
 
     del_f = 1./(N*delta)
 
-    fx = np.arange(-N/2., N/2.) * del_f
+    fx = backend.arange(-N/2., N/2.) * del_f
 
-    (fx, fy) = np.meshgrid(fx, fx)
-    f = np.sqrt(fx**2 + fy**2)
+    (fx, fy) = backend.meshgrid(fx, fx)
+    f = backend.sqrt(fx**2 + fy**2)
 
     fm = 5.92/l0/(2*np.pi)
     f0 = 1./L0
 
-    PSD_phi = (0.023*r0**(-5./3.) * np.exp(-1*((f/fm)**2)) / (((f**2) + (f0**2))**(11./6)))
+    PSD_phi = (0.023*r0**(-5./3.) * backend.exp(-1*((f/fm)**2)) / (((f**2) + (f0**2))**(11./6)))
 
     PSD_phi[int(N/2), int(N/2)] = 0
 
-    cn = ((randomState.normal(size=(N, N)) + 1j * randomState.normal(size=(N, N))) * np.sqrt(PSD_phi)*del_f)
+    # random draws on the CPU (reproducible for a given seed), then moved to the backend
+    noise = randomState.normal(size=(N, N)) + 1j * randomState.normal(size=(N, N))
+    cn = (backend.asarray(noise) * backend.sqrt(PSD_phi)*del_f)
 
-    phs = ift2(cn, 1).real
+    phs = ift2(cn, 1, backend=backend).real
     if return_PSD:
         return phs, PSD_phi
     else:
         return phs
 
 
-def ft_sh_phase_screen(atm, resolution, pixel_size, l0=1e-10, seed=None, return_PSD=False):
+def ft_sh_phase_screen(atm, resolution, pixel_size, l0=1e-10, seed=None, return_PSD=False, backend=np):
     """
     ------------ Function adapted from aotools ----------------------
 
@@ -212,9 +218,11 @@ def ft_sh_phase_screen(atm, resolution, pixel_size, l0=1e-10, seed=None, return_
         pixel_size (float): size in Metres of each pxl
         L0 (float): Size of outer-scale in metres
         l0 (float): inner scale in metres
+        backend (module): array module used for the computation (numpy by default, or cupy).
+            The random draws are always made on the CPU with numpy.
 
     Returns:
-        ndarray: np array representing phase screen
+        ndarray: np array representing phase screen (on `backend`)
     """
     pixel_size = float(pixel_size)
     r0 = float(atm.r0)
@@ -226,14 +234,14 @@ def ft_sh_phase_screen(atm, resolution, pixel_size, l0=1e-10, seed=None, return_
 
     D = resolution*pixel_size
     # high-frequency screen from FFT method
-    phs_hi = ft_phase_screen(atm, resolution, pixel_size, seed=seed)
+    phs_hi = ft_phase_screen(atm, resolution, pixel_size, seed=seed, backend=backend)
 
     # spatial grid [m]
-    coords = np.arange(-resolution/2, resolution/2)*pixel_size
-    x, y = np.meshgrid(coords, coords)
+    coords = backend.arange(-resolution/2, resolution/2)*pixel_size
+    x, y = backend.meshgrid(coords, coords)
 
     # initialize low-freq screen
-    phs_lo = np.zeros(phs_hi.shape)
+    phs_lo = backend.zeros(phs_hi.shape)
 
     # loop over frequency grids with spacing 1/(3^p*L)
     for p in range(1, 4):
@@ -256,11 +264,11 @@ def ft_sh_phase_screen(atm, resolution, pixel_size, l0=1e-10, seed=None, return_
 
         # random draws of Fourier coefficients
         cn = ((randomState.normal(size=(3, 3)) + 1j*randomState.normal(size=(3, 3))) * np.sqrt(PSD_phi)*del_f)
-        SH = np.zeros((resolution, resolution), dtype="complex")
-        # loop over frequencies on this grid
+        SH = backend.zeros((resolution, resolution), dtype="complex")
+        # loop over frequencies on this grid (the 3x3 coefficients are Python scalars)
         for i in range(0, 2):
             for j in range(0, 2):
-                SH += cn[i, j] * np.exp(1j*2*np.pi*(fx[i, j]*x+fy[i, j]*y))
+                SH += complex(cn[i, j]) * backend.exp(1j*2*np.pi*(float(fx[i, j])*x+float(fy[i, j])*y))
         phs_lo = phs_lo + SH
         # accumulate subharmonics
     phs_lo = phs_lo.real - phs_lo.real.mean()

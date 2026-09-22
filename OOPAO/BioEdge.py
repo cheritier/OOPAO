@@ -10,18 +10,22 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy
+import scipy.fft
 from joblib import Parallel, delayed
 from .tools.tools import warning, OopaoError
 from .Detector import Detector
+from .runtime import array_backend, gpu_resident, precision_bits
+xp, global_gpu_flag = array_backend()
+from .runtime import backend_of as _backend_of, fft_kwargs as _fft_kwargs, stack_squeeze as _stack_squeeze, to_backend as _to_backend
 
-try:
-    import cupy as xp
-
+if global_gpu_flag:
     fft2 = xp.fft.fft2
-except:
-    import numpy as xp
-
+    ifft2 = xp.fft.ifft2
+    fftshift = xp.fft.fftshift
+else:
     fft2 = scipy.fft.fft2
+    ifft2 = scipy.fft.ifft2
+    fftshift = scipy.fft.fftshift
 
 
 class BioEdge:
@@ -153,10 +157,9 @@ class BioEdge:
             _ wfs.cam.backgroundNoise   : Background noise can be set to True or False. An Associated wfs.cam.backgroundNoiseMap of the detector frame size must be defined
 
         """
-        try:
-            import cupy as xp
-
-            self.gpu_available = True
+        self.gpu_available = global_gpu_flag
+        self.gpu_resident = gpu_resident()
+        if self.gpu_available:
             self.convert_for_gpu = xp.asarray
             self.convert_for_numpy = xp.asnumpy
             self.nJobs = 1
@@ -174,31 +177,14 @@ class BioEdge:
                     + str(self.mem_gpu[i] / 1024)
                     + "GB memory"
                 )
-        except:
-            import numpy as xp
-
-            def no_function(input_matrix):
-                return input_matrix
-
-            self.gpu_available = False
-            self.convert_for_gpu = no_function
-            self.convert_for_numpy = no_function
-
-        OOPAO_path = [s for s in sys.path if "OOPAO" in s]
-        l = []
-        for i in OOPAO_path:
-            l.append(len(i))
-        path = OOPAO_path[np.argmin(l)]
-        precision = np.load(path + "/precision_oopao.npy")
-        if precision == 64:
-            self.precision = np.float64
         else:
-            self.precision = np.float32
-        if self.precision is xp.float32:
-            self.precision_complex = xp.complex64
-        else:
-            self.precision_complex = xp.complex128
-        # initialize the Pyramid Object
+            self.convert_for_gpu = lambda input_matrix: input_matrix
+            self.convert_for_numpy = lambda input_matrix: input_matrix
+
+        precision = precision_bits()
+        self.precision = np.float64 if precision == 64 else np.float32
+        self.precision_complex = xp.complex128 if precision == 64 else xp.complex64
+        # initialize the Bi-O Edge Object
         # telescope attached to the wfs
         self.telescope = telescope
         if (
@@ -241,13 +227,13 @@ class BioEdge:
         self.quadrants_numbering = quadrants_numbering
         # user defined modulation path
         self.user_modulation_path = user_modulation_path
+        # kept for backward compatibility (the 4 masks are now propagated as a single batched operation)
         self.joblib_prefer_masks = "threads"
         self.nJobs_masks = 1
         self.weight_vector = None
         self.n_pix_separation = n_pix_separation
         self.sx = [0, 0, 0, 0]
         self.sy = [0, 0, 0, 0]
-        print(self.sx)
         if n_pix_edge is None:
             self.n_pix_edge = self.n_pix_separation // 2
         else:
@@ -367,9 +353,22 @@ class BioEdge:
             np.linspace(0, self.resolution - 1, self.resolution),
         )
         # phasor for the FFT centering
+        # (cast to the working precision: a complex128 phasor would silently turn every FFT into double precision)
         self.phasor = self.convert_for_gpu(
-            np.exp(-(1j * np.pi * (self.resolution + 1) / self.resolution) * (xx + yy))
+            np.exp(-(1j * np.pi * (self.resolution + 1) / self.resolution) * (xx + yy)).astype(self.precision_complex)
         )
+
+        # Batched propagation settings
+        # compute the focal-plane (modulation camera) image during each measurement; set to False to skip that work
+        # when wfs.focal_plane_camera is not used (e.g. in a closed loop)
+        self.compute_focal_plane = True
+        # memory budget (bytes) for one batch of fields when running on the CPU
+        self.cpu_batch_memory = 1e9
+        # focal-plane intensity summed over the last measurement (read by wfs*wfs.focal_plane_camera)
+        self.modulation_camera_intensity = None
+        self._focal_plane_sum = None
+        # batch size on the GPU, measured once from the free memory (reset when the modulation changes)
+        self._max_batch_cache = None
 
         # Creating the PWFS mask
         self.mask_computation()
@@ -473,10 +472,10 @@ class BioEdge:
             self.mask.append(mask_[i_m] * np.exp(1j * mask_TT_[i_m]))
             self.mask_TT.append(mask_TT_[i_m])
 
-        # convert for GPU
-        self.mask = self.convert_for_gpu(self.mask)
+        # stack the 4 masks as a (4, N, N) array on the active backend, at the working precision
+        self.mask = xp.asarray(np.asarray(self.mask).astype(self.precision_complex))
         # Save a copy of the initial mask
-        self.initial_mask = np.copy(self.mask)
+        self.initial_mask = self.mask.copy()
         print("Done!")
         return
 
@@ -527,16 +526,6 @@ class BioEdge:
         self.referenceSignal_2D = 0
         self.wfs_calibration()
         return
-
-    def convolution(self, mask, em_field_ft):
-        if self.psfCentering:  # case with mask centered on 4 pixels
-            em_field_pwfs = np.fft.ifft2(em_field_ft * mask)
-            intensity = np.abs(em_field_pwfs) ** 2
-        else:  # case with mask centered on 1 pixel
-            em_field_pwfs = np.fft.ifft2(em_field_ft * mask)
-            intensity = np.abs(em_field_pwfs) ** 2
-        self.modulation_camera_em.append(em_field_ft)
-        return intensity
 
     def initialization(self):
         self.src**self.telescope
@@ -597,10 +586,13 @@ class BioEdge:
         self.src**self.telescope
         # compute the refrence signals
         self.relay(self.src)
-        self.referenceSignal_2D, self.referenceSignal = self.signalProcessing()
+        reference_2D, reference = self.signalProcessing()
+        # the references are kept on the CPU (signalProcessing keeps a GPU copy when it needs one)
+        self.referenceSignal_2D = _to_backend(reference_2D, np)
+        self.referenceSignal = _to_backend(reference, np)
 
         # 2D reference Frame before binning with detector
-        self.referencePyramidFrame = np.copy(self.raw_data)
+        self.referencePyramidFrame = np.copy(_to_backend(self.raw_data, np))
         if self.isCalibrated is False:
             print("WFS calibrated!")
         self.isCalibrated = True
@@ -608,52 +600,174 @@ class BioEdge:
         self.src.OPD = tmp_OPD
         return
 
-    def bio_edge_transform(self, phase_in):
-        # copy of the support for the zero-padding
-        support = self.supportPadded.copy()
-        # em field corresponding to phase_in
-        if np.ndim(self.telescope.OPD) == 2:
-            if self.modulation == 0:
-                em_field = np.sqrt(0.5) * self.maskAmplitude * np.exp(1j * (phase_in))
-            else:
-                em_field = (
-                    np.sqrt(0.5)
-                    * self.maskAmplitude
-                    * np.exp(
-                        1j * (self.convert_for_gpu(self.telescope.src.phase) + phase_in)
-                    )
-                )
-        else:
-            em_field = np.sqrt(0.5) * self.maskAmplitude * np.exp(1j * phase_in)
-        n = (self.resolution - self.telescope.resolution) // 2
-        # zero-padding for the FFT computation
-        support[n:-n, n:-n] = em_field
-        del em_field
-        # case with mask centered on 4 pixels
-        if self.psfCentering:
-            em_field_ft = xp.fft.fft2(support * self.phasor)
-        # case with mask centered on 1 pixel
-        else:
-            em_field_ft = xp.fft.fftshift(xp.fft.fft2(support))
-        support_list = [em_field_ft] * 4
-        intensity = np.zeros([2 * self.resolution, 2 * self.resolution])
+    def convolution(self, mask, em_field_ft):
+        """Detector-plane intensity for one mask and one focal-plane field (kept for backward compatibility).
 
-        def job_loop_mask():
-            Q = Parallel(n_jobs=self.nJobs_masks, prefer=self.joblib_prefer_masks)(
-                delayed(self.convolution)(i, j) for i, j in zip(self.mask, support_list)
-            )
-            return Q
-
-        out = self.convert_for_numpy(xp.asarray(job_loop_mask()))
-        count = 0
-        for i in range(2):
-            for j in range(2):
-                intensity[
-                    i * self.resolution : (i + 1) * self.resolution,
-                    j * self.resolution : (j + 1) * self.resolution,
-                ] = out[count, :, :]
-                count += 1
+        wfs_measure no longer calls this method: the 4 masks are applied in _bio_edge_transform_block.
+        """
+        intensity = xp.abs(ifft2(em_field_ft * mask))
+        xp.square(intensity, out=intensity)
         return intensity
+
+    def bio_edge_transform(self, phase_in):
+        """Propagate a single phase screen through the Bi-O Edge (kept for backward compatibility).
+
+        wfs_measure no longer calls this method: it uses the batched path (_bio_edge_transform_batch).
+        Returns the (2N, 2N) detector-plane intensity with the 4 pupils tiled 2x2.
+        """
+        phase_in = xp.asarray(phase_in, dtype=self.precision)
+        # em field corresponding to phase_in
+        if np.ndim(self.telescope.OPD) == 2 and self.modulation != 0:
+            phase_in = xp.asarray(self.src.phase, dtype=self.precision) + phase_in
+        em_field = self.precision(np.sqrt(0.5)) * self.maskAmplitude * xp.exp(1j * phase_in)
+        return self._bio_edge_transform_batch(em_field[None])[0]
+
+    def _bio_edge_transform_block(self, fields, workers=-1):
+        """Propagate a (B, n, n) stack of pupil-plane EM fields through the 4 Bi-O Edge masks.
+
+        Returns the (B, 2N, 2N) intensities in the detector plane (the 4 pupils tiled 2x2, in mask order) and,
+        when compute_focal_plane is set, the (N, N) focal-plane intensity summed over the stack (None otherwise).
+        """
+        n = self.telescope.resolution
+        N = self.resolution
+        pupil = slice(self.center - n // 2, self.center + n // 2)
+        fft_kw = _fft_kwargs(workers)
+        # zero-padding for the FFT computation
+        support = xp.zeros((fields.shape[0], N, N), dtype=self.precision_complex)
+        support[:, pupil, pupil] = fields
+        if self.psfCentering:
+            # case with mask centered on 4 pixels
+            support *= self.phasor
+            em_field_ft = fft2(support, **fft_kw)
+        else:
+            # case with mask centered on 1 pixel
+            em_field_ft = fftshift(fft2(support, **fft_kw), axes=(-2, -1))
+        del support
+        focal_plane = None
+        if self.compute_focal_plane:
+            focal_plane = xp.abs(em_field_ft)
+            xp.square(focal_plane, out=focal_plane)
+            focal_plane = focal_plane.sum(axis=0)
+        # Fourier filtering by each of the 4 masks and propagation to the detector plane.
+        # The focal-plane field is computed once and shared by the 4 masks.
+        intensity = xp.empty((fields.shape[0], 2 * N, 2 * N), dtype=self.precision)
+        for k in range(4):
+            i, j = divmod(k, 2)
+            quadrant = xp.abs(ifft2(em_field_ft * self.mask[k], **fft_kw))
+            xp.square(quadrant, out=quadrant)
+            intensity[:, i * N:(i + 1) * N, j * N:(j + 1) * N] = quadrant
+            del quadrant
+        return intensity, focal_plane
+
+    def _bio_edge_transform_batch(self, fields):
+        """Propagate a (B, n, n) stack of pupil-plane EM fields; returns the (B, 2N, 2N) detector-plane intensities.
+
+        On the GPU the whole stack is processed in one batched call. On the CPU it is split into nJobs
+        blocks run by threads (NumPy and SciPy release the GIL), each using single-threaded FFTs.
+        The focal-plane intensity is added to self._focal_plane_sum when it is being accumulated.
+        """
+        n_fields = fields.shape[0]
+        n_blocks = 1 if self.gpu_available else max(1, min(self.nJobs, n_fields))
+        if n_blocks == 1:
+            results = [self._bio_edge_transform_block(fields, workers=-1)]
+        else:
+            edges = np.linspace(0, n_fields, n_blocks + 1).astype(int)
+            results = Parallel(n_jobs=n_blocks, prefer='threads')(
+                delayed(self._bio_edge_transform_block)(fields[a:b], 1) for a, b in zip(edges[:-1], edges[1:]))
+        if self._focal_plane_sum is not None:
+            for _, focal_plane in results:
+                if focal_plane is not None:
+                    self._focal_plane_sum += focal_plane
+        if len(results) == 1:
+            return results[0][0]
+        return xp.concatenate([intensity for intensity, _ in results], axis=0)
+
+    def _max_batch(self):
+        """Number of fields that can be propagated in one batch with the memory available."""
+        # peak usage is about 8 complex (N, N) arrays per field (padded field, focal-plane field, masked field,
+        # inverse FFT, the (2N, 2N) real output and FFT workspace)
+        item_bytes = 8 * self.resolution**2 * np.dtype(self.precision_complex).itemsize
+        if self.gpu_available:
+            # the memory query is a driver call: do it once and reuse the result
+            if self._max_batch_cache is None:
+                free_bytes = xp.cuda.runtime.memGetInfo()[0] + xp.get_default_memory_pool().free_bytes()
+                self._max_batch_cache = int(max(1, min(self.n_max, 0.5 * free_bytes // item_bytes)))
+            return self._max_batch_cache
+        return int(max(1, min(self.n_max, self.cpu_batch_memory // item_bytes)))
+
+    def _modulation_phasors(self, start, stop):
+        """exp(1j*TT) for modulation points [start:stop], as a (stop-start, n, n) array on the active backend."""
+        if self.modulation_phasors is not None:
+            return self.modulation_phasors[start:stop]
+        tip_tilt = xp.asarray(self.phaseBuffModulationLowres[start:stop], dtype=self.precision)
+        return xp.exp(1j * tip_tilt)
+
+    def _modulated_frames(self, em_fields, weights=None):
+        """Bi-O Edge intensities summed over the modulation points, for each field of a (m, n, n) stack.
+
+        Modulation point i multiplies the field by exp(1j*TT_i). Fields and modulation points are propagated
+        together in batches sized from the memory available. If weights (length nTheta) are given, the
+        weighted sum is returned. Returns a (m, 2N, 2N) array on the active backend.
+        """
+        n_fields, n = em_fields.shape[0], self.telescope.resolution
+        N2 = 2 * self.resolution
+        batch = self._max_batch()
+        # modulation points per batch, and fields per batch (1 if a full modulation cycle does not fit)
+        theta_step = min(self.nTheta, batch)
+        field_step = max(1, batch // self.nTheta)
+        frames = xp.zeros((n_fields, N2, N2), dtype=self.precision)
+        for f0 in range(0, n_fields, field_step):
+            f1 = min(f0 + field_step, n_fields)
+            for t0 in range(0, self.nTheta, theta_step):
+                t1 = min(t0 + theta_step, self.nTheta)
+                fields = em_fields[f0:f1, None] * self._modulation_phasors(t0, t1)[None]
+                intensity = self._bio_edge_transform_batch(fields.reshape(-1, n, n))
+                del fields
+                intensity = intensity.reshape(f1 - f0, t1 - t0, N2, N2)
+                if weights is None:
+                    frames[f0:f1] += intensity.sum(axis=1)
+                else:
+                    frames[f0:f1] += xp.tensordot(intensity, weights[t0:t1], axes=([1], [0]))
+                del intensity
+        return frames
+
+    def _phase_modes(self, phase, start, stop):
+        """Phase screens [start:stop] of a (n, n, n_modes) cube, as a (stop-start, n, n) array on the active backend."""
+        chunk = phase[:, :, start:stop]
+        backend = _backend_of(chunk)
+        # reorder and cast before any transfer to the GPU
+        chunk = backend.ascontiguousarray(backend.moveaxis(chunk, -1, 0), dtype=self.precision)
+        return xp.asarray(chunk)
+
+    def _spatial_filter_diagnostics(self, phase):
+        """Store the focal-plane field and the spatially filtered pupil-plane field (for inspection only)."""
+        n = self.telescope.resolution
+        pupil = slice(self.center - n // 2, self.center + n // 2)
+        support = xp.zeros((self.resolution, self.resolution), dtype=self.precision_complex)
+        support[pupil, pupil] = self.maskAmplitude * xp.exp(1j * xp.asarray(phase, dtype=self.precision))
+        em_field_ft = fft2(support * self.phasor)
+        self.em_field_spatial_filter = self.convert_for_numpy(em_field_ft)
+        self.pupil_plane_spatial_filter = self.convert_for_numpy(ifft2(em_field_ft * self._spatial_filter_xp))
+
+    def _store_focal_plane(self):
+        """Keep the accumulated focal-plane intensity for wfs*wfs.focal_plane_camera."""
+        if self._focal_plane_sum is None:
+            self.modulation_camera_intensity = None
+            return
+        # factor 4: same scaling as the previous implementation, which stored the focal-plane field once per mask
+        intensity = 4 * self._focal_plane_sum
+        self.modulation_camera_intensity = intensity if self.gpu_resident and self.isCalibrated else self.convert_for_numpy(intensity)
+        self._focal_plane_sum = None
+
+    def _release_gpu_memory(self):
+        """Give cached GPU memory (FFT plans, memory-pool blocks) back to the device after a large batched run."""
+        if self.gpu_available:
+            self._max_batch_cache = None
+            try:
+                xp.fft.config.get_plan_cache().clear()
+                xp.get_default_memory_pool().free_all_blocks()
+            except Exception:
+                warning("could not free the memory")
 
     def wfs_integrate(self):
         # propagate to the detector to apply the noise
@@ -677,389 +791,131 @@ class BioEdge:
                 )
         if phase_in is not None:
             self.src.phase = phase_in
+        phase = self.src.phase
+        if np.ndim(phase) not in (2, 3):
+            raise OopaoError("Wrong dimension for the input phase. Aborting")
+        modulated = not (self.modulation == 0 and self.user_modulation_path is None)
         # mask amplitude for the light propagation
-        self.maskAmplitude = self.convert_for_gpu(
-            np.sqrt(self.src.fluxMap / self.nTheta) * self.telescope.pupilReflectivity
-        )
+        # src.intensity = fluxMap * scintillation, and fluxMap already includes tel.pupilReflectivity
+        # (Telescope.relay), so this matches the Pyramid and the Shack-Hartmann
+        self.maskAmplitude = xp.sqrt(xp.asarray(self.src.intensity, dtype=self.precision) / self.nTheta)
+        # the light is split between the two polarization channels of the Bi-O Edge
+        amplitude = self.precision(np.sqrt(0.5)) * self.maskAmplitude
 
-        if self.spatialFilter is not None:
-            if np.ndim(phase_in) == 2:
-                support_spatial_filter = np.copy(self.supportPadded)
-                em_field = self.maskAmplitude * np.exp(1j * (self.src.phase))
-                support_spatial_filter[
-                    self.center
-                    - self.telescope.resolution // 2 : self.center
-                    + self.telescope.resolution // 2,
-                    self.center
-                    - self.telescope.resolution // 2 : self.center
-                    + self.telescope.resolution // 2,
-                ] = em_field
-                self.em_field_spatial_filter = np.fft.fft2(
-                    support_spatial_filter * self.phasor
-                )
-                self.pupil_plane_spatial_filter = np.fft.ifft2(
-                    self.em_field_spatial_filter * self.spatialFilter
-                )
-        # initialize modulation camera em field buffer
-        self.modulation_camera_em = []
-        if self.modulation == 0 and self.user_modulation_path is None:
-            if np.ndim(phase_in) == 2:
-                self.raw_data = self.convert_for_numpy(
-                    self.bio_edge_transform(self.convert_for_gpu(self.src.phase))
-                )
-                if integrate:
-                    self.signal_2D, self.signal = self.wfs_integrate()
-            else:
-                nModes = phase_in.shape[2]
-                # move axis to get the number of modes first
-                self.phase_buffer = self.convert_for_gpu(
-                    np.moveaxis(self.src.phase, -1, 0)
-                )
-                # define the parallel jobs
-
-                def job_loop_multiple_modes_non_modulated():
-                    Q = Parallel(n_jobs=self.nJobs, prefer=self.joblib_setting)(
-                        delayed(self.bio_edge_transform)(i) for i in self.phase_buffer
-                    )
-                    return Q
-
-                # apply the pyramid transform in parallel
-                maps = self.convert_for_numpy(
-                    xp.asarray(job_loop_multiple_modes_non_modulated())
-                )
-
-                self.signal_2D = np.zeros(
-                    [self.validSignal.shape[0], self.validSignal.shape[1], nModes]
-                )
-                self.signal = np.zeros([self.nSignal, nModes])
-                for i in range(nModes):
-                    self.raw_data = maps[i, :, :]
-                    if integrate:
-                        self.signal_2D[:, :, i], self.signal[:, i] = (
-                            self.wfs_integrate()
-                        )
-                del maps
+        if self.spatialFilter is not None and np.ndim(phase) == 2:
+            self._spatial_filter_diagnostics(phase)
+        # focal-plane (modulation camera) intensity, accumulated during the propagation
+        if self.compute_focal_plane:
+            self._focal_plane_sum = xp.zeros((self.resolution, self.resolution), dtype=self.precision)
         else:
-            if np.ndim(phase_in) == 2:
-                n_max_ = self.n_max
-                if self.nTheta > n_max_:
-                    # break problem in pieces:
-                    nCycle = int(np.ceil(self.nTheta / n_max_))
-                    maps = self.convert_for_numpy(
-                        xp.zeros([self.resolution, self.resolution])
-                    )
-                    for i in range(nCycle):
-                        if self.gpu_available:
-                            try:
-                                self.mempool = xp.get_default_memory_pool()
-                                self.mempool.free_all_blocks()
-                            except:
-                                warning("could not free the memory")
-                        if i < nCycle - 1:
+            self._focal_plane_sum = None
 
-                            def job_loop_single_mode_modulated():
-                                Q = Parallel(
-                                    n_jobs=self.nJobs, prefer=self.joblib_setting
-                                )(
-                                    delayed(self.bio_edge_transform)(i)
-                                    for i in self.convert_for_gpu(
-                                        self.phaseBuffModulationLowres[
-                                            i * n_max_ : (i + 1) * n_max_, :, :
-                                        ]
-                                    )
-                                )
-                                return Q
-
-                            maps += self.convert_for_numpy(
-                                xp.sum(
-                                    xp.asarray(job_loop_single_mode_modulated()), axis=0
-                                )
-                            )
-                        else:
-
-                            def job_loop_single_mode_modulated():
-                                Q = Parallel(
-                                    n_jobs=self.nJobs, prefer=self.joblib_setting
-                                )(
-                                    delayed(self.bio_edge_transform)(i)
-                                    for i in self.convert_for_gpu(
-                                        self.phaseBuffModulationLowres[
-                                            i * n_max_ :, :, :
-                                        ]
-                                    )
-                                )
-                                return Q
-
-                            maps += self.convert_for_numpy(
-                                xp.sum(
-                                    xp.asarray(job_loop_single_mode_modulated()), axis=0
-                                )
-                            )
-                    self.maps = maps.copy()
-                    self.raw_data = maps
-                    del maps
-                else:
-                    # define the parallel jobs
-                    def job_loop_single_mode_modulated():
-                        Q = Parallel(n_jobs=self.nJobs, prefer=self.joblib_setting)(
-                            delayed(self.bio_edge_transform)(i)
-                            for i in self.phaseBuffModulationLowres
-                        )
-                        return Q
-
-                    # apply the pyramid transform in parallel
-                    self.maps = xp.asarray(job_loop_single_mode_modulated())
-                    # compute the sum of the pyramid frames for each modulation points
-                    if self.weight_vector is None:
-                        self.raw_data = self.convert_for_numpy(
-                            xp.sum((self.maps), axis=0)
-                        )
-                    else:
-                        weighted_map = np.reshape(
-                            self.maps, [self.nTheta, self.resolution**2]
-                        )
-                        self.weighted_map = np.diag(self.weight_vector) @ weighted_map
-                        self.raw_data = np.reshape(
-                            self.convert_for_numpy(xp.sum((self.weighted_map), axis=0))
-                            / self.nTheta,
-                            [self.resolution, self.resolution],
-                        )
-                if integrate:
-                    self.signal_2D, self.signal = self.wfs_integrate()
+        if np.ndim(phase) == 2:
+            # single phase screen: all modulation points in as few batched calls as memory allows
+            em_field = amplitude * xp.exp(1j * xp.asarray(phase, dtype=self.precision))
+            if modulated:
+                weights = None if self.weight_vector is None else xp.asarray(self.weight_vector, dtype=self.precision)
+                frame = self._modulated_frames(em_field[None], weights)[0]
+                if weights is not None:
+                    frame /= self.nTheta
             else:
-                if np.ndim(phase_in) == 3:
-                    nModes = phase_in.shape[2]
-                    # move axis to get the number of modes first
-                    self.phase_buffer = np.moveaxis(self.src.phase, -1, 0)
-
-                    def jobLoop_setPhaseBuffer():
-                        Q = Parallel(n_jobs=self.nJobs, prefer=self.joblib_setting)(
-                            delayed(self.setPhaseBuffer)(i) for i in self.phase_buffer
-                        )
-                        return Q
-
-                    self.phaseBuffer = np.reshape(
-                        np.asarray(jobLoop_setPhaseBuffer()),
-                        [
-                            nModes * self.nTheta,
-                            self.telescope.resolution,
-                            self.telescope.resolution,
-                        ],
-                    )
-                    n_measurements = nModes * self.nTheta
-                    n_max = self.n_max
-                    n_measurement_max = int(np.floor(n_max / self.nTheta))
-                    maps = xp.zeros([n_measurements, self.resolution, self.resolution])
-
-                    if n_measurements > n_max:
-                        nCycle = int(np.ceil(nModes / n_measurement_max))
-                        for i in range(nCycle):
-                            if self.gpu_available:
-                                try:
-                                    self.mempool = xp.get_default_memory_pool()
-                                    self.mempool.free_all_blocks()
-                                except:
-                                    warning("could not free the memory")
-                            if i < nCycle - 1:
-
-                                def job_loop_multiple_mode_modulated():
-                                    Q = Parallel(
-                                        n_jobs=self.nJobs, prefer=self.joblib_setting
-                                    )(
-                                        delayed(self.bio_edge_transform)(i)
-                                        for i in self.convert_for_gpu(
-                                            self.phaseBuffer[
-                                                i
-                                                * n_measurement_max
-                                                * self.nTheta : (i + 1)
-                                                * n_measurement_max
-                                                * self.nTheta,
-                                                :,
-                                                :,
-                                            ]
-                                        )
-                                    )
-                                    return Q
-
-                                maps[
-                                    i
-                                    * n_measurement_max
-                                    * self.nTheta : (i + 1)
-                                    * n_measurement_max
-                                    * self.nTheta,
-                                    :,
-                                    :,
-                                ] = xp.asarray(job_loop_multiple_mode_modulated())
-                            else:
-
-                                def job_loop_multiple_mode_modulated():
-                                    Q = Parallel(
-                                        n_jobs=self.nJobs, prefer=self.joblib_setting
-                                    )(
-                                        delayed(self.bio_edge_transform)(i)
-                                        for i in self.convert_for_gpu(
-                                            self.phaseBuffer[
-                                                i * n_measurement_max * self.nTheta :,
-                                                :,
-                                                :,
-                                            ]
-                                        )
-                                    )
-                                    return Q
-
-                                maps[i * n_measurement_max * self.nTheta :, :, :] = (
-                                    xp.asarray(job_loop_multiple_mode_modulated())
-                                )
-                        self.buffer_intensity = self.convert_for_numpy(maps)
-                        del self.phaseBuffer
-                        del maps
-                        if self.gpu_available:
-                            try:
-                                self.mempool = xp.get_default_memory_pool()
-                                self.mempool.free_all_blocks()
-                            except:
-                                warning("could not free the memory")
-                    else:
-
-                        def job_loop_multiple_mode_modulated():
-                            Q = Parallel(n_jobs=self.nJobs, prefer=self.joblib_setting)(
-                                delayed(self.bio_edge_transform)(i)
-                                for i in self.convert_for_gpu(self.phaseBuffer)
-                            )
-                            return Q
-
-                        self.buffer_intensity = self.convert_for_numpy(
-                            xp.asarray(job_loop_multiple_mode_modulated())
-                        )
-
-                    self.signal_2D = np.zeros(
-                        [self.validSignal.shape[0], self.validSignal.shape[1], nModes]
-                    )
-                    self.signal = np.zeros([self.nSignal, nModes])
-
-                    for i in range(nModes):
-                        self.raw_data = xp.sum(
-                            self.buffer_intensity[
-                                i * (self.nTheta) : (self.nTheta) + i * (self.nTheta)
-                            ],
-                            axis=0,
-                        )
-                        if integrate:
-                            self.signal_2D[:, :, i], self.signal[:, i] = (
-                                self.wfs_integrate()
-                            )
-                    del self.buffer_intensity
+                frame = self._bio_edge_transform_batch(em_field[None])[0]
+            # with GPU residency the frame stays on the GPU for the detector and the signal processing
+            self.raw_data = frame if self.gpu_resident and self.isCalibrated else self.convert_for_numpy(frame)
+            self._store_focal_plane()
+            if integrate:
+                self.signal_2D, self.signal = self.wfs_integrate()
+        else:
+            # cube of phase screens (e.g. interaction matrix): processed by chunks of modes
+            n_modes = phase.shape[2]
+            modes_per_batch = max(1, self._max_batch() // self.nTheta)
+            self.signal_2D = np.zeros([self.validSignal.shape[0], self.validSignal.shape[1], n_modes])
+            self.signal = np.zeros([self.nSignal, n_modes])
+            for start in range(0, n_modes, modes_per_batch):
+                stop = min(start + modes_per_batch, n_modes)
+                em_fields = amplitude * xp.exp(1j * self._phase_modes(phase, start, stop))
+                if modulated:
+                    frames = self._modulated_frames(em_fields)
                 else:
-                    raise OopaoError("Wrong dimension for the input phase. Aborting")
-                if self.gpu_available:
-                    try:
-                        self.mempool = xp.get_default_memory_pool()
-                        self.mempool.free_all_blocks()
-                    except:
-                        warning("could not free the memory")
+                    frames = self._bio_edge_transform_batch(em_fields)
+                del em_fields
+                frames = self.convert_for_numpy(frames)
+                for i in range(stop - start):
+                    self.raw_data = frames[i]
+                    if integrate:
+                        self.signal_2D[:, :, start + i], self.signal[:, start + i] = self.wfs_integrate()
+                del frames
+            self._store_focal_plane()
+            self._release_gpu_memory()
         return
 
+    def _processing_arrays(self, backend):
+        """Valid-pixel masks, their flat indices and the 2D reference signal on `backend`.
+
+        Boolean-mask indexing (a[mask]) forces a GPU synchronization because the size of the result
+        must be read back; integer indices computed once avoid it. The arrays are cached and rebuilt
+        whenever validI4Q, validSignal or referenceSignal_2D is replaced (new calibration, lightRatio...).
+        """
+        valid_I4Q = getattr(self, "validI4Q", None)
+        sources = (valid_I4Q, self.validSignal, self.referenceSignal_2D)
+        cache = getattr(self, "_processing_cache", None)
+        on_gpu = backend is not np
+        if cache is not None and cache["on_gpu"] == on_gpu and all(a is b for a, b in zip(cache["sources"], sources)):
+            return cache["arrays"]
+        arrays = {"reference_2D": _to_backend(self.referenceSignal_2D, backend),
+                  "signal_index": _to_backend(np.flatnonzero(_to_backend(self.validSignal, np) == 1), backend)}
+        if valid_I4Q is not None:
+            arrays["valid_I4Q"] = _to_backend(valid_I4Q, backend)
+            arrays["I4Q_index"] = _to_backend(np.flatnonzero(_to_backend(valid_I4Q, np)), backend)
+        self._processing_cache = {"on_gpu": on_gpu, "sources": sources, "arrays": arrays}
+        return arrays
+
     def signalProcessing(self, cameraFrame=None):
+        # runs on the backend of the camera frame (NumPy, or CuPy with GPU residency) without read-backs
         if cameraFrame is None:
             cameraFrame = self.cam.frame
-        if self.postProcessing == "slopesMaps":
+        backend = _backend_of(cameraFrame)
+        arrays = self._processing_arrays(backend)
+
+        if self.postProcessing in ("slopesMaps", "slopesMaps_incidence_flux", "slopesMaps_camera_flux"):
             # slopes-maps computation
-            I1 = self.grabQuadrant(1, cameraFrame=None) * self.validI4Q
-            I2 = self.grabQuadrant(2, cameraFrame=None) * self.validI4Q
-            I3 = self.grabQuadrant(3, cameraFrame=None) * self.validI4Q
-            I4 = self.grabQuadrant(4, cameraFrame=None) * self.validI4Q
+            I1 = self.grabQuadrant(1, cameraFrame=cameraFrame) * arrays["valid_I4Q"]
+            I2 = self.grabQuadrant(2, cameraFrame=cameraFrame) * arrays["valid_I4Q"]
+            I3 = self.grabQuadrant(3, cameraFrame=cameraFrame) * arrays["valid_I4Q"]
+            I4 = self.grabQuadrant(4, cameraFrame=cameraFrame) * arrays["valid_I4Q"]
             # global normalisation
-            I4Q = I1 + I2 + I3 + I4
-            self.norma = np.mean(I4Q[self.validI4Q])
+            if self.postProcessing == "slopesMaps":
+                I4Q = I1 + I2 + I3 + I4
+                self.norma = I4Q.ravel()[arrays["I4Q_index"]].mean()
+            elif self.postProcessing == "slopesMaps_incidence_flux":
+                subArea = (self.telescope.D / self.nSubap) ** 2
+                self.norma = np.float64(self.src.nPhoton * self.telescope.samplingTime * subArea)
+            else:
+                self.norma = self.cam.frame.mean().astype(np.float64)
             # slopesMaps computation cropped to the valid pixels
             Sx = I1 - I2 + I4 - I3
             Sy = I1 - I4 + I2 - I3
             # 2D slopes maps
-            slopesMaps = (
-                np.concatenate((Sx, Sy) / self.norma) - self.referenceSignal_2D
-            ) * self.slopesUnits
+            slopesMaps = (backend.concatenate((Sx, Sy)) / self.norma - arrays["reference_2D"]) * self.slopesUnits
             # slopes vector
-            slopes = slopesMaps[np.where(self.validSignal == 1)]
+            slopes = slopesMaps.ravel()[arrays["signal_index"]]
             return slopesMaps, slopes
 
-        if self.postProcessing == "slopesMaps_incidence_flux":
-            # slopes-maps computation
-            I1 = self.grabQuadrant(1, cameraFrame=None) * self.validI4Q
-            I2 = self.grabQuadrant(2, cameraFrame=None) * self.validI4Q
-            I3 = self.grabQuadrant(3, cameraFrame=None) * self.validI4Q
-            I4 = self.grabQuadrant(4, cameraFrame=None) * self.validI4Q
-            # global normalisation
-            subArea = (self.telescope.D / self.nSubap) ** 2
-            self.norma = np.float64(
-                self.src.nPhoton * self.telescope.samplingTime * subArea
-            )
-            # slopesMaps computation cropped to the valid pixels
-            Sx = I1 - I2 + I4 - I3
-            Sy = I1 - I4 + I2 - I3
-            # 2D slopes maps
-            slopesMaps = (
-                np.concatenate((Sx, Sy) / self.norma) - self.referenceSignal_2D
-            ) * self.slopesUnits
-            # slopes vector
-            slopes = slopesMaps[np.where(self.validSignal == 1)]
-            return slopesMaps, slopes
-
-        if self.postProcessing == "slopesMaps_camera_flux":
-            # slopes-maps computation
-            I1 = self.grabQuadrant(1, cameraFrame=None) * self.validI4Q
-            I2 = self.grabQuadrant(2, cameraFrame=None) * self.validI4Q
-            I3 = self.grabQuadrant(3, cameraFrame=None) * self.validI4Q
-            I4 = self.grabQuadrant(4, cameraFrame=None) * self.validI4Q
-            # global normalisation
-            self.norma = np.float64(self.cam.frame.mean())
-            # slopesMaps computation cropped to the valid pixels
-            Sx = I1 - I2 + I4 - I3
-            Sy = I1 - I4 + I2 - I3
-            # 2D slopes maps
-            slopesMaps = (
-                np.concatenate((Sx, Sy) / self.norma) - self.referenceSignal_2D
-            ) * self.slopesUnits
-            # slopes vector
-            slopes = slopesMaps[np.where(self.validSignal == 1)]
-            return slopesMaps, slopes
-
-        if self.postProcessing == "fullFrame_camera_flux":
+        if self.postProcessing in ("fullFrame_camera_flux", "fullFrame_incidence_flux", "fullFrame_sum_flux", "fullFrame"):
             # global normalization
-            self.norma = np.float64(self.cam.frame.mean())
+            if self.postProcessing == "fullFrame_camera_flux":
+                self.norma = self.cam.frame.mean().astype(np.float64)
+            elif self.postProcessing == "fullFrame_incidence_flux":
+                subArea = (self.telescope.D / self.nSubap) ** 2
+                self.norma = np.float64(self.src.nPhoton * self.telescope.samplingTime * subArea) / 4
+            elif self.postProcessing == "fullFrame_sum_flux":
+                self.norma = self.cam.frame.sum().astype(np.float64)
+            else:
+                self.norma = cameraFrame.ravel()[arrays["signal_index"]].sum()
             # 2D full-frame
-            fullFrameMaps = (cameraFrame / self.norma) - self.referenceSignal_2D
+            fullFrameMaps = (cameraFrame / self.norma) - arrays["reference_2D"]
             # full-frame vector
-            fullFrame = fullFrameMaps[np.where(self.validSignal == 1)]
-            return fullFrameMaps, fullFrame
-
-        if self.postProcessing == "fullFrame_incidence_flux":
-            # global normalization
-            subArea = (self.telescope.D / self.nSubap) ** 2
-            self.norma = (
-                np.float64(self.src.nPhoton * self.telescope.samplingTime * subArea) / 4
-            )
-            # 2D full-frame
-            fullFrameMaps = (cameraFrame / self.norma) - self.referenceSignal_2D
-            # full-frame vector
-            fullFrame = fullFrameMaps[np.where(self.validSignal == 1)]
-            return fullFrameMaps, fullFrame
-
-        if self.postProcessing == "fullFrame_sum_flux":
-            # global normalization
-            self.norma = np.float64(self.cam.frame.sum())
-            # 2D full-frame
-            fullFrameMaps = (cameraFrame / self.norma) - self.referenceSignal_2D
-            # full-frame vector
-            fullFrame = fullFrameMaps[np.where(self.validSignal == 1)]
-            return fullFrameMaps, fullFrame
-
-        if self.postProcessing == "fullFrame":
-            # global normalization
-            self.norma = np.sum(cameraFrame[self.validSignal])
-            # 2D full-frame
-            fullFrameMaps = (cameraFrame / self.norma) - self.referenceSignal_2D
-            # full-frame vector
-            fullFrame = fullFrameMaps[np.where(self.validSignal == 1)]
+            fullFrame = fullFrameMaps.ravel()[arrays["signal_index"]]
             return fullFrameMaps, fullFrame
 
     def get_modulation_frame(self, radius=6, norma=True):
@@ -1068,7 +924,7 @@ class BioEdge:
                 "radius for the field of view must be a strictly positive number. Ignoring the input value."
             )
             radius = self.telescope.resolution // 2
-        self.modulation_camera_frame = self.focal_plane_camera.frame.astype(float)
+        self.modulation_camera_frame = self.convert_for_numpy(self.focal_plane_camera.frame).astype(float)
         N_trunc = int(self.resolution / 2 - radius * self.zeroPaddingFactor)
         if N_trunc <= 0:
             warning(
@@ -1163,6 +1019,8 @@ class BioEdge:
     @spatialFilter.setter
     def spatialFilter(self, val):
         self._spatialFilter = val
+        # copy of the filter on the active backend, at the working precision
+        self._spatial_filter_xp = None if val is None else xp.asarray(val).astype(self.precision_complex)
         if self.isInitialized:
             if val is None:
                 print("No spatial filter considered")
@@ -1177,11 +1035,13 @@ class BioEdge:
                     self.wfs_calibration()
                     print("Done!")
             else:
-                if val.shape == self.mask.shape:
+                # a (N, N) filter is applied to the 4 masks, a (4, N, N) filter mask by mask
+                if val.shape == self.mask.shape or val.shape == self.mask.shape[1:]:
                     print("A spatial filter is now considered")
-                    self.mask = self.initial_mask * val
+                    self.mask = self.initial_mask * self._spatial_filter_xp
+                    mask_cpu = self.convert_for_numpy(xp.real(self.mask))
                     plt.figure()
-                    plt.imshow(np.real(self.mask))
+                    plt.imshow(np.block([[mask_cpu[0], mask_cpu[1]], [mask_cpu[2], mask_cpu[3]]]))
                     plt.title("Spatial Filter considered")
                     if self.isCalibrated:
                         print(
@@ -1294,8 +1154,16 @@ class BioEdge:
                     self.phaseBuffModulationLowres = self.convert_for_gpu(
                         self.phaseBuffModulationLowres
                     )
+            # modulation phasors exp(1j*TT), computed once per modulation change
+            # (if they do not fit in memory they are computed on the fly, batch by batch)
+            self.modulation_phasors = None
+            if self.nTheta <= self.n_max:
+                self.modulation_phasors = xp.exp(1j * xp.asarray(self.phaseBuffModulationLowres, dtype=self.precision))
         else:
             self.nTheta = 1
+            self.modulation_phasors = None
+        # the memory in use has changed: measure the batch size again at the next propagation
+        self._max_batch_cache = None
 
         if hasattr(self, "isCalibrated"):
             if self.isCalibrated:
@@ -1325,17 +1193,20 @@ class BioEdge:
             signal_list.append(self.signal)
             frames_list.append(self.cam.frame)
 
-        self.signal_2D = np.squeeze(np.array(signal_2D_list))
-        self.signal = np.squeeze(np.array(signal_list))
-        self.frames = np.squeeze(np.array(frames_list))
+        self.signal_2D = _stack_squeeze(signal_2D_list)
+        self.signal = _stack_squeeze(signal_list)
+        self.frames = _stack_squeeze(frames_list)
         return
 
     def __mul__(self, obj):
         if obj.tag == "detector":
+            if getattr(obj, "is_focal_plane_camera", False) and self.modulation_camera_intensity is None:
+                raise OopaoError("The focal-plane image was not computed. Set wfs.compute_focal_plane = True and propagate the light again.")
             obj._integrated_time += self.telescope.samplingTime
             try:
                 if obj.is_focal_plane_camera:
-                    intensity = np.sum(np.abs(self.modulation_camera_em) ** 2, axis=0)
+                    camera_backend = xp if self.gpu_resident else np
+                    intensity = camera_backend.asarray(self.modulation_camera_intensity)
                     if obj.resolution > self.resolution:
                         frame = intensity
                         warning(

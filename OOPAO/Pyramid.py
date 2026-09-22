@@ -17,10 +17,8 @@ from .tools.tools import warning, OopaoError
 from .Detector import Detector
 from .runtime import array_backend, gpu_resident, precision_bits
 xp, global_gpu_flag = array_backend()
+from .runtime import backend_of as _backend_of, fft_kwargs as _fft_kwargs, stack_squeeze as _stack_squeeze, to_backend as _to_backend
 
-# 2D FFTs act on the last two axes, so a (B, N, N) stack is transformed as a batch.
-# On the GPU this is a single batched cuFFT call. On the CPU, scipy.fft is used for
-# both directions: it keeps single precision and accepts a `workers` argument.
 if global_gpu_flag:
     fft2 = xp.fft.fft2
     ifft2 = xp.fft.ifft2
@@ -29,32 +27,6 @@ else:
     fft2 = scipy.fft.fft2
     ifft2 = scipy.fft.ifft2
     fftshift = scipy.fft.fftshift
-
-
-def _fft_kwargs(workers):
-    """Extra FFT arguments: CPU thread count for scipy.fft, nothing for CuPy."""
-    return {} if global_gpu_flag else {'workers': workers}
-
-
-def _backend_of(array):
-    """NumPy or CuPy, whichever holds `array`."""
-    return xp if global_gpu_flag and isinstance(array, xp.ndarray) else np
-
-
-def _to_backend(array, backend):
-    """Move an array to `backend` (NumPy or CuPy). Python and NumPy scalars are returned unchanged."""
-    if np.isscalar(array):
-        return array
-    if backend is np:
-        return xp.asnumpy(array) if _backend_of(array) is not np else np.asarray(array)
-    return backend.asarray(array)
-
-
-def _stack_squeeze(items):
-    """np.squeeze(np.array(items)), keeping GPU arrays on the GPU."""
-    if global_gpu_flag and len(items) > 0 and all(isinstance(item, xp.ndarray) for item in items):
-        return xp.squeeze(xp.stack(items))
-    return np.squeeze(np.array(items))
 
 
 class Pyramid:
@@ -351,8 +323,6 @@ class Pyramid:
         # Prepare the Tip Tilt for the modulation -- normalized to apply the modulation in terms of lambda/D
         [self.Tip, self.Tilt] = np.meshgrid(np.linspace(-np.pi, np.pi, self.telescope.resolution), np.linspace(-np.pi, np.pi, self.telescope.resolution))
         # truncate with the pupil and scale the TT to account for eventual padding of the pupil
-        # self.Tilt *= self.telescope.pupil * self.telescope.resolution/self.telescope.initial_resolution
-        # self.Tip *= self.telescope.pupil * self.telescope.resolution/self.telescope.initial_resolution
         self.Tilt *= self.telescope.resolution/self.telescope.initial_resolution
         self.Tip *= self.telescope.resolution/self.telescope.initial_resolution
 

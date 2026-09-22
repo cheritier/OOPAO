@@ -60,9 +60,9 @@ def InteractionMatrix(ngs,
         def iterate(x):
             return tqdm.tqdm(x)
 
-    if wfs.tag=='pyramid' and wfs.gpu_available:
-        nMeasurements = 1
-        print('Pyramid with GPU detected => using single mode measurement to increase speed.')
+    # if wfs.tag=='pyramid' and wfs.gpu_available:
+        # nMeasurements = 1
+        # print('Pyramid with GPU detected => using single mode measurement to increase speed.')
 
     # disabled noise functionality from WFS
     if noise =='off':  
