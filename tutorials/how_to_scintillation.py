@@ -323,7 +323,7 @@ pixels_per_subap = tel.initial_resolution / n_subaperture
 n_subap_padded_wfs = int(tel.resolution / pixels_per_subap)
 
 # Initialize PWFS
-pwfs = Pyramid(nSubap=n_subap_padded_wfs, telescope=tel, lightRatio=0.5, modulation=5, 
+pwfs = Pyramid(nSubap=n_subap_padded_wfs, telescope=tel, lightRatio=0.01, modulation=5, 
                binning=1, n_pix_separation=2, n_pix_edge=1, postProcessing='slopesMaps') 
 
 # Initialize SHWFS
@@ -451,7 +451,7 @@ displayMap(tel.OPD)
 #%% -----------------------     Calibration: Interaction Matrix PWFS  ----------------------------------
 
 # amplitude of the modes in m
-stroke=1e-9
+stroke=1e-12
 # zonal Interaction Matrix
 M2C_zonal = np.eye(dm.nValidAct)
 
@@ -666,7 +666,7 @@ for i in range(nLoop):
     # store the slopes after computing the commands <=> 2 frames delay
     if frame_delay == 2:
         wfsSignal = pwfs.signal
-    # print('Elapsed time: ' + str(time.time()-a) + ' s')
+    print('Elapsed time: ' + str(time.time()-a) + ' s')
 
     # update displays if required
     if display and i > 1:
