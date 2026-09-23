@@ -17,6 +17,9 @@ from .tools.interpolateGeometricalTransformation import interpolate_cube, interp
 from .tools.tools import createFolder, emptyClass, globalTransformation, pol2cart, translationImageMatrix, OopaoError, warning
 from .runtime import array_backend, gpu_resident, precision_bits
 from .tools.gpuTransforms import translate_cubic
+from .tools.separableInterpolation import SeparableTaps, shift_crop_zoom_taps, stack_taps
+import scipy.fft
+import scipy.linalg
 xp, global_gpu_flag = array_backend()
 from .runtime import backend_of as _backend_of, to_backend as _to_backend
 
@@ -181,6 +184,13 @@ class Atmosphere:
         # caches: pupil masks on the working backend (CPU/GPU), angular-spectrum kernels
         self._mask_cache = {}
         self._asm_cache = {}
+        self._asm_batch_cache = {}
+        # propagate all the sources of an asterism at once (False: one after the other)
+        self.parallel_sources = True
+        # number of CPU threads for the batched FFTs (-1: all the cores)
+        self.fft_workers = -1
+        # inversion of the covariance matrices of the phase screens: 'cholesky' or 'pinv' (SVD)
+        self.covariance_inversion = 'cholesky'
         # Elevation initialization
         self.angular_spectrum_propagation = angular_spectrum_propagation
         self.geometric_phase_backup = geometric_phase_backup
@@ -643,11 +653,58 @@ class Atmosphere:
         return OPD_support
 
     def fill_OPD_support(self, tmp_layer, OPD_support, i_layer):
+        for src in self.src_list:
+            if src.altitude <= tmp_layer.altitude:
+                raise OopaoError('The source altitude ('+str(src.altitude)+' m) is below or at the same altitude as the atmosphere layer ('+str(tmp_layer.altitude)+' m)')
+        OPD_batch = None
+        if self.parallel_sources and len(self.src_list) > 0:
+            OPD_batch = self._get_OPD_batch(tmp_layer, i_layer)
+        if OPD_batch is None:
+            return self._fill_OPD_support_sequential(tmp_layer, OPD_support, i_layer)
+        OPD_batch = _to_backend(OPD_batch, _backend_of(OPD_support[0]))
+        for i_src in range(len(self.src_list)):
+            OPD_support[i_src] += OPD_batch[i_src]
+        return OPD_support
+
+    def _get_taps(self, layer):
+        """Interpolation taps of every source for the layer (footprint, sub-pixel shift, cone effect)."""
+        backend = _backend_of(layer.OPD)
+        n = self.telescope.resolution
+        n_layer = layer.OPD.shape[0]
+        key = (getattr(layer, '_footprint_key', None), tuple(float(src.altitude) for src in self.src_list),
+               float(layer.altitude), n, n_layer, backend.__name__, np.dtype(layer.OPD.dtype).str)
+        cache = getattr(layer, '_taps_cache', None)
+        if cache is not None and cache[0] == key:
+            return cache[1]
+        row_taps = []
+        col_taps = []
+        for i_src, src in enumerate(self.src_list):
+            rows, cols = layer.footprint_slices[i_src]
+            magnification = 1 if src.altitude == np.inf else (src.altitude-layer.altitude)/src.altitude
+            taps = shift_crop_zoom_taps(n_layer, rows, cols, layer.extra_sx[i_src], layer.extra_sy[i_src], magnification, n)
+            if taps is None:
+                layer._taps_cache = (key, None)
+                return None
+            row_taps.append(taps[0])
+            col_taps.append(taps[1])
+        taps = SeparableTaps(stack_taps(row_taps), stack_taps(col_taps), backend, layer.OPD.dtype)
+        layer._taps_cache = (key, taps)
+        return taps
+
+    def _get_OPD_batch(self, layer, i_layer):
+        """OPD of the layer seen by every source, as a (n_src, n, n) array (None if it cannot be batched)."""
+        taps = self._get_taps(layer)
+        if taps is None:
+            return None
+        OPD = taps.apply(layer.OPD)
+        OPD = OPD * (self.wavelength/2/np.pi)
+        OPD = OPD * np.sqrt(self.fractionalR0[i_layer])
+        return OPD
+
+    def _fill_OPD_support_sequential(self, tmp_layer, OPD_support, i_layer):
         backend = xp if self.gpu_resident else np
         for i_src in range(len(self.src_list)):
             src = self.src_list[i_src]
-            if src.altitude <= tmp_layer.altitude:
-                raise OopaoError('The source altitude ('+str(src.altitude)+' m) is below or at the same altitude as the atmosphere layer ('+str(tmp_layer.altitude)+' m)')
             rows, cols = tmp_layer.footprint_slices[i_src]
             off_axis_shift = tmp_layer.extra_sx[i_src] != 0 or tmp_layer.extra_sy[i_src] != 0
             cone_effect = src.altitude != np.inf
@@ -716,6 +773,8 @@ class Atmosphere:
         # extract the geometric OPD for this layer only
         # (on the working backend: GPU with GPU residency)
         layer_opd = self.fill_OPD_support(tmp_layer, self.initialize_OPD_support(), i_layer)
+        if self.parallel_sources and len(self.src_list) > 1:
+            return self._fill_scintillation_support_batch(scintillation_support, layer_opd, distance, pxl_scale)
         for i_src, src in enumerate(self.src_list):
             wvl = src.wavelength
             backend = _backend_of(scintillation_support[i_src])
@@ -727,6 +786,54 @@ class Atmosphere:
                 scintillation_support[i_src] = self.ASM(
                     scintillation_support[i_src], wvl, pxl_scale, pxl_scale, distance)
         return scintillation_support
+
+    def _fill_scintillation_support_batch(self, scintillation_support, layer_opd, distance, pxl_scale):
+        backend = _backend_of(scintillation_support[0])
+        fields = backend.stack([_to_backend(f, backend) for f in scintillation_support])
+        opd = backend.stack([_to_backend(o, backend) for o in layer_opd])
+        wavenumber = backend.asarray([2*np.pi/src.wavelength for src in self.src_list], dtype=opd.dtype)
+        # apply phase screen
+        fields = fields * backend.exp(1j * (opd * wavenumber[:, None, None]))
+        # propagate using angular spectrum
+        if distance > 1e-6:
+            fields = self._ASM_batch(fields, [src.wavelength for src in self.src_list], pxl_scale, pxl_scale, distance)
+        return list(fields)
+
+    def _ASM_batch(self, fields, wavelengths, input_pitch, output_pitch, distance):
+        """Angular-spectrum propagation of a (n_src, N, N) stack of fields (one wavelength per field)."""
+        if distance == 0:
+            return fields
+        backend = _backend_of(fields)
+        if backend is np:
+            fft, fft_kw = scipy.fft, {'workers': self.fft_workers}
+        else:
+            fft, fft_kw = backend.fft, {}
+        phase_1, phase_2, phase_3, m = self._asm_kernels_batch(backend, fields.shape[-1], fields.real.dtype,
+                                                               tuple(wavelengths), input_pitch, output_pitch, distance)
+        axes = (-2, -1)
+        field_freq = fft.fft2(backend.fft.ifftshift(fields * phase_1, axes=axes), axes=axes, **fft_kw)
+        field_out = backend.fft.fftshift(fft.ifft2(field_freq * phase_2, axes=axes, **fft_kw), axes=axes)
+        return field_out * phase_3 / m
+
+    def _asm_kernels_batch(self, backend, N, dtype, wavelengths, input_pitch, output_pitch, distance):
+        """ASM kernels of every source, stacked along the first axis (shared if one wavelength)."""
+        key = (backend.__name__, N, np.dtype(dtype).str, wavelengths, input_pitch, output_pitch, distance)
+        kernels = self._asm_batch_cache.get(key)
+        if kernels is not None:
+            return kernels
+        if len(self._asm_batch_cache) >= self.nLayer + 1:
+            self._asm_batch_cache.clear()
+        kernels_src = [self._asm_kernels(backend, N, dtype, wvl, input_pitch, output_pitch, distance) for wvl in wavelengths]
+        if len(set(wavelengths)) == 1:
+            kernels = kernels_src[0]
+        else:
+            def stack(items):
+                if all(np.isscalar(item) for item in items):
+                    return backend.asarray(items)[:, None, None] if len(set(items)) > 1 else items[0]
+                return backend.stack([item * backend.ones((N, N), dtype=dtype) for item in items])
+            kernels = tuple(stack([k[i] for k in kernels_src]) for i in range(4))
+        self._asm_batch_cache[key] = kernels
+        return kernels
 
     def set_scintillation_support(self, scintillation_support, OPD_support):
         intensity_support = []
@@ -772,6 +879,20 @@ class Atmosphere:
         self.set_OPD(OPD_support)
         return
 
+    def _invert_covariance(self, M):
+        if self.covariance_inversion == 'cholesky':
+            potrf, potri = scipy.linalg.lapack.get_lapack_funcs(('potrf', 'potri'), (M,))
+            factor, info = potrf(M, lower=1)
+            if info == 0:
+                inverse, info = potri(factor, lower=1)
+            if info == 0:
+                # potri only fills the lower triangle
+                return np.tril(inverse) + np.tril(inverse, -1).T
+            warning('The covariance matrix is not positive definite: using the SVD pseudo-inverse instead.')
+        elif self.covariance_inversion != 'pinv':
+            raise OopaoError("covariance_inversion must be 'cholesky' or 'pinv'")
+        return np.linalg.pinv(M)
+
     def get_covariance_matrices(self, layer):
         # Compute the covariance matrices
         compute_covariance_matrices = True
@@ -797,7 +918,7 @@ class Atmosphere:
             c = time.time()
             self.ZZt = makeCovarianceMatrix(layer.innerZ, layer.innerZ, self)
             if self.param is None:
-                self.ZZt_inv = np.linalg.pinv(self.ZZt)
+                self.ZZt_inv = self._invert_covariance(self.ZZt)
             else:
                 try:
                     print('Loading pre-computed data...')
@@ -821,7 +942,7 @@ class Atmosphere:
                     location_data = self.param['pathInput'] + \
                         self.param['name'] + '/sk_v/'
                     createFolder(location_data)
-                    self.ZZt_inv = np.linalg.pinv(self.ZZt)
+                    self.ZZt_inv = self._invert_covariance(self.ZZt)
                     print('saving for future...')
                     data = dict()
                     data['pupil'] = self.telescope.pupil

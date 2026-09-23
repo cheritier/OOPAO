@@ -16,6 +16,7 @@ from .runtime import backend_of as _backend_of, to_backend as _to_backend
 from joblib import Parallel, delayed
 from .MisRegistration import MisRegistration
 from .tools.interpolateGeometricalTransformation import interpolate_cube
+from .tools.separableInterpolation import SeparableTaps, shift_crop_zoom_taps, stack_taps
 from .tools.tools import emptyClass, pol2cart, print_, OopaoError, warning
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -262,6 +263,8 @@ class DeformableMirror:
             self.isM4 = False
         self.telescope = telescope
         self.altitude = altitude
+        # DM at altitude: compute the footprints of all the sources of an asterism at once (False: one after the other)
+        self.parallel_sources = True
         if mechCoupling <= 0:
             raise OopaoError('The value of mechanical coupling should be positive.')
 
@@ -419,10 +422,13 @@ class DeformableMirror:
             self.src_list = [src]
         elif src.tag == 'asterism':
             self.src_list = src.src
+        OPD_batch = None
         if self.altitude is not None:
             self.set_pupil_footprint()
+            if self.parallel_sources and len(self.src_list) > 1 and np.ndim(self.OPD) == 2:
+                OPD_batch = self._get_OPD_altitude_batch()
 
-        for src in self.src_list:
+        for i_src, src in enumerate(self.src_list):
             src.optical_path.append([self.tag, self])
 
             if np.ndim(src.OPD_no_pupil) > 2:
@@ -430,7 +436,7 @@ class DeformableMirror:
                     [self.resolution, self.resolution])
 
             if self.altitude is not None:
-                dm_OPD = self.get_OPD_altitude(src)
+                dm_OPD = self.get_OPD_altitude(src) if OPD_batch is None else OPD_batch[i_src]
             else:
                 dm_OPD = self.OPD
 
@@ -669,6 +675,35 @@ class DeformableMirror:
         else:
             center_x, center_y = layer.center_x, layer.center_y
         return slice(center_x - n//2, center_x + n//2), slice(center_y - n//2, center_y + n//2)
+
+    def _get_taps(self):
+        """Interpolation taps of every source for the altitude layer (footprint, cone effect)."""
+        layer = self.altitude_layer
+        backend = _backend_of(self.OPD)
+        n = self.telescope.resolution
+        n_layer = self.OPD.shape[0]
+        key = (tuple(tuple(float(c) for c in src.coordinates) for src in self.src_list),
+               tuple(float(src.altitude) for src in self.src_list), float(layer.altitude), n, n_layer,
+               backend.__name__, np.dtype(self.OPD.dtype).str)
+        cache = getattr(self, '_taps_cache', None)
+        if cache is not None and cache[0] == key:
+            return cache[1]
+        row_taps = []
+        col_taps = []
+        for src in self.src_list:
+            rows, cols = self._footprint_slices(src)
+            h = src.altitude - layer.altitude
+            magnification = 1 if (np.isinf(src.altitude) or np.isinf(h)) else h/src.altitude
+            taps = shift_crop_zoom_taps(n_layer, rows, cols, 0, 0, magnification, n)
+            row_taps.append(taps[0])
+            col_taps.append(taps[1])
+        taps = SeparableTaps(stack_taps(row_taps), stack_taps(col_taps), backend, self.OPD.dtype)
+        self._taps_cache = (key, taps)
+        return taps
+
+    def _get_OPD_altitude_batch(self):
+        """DM OPD seen by every source, as a (n_src, n, n) array (same as get_OPD_altitude for each source)."""
+        return self._get_taps().apply(self.OPD)
 
     def get_OPD_altitude(self, src):
         self.set_pupil_footprint()

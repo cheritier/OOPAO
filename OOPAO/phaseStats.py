@@ -74,58 +74,64 @@ def makeCovarianceMatrix(rho1, rho2, atm):
     L0r0ratio = (atm.L0/atm.r0_def)**(5./3)
     cst = (24.*gamma(6./5)/5)**(5./6) * \
         (gamma(11./6)/((2.**(5./6))*np.pi**(8./3)))*L0r0ratio
-    out = np.ones(rho.shape)*((24.*gamma(6./5)/5)**(5./6)) * \
+    variance = ((24.*gamma(6./5)/5)**(5./6)) * \
         (gamma(11./6)*gamma(5./6)/(2*np.pi**(8./3))) * L0r0ratio
-    index = np.where(rho != 0)
-    u = 2*np.pi*rho[index]/atm.L0
 
     if atm.param is None:
+        # the points lie on a grid: the covariance is computed once for each distinct distance
+        distinct, inverse = np.unique(rho.ravel(), return_inverse=True)
+        covariance = np.full(distinct.shape, variance)
+        nonzero = distinct != 0
+        u = 2*np.pi*distinct[nonzero]/atm.L0
+        covariance[nonzero] = cst*u**(5./6)*sp.special.kv(5./6, u)
+        return covariance[inverse.reshape(-1)].reshape(rho.shape)
+
+    out = np.full(rho.shape, variance)
+    index = np.where(rho != 0)
+    u = 2*np.pi*rho[index]/atm.L0
+    try:
+        print('Loading pre-computed data...')
+        name_data = 'sp_kv_L0_' + \
+            str(atm.param['L0'])+'_m_shape_' + \
+            str(len(rho1))+'x'+str(len(rho2))+'.json'
+
+        location_data = atm.param['pathInput'] + \
+            atm.param['name'] + '/sk_v/'
+
+        try:
+            with open(location_data+name_data) as f:
+                C = json.load(f)
+            data_loaded = jsonpickle.decode(C)
+        except:
+            createFolder(location_data)
+            with open(location_data+name_data) as f:
+                C = json.load(f)
+            data_loaded = jsonpickle.decode(C)
+
+        sp_kv = data_loaded['sp_kv']
+
+    except:
+        print('Something went wrong.. re-computing sp_kv ...')
+        name_data = 'sp_kv_L0_' + \
+            str(atm.param['L0'])+'_m_shape_' + \
+            str(len(rho1))+'x'+str(len(rho2))+'.json'
+        location_data = atm.param['pathInput'] + \
+            atm.param['name'] + '/sk_v/'
+
         sp_kv = sp.special.kv(5./6, u)
 
-    else:
+        print('saving for future...')
+        data = dict()
+        data['sp_kv'] = sp_kv
+        data_encoded = jsonpickle.encode(data)
+
         try:
-            print('Loading pre-computed data...')
-            name_data = 'sp_kv_L0_' + \
-                str(atm.param['L0'])+'_m_shape_' + \
-                str(len(rho1))+'x'+str(len(rho2))+'.json'
-
-            location_data = atm.param['pathInput'] + \
-                atm.param['name'] + '/sk_v/'
-
-            try:
-                with open(location_data+name_data) as f:
-                    C = json.load(f)
-                data_loaded = jsonpickle.decode(C)
-            except:
-                createFolder(location_data)
-                with open(location_data+name_data) as f:
-                    C = json.load(f)
-                data_loaded = jsonpickle.decode(C)
-
-            sp_kv = data_loaded['sp_kv']
-
+            with open(location_data+name_data, 'w') as f:
+                json.dump(data_encoded, f)
         except:
-            print('Something went wrong.. re-computing sp_kv ...')
-            name_data = 'sp_kv_L0_' + \
-                str(atm.param['L0'])+'_m_shape_' + \
-                str(len(rho1))+'x'+str(len(rho2))+'.json'
-            location_data = atm.param['pathInput'] + \
-                atm.param['name'] + '/sk_v/'
-
-            sp_kv = sp.special.kv(5./6, u)
-
-            print('saving for future...')
-            data = dict()
-            data['sp_kv'] = sp_kv
-            data_encoded = jsonpickle.encode(data)
-
-            try:
-                with open(location_data+name_data, 'w') as f:
-                    json.dump(data_encoded, f)
-            except:
-                createFolder(location_data)
-                with open(location_data+name_data, 'w') as f:
-                    json.dump(data_encoded, f)
+            createFolder(location_data)
+            with open(location_data+name_data, 'w') as f:
+                json.dump(data_encoded, f)
 
     out[index] = cst*u**(5./6)*sp_kv
 

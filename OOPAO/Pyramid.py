@@ -303,6 +303,9 @@ class Pyramid:
         # maximum field of view for off-axis sources when propagating asterism
         self.max_fov_arcsec = self.fov/2
 
+        # measure all the sources of an asterism at once (False: one after the other). On the CPU the transform
+        # is already batched over the modulation points: batching the sources does not make it faster
+        self.parallel_sources = self.gpu_available
         n_cpu = multiprocessing.cpu_count()
         # joblib settings for parallization
         if self.gpu_available is False:
@@ -629,7 +632,7 @@ class Pyramid:
             em_field = self.maskAmplitude*xp.exp(1j*phase_in)
         return self._pyramid_transform_batch(em_field[None])[0]
 
-    def _pyramid_transform_block(self, fields, workers=-1):
+    def _pyramid_transform_block(self, fields, workers=-1, per_field_focal_plane=False):
         """Propagate a (B, n, n) stack of pupil-plane EM fields through the Pyramid mask.
 
         Returns the (B, N, N) intensities in the detector plane and, when compute_focal_plane is set,
@@ -655,35 +658,39 @@ class Pyramid:
         if self.compute_focal_plane:
             focal_plane = xp.abs(em_field_ft)
             xp.square(focal_plane, out=focal_plane)
-            focal_plane = focal_plane.sum(axis=0)
+            if not per_field_focal_plane:
+                focal_plane = focal_plane.sum(axis=0)
         # Fourier filtering by the Pyramid mask and propagation to the detector plane
         em_field_ft *= self.mask
         intensity = xp.abs(ifft2(em_field_ft, **fft_kw))
         xp.square(intensity, out=intensity)
         return intensity, focal_plane
 
-    def _pyramid_transform_batch(self, fields):
+    def _pyramid_transform_batch(self, fields, per_field_focal_plane=False):
         """Propagate a (B, n, n) stack of pupil-plane EM fields; returns the (B, N, N) detector-plane intensities.
 
         On the GPU the whole stack is processed in one batched call. On the CPU it is split into nJobs
         blocks run by threads (NumPy and SciPy release the GIL), each using single-threaded FFTs.
-        The focal-plane intensity is added to self._focal_plane_sum when it is being accumulated.
+        The focal-plane intensity is added to self._focal_plane_sum when it is being accumulated, or returned
+        for each field with per_field_focal_plane=True.
         """
         n_fields = fields.shape[0]
         n_blocks = 1 if self.gpu_available else max(1, min(self.nJobs, n_fields))
         if n_blocks == 1:
-            results = [self._pyramid_transform_block(fields, workers=-1)]
+            results = [self._pyramid_transform_block(fields, -1, per_field_focal_plane)]
         else:
             edges = np.linspace(0, n_fields, n_blocks + 1).astype(int)
             results = Parallel(n_jobs=n_blocks, prefer='threads')(
-                delayed(self._pyramid_transform_block)(fields[a:b], 1) for a, b in zip(edges[:-1], edges[1:]))
+                delayed(self._pyramid_transform_block)(fields[a:b], 1, per_field_focal_plane) for a, b in zip(edges[:-1], edges[1:]))
+        intensity = results[0][0] if len(results) == 1 else xp.concatenate([r[0] for r in results], axis=0)
+        if per_field_focal_plane:
+            # focal-plane intensity of each field (batched sources)
+            return intensity, xp.concatenate([r[1] for r in results], axis=0)
         if self._focal_plane_sum is not None:
             for _, focal_plane in results:
                 if focal_plane is not None:
                     self._focal_plane_sum += focal_plane
-        if len(results) == 1:
-            return results[0][0]
-        return xp.concatenate([intensity for intensity, _ in results], axis=0)
+        return intensity
 
     def _max_batch(self):
         """Number of fields that can be propagated in one batch with the memory available."""
@@ -711,6 +718,8 @@ class Pyramid:
         together in batches sized from the memory available. If weights (length nTheta) are given, the
         weighted sum is returned. Returns a (m, N, N) array on the active backend.
         """
+        # one focal-plane image per field (batched sources) or a single one
+        per_field = self._focal_plane_sum is not None and self._focal_plane_sum.ndim == 3
         n_fields, n = em_fields.shape[0], self.telescope.resolution
         batch = self._max_batch()
         # modulation points per batch, and fields per batch (1 if a full modulation cycle does not fit)
@@ -722,7 +731,12 @@ class Pyramid:
             for t0 in range(0, self.nTheta, theta_step):
                 t1 = min(t0 + theta_step, self.nTheta)
                 fields = em_fields[f0:f1, None] * self._modulation_phasors(t0, t1)[None]
-                intensity = self._pyramid_transform_batch(fields.reshape(-1, n, n))
+                if per_field:
+                    intensity, focal_planes = self._pyramid_transform_batch(fields.reshape(-1, n, n), per_field_focal_plane=True)
+                    self._focal_plane_sum[f0:f1] += focal_planes.reshape((f1 - f0, t1 - t0) + focal_planes.shape[1:]).sum(axis=1)
+                    del focal_planes
+                else:
+                    intensity = self._pyramid_transform_batch(fields.reshape(-1, n, n))
                 del fields
                 intensity = intensity.reshape(f1 - f0, t1 - t0, self.resolution, self.resolution)
                 if weights is None:
@@ -1160,10 +1174,23 @@ class Pyramid:
             src_list = [src]
         elif src.tag == 'asterism':
             src_list = src.src
+        if self._can_batch_sources(src_list):
+            signal_2D_list, signal_list, frames_list = self._relay_batch(src_list)
+        else:
+            signal_2D_list, signal_list, frames_list = self._relay_sequential(src_list)
+        self.signal_2D = _stack_squeeze(signal_2D_list)
+        self.signal = _stack_squeeze(signal_list)
+        self.frames = _stack_squeeze(frames_list)
+        return
+
+    def _can_batch_sources(self, src_list):
+        return (self.parallel_sources and len(src_list) > 1 and self.spatialFilter is None
+                and all(np.ndim(src.phase) == 2 for src in src_list))
+
+    def _relay_sequential(self, src_list):
         signal_2D_list = []
         signal_list = []
         frames_list = []
-
         for src in src_list:
             src.optical_path.append([self.tag, self])
             self.src = src
@@ -1171,11 +1198,58 @@ class Pyramid:
             signal_2D_list.append(self.signal_2D)
             signal_list.append(self.signal)
             frames_list.append(self.cam.frame)
+        return signal_2D_list, signal_list, frames_list
 
-        self.signal_2D = _stack_squeeze(signal_2D_list)
-        self.signal = _stack_squeeze(signal_list)
-        self.frames = _stack_squeeze(frames_list)
-        return
+    def _relay_batch(self, src_list):
+        """Fields of all the sources propagated in one batch, then detector and signal processing source by source."""
+        for src in src_list:
+            src.optical_path.append([self.tag, self])
+            if self.isInitialized and self.isCalibrated:
+                if self.wavelength_calibration != src.wavelength:
+                    raise OopaoError('A change in wavelength was detected in the WFS object \n' +
+                                     'Make sure that the correct source is propagated in the WFS object or re-calibrate with the correct source.')
+            # same as wfs_measure(phase_in=src.phase)
+            src.phase = src.phase
+        em_fields = xp.stack([self._get_em_field(src) for src in src_list])
+        # focal-plane intensity of each source
+        if self.compute_focal_plane:
+            self._focal_plane_sum = xp.zeros((len(src_list), self.resolution, self.resolution), dtype=self.precision)
+        else:
+            self._focal_plane_sum = None
+        if not (self.modulation == 0 and self.user_modulation_path is None):
+            weights = None if self.weight_vector is None else xp.asarray(self.weight_vector, dtype=self.precision)
+            frames = self._modulated_frames(em_fields, weights)
+            if weights is not None:
+                frames /= self.nTheta
+        elif self.compute_focal_plane:
+            frames, focal_planes = self._pyramid_transform_batch(em_fields, per_field_focal_plane=True)
+            self._focal_plane_sum += focal_planes
+        else:
+            frames = self._pyramid_transform_batch(em_fields)
+        del em_fields
+        focal_plane_sum = self._focal_plane_sum
+        # with GPU residency the frames stay on the GPU for the detector and the signal processing
+        if not (self.gpu_resident and self.isCalibrated):
+            frames = self.convert_for_numpy(frames)
+        signal_2D_list = []
+        signal_list = []
+        frames_list = []
+        # the noise is applied in the same order as the sequential measurement
+        for i_src, src in enumerate(src_list):
+            self.src = src
+            self.raw_data = frames[i_src]
+            self._focal_plane_sum = None if focal_plane_sum is None else focal_plane_sum[i_src]
+            self._store_focal_plane()
+            self.signal_2D, self.signal = self.wfs_integrate()
+            signal_2D_list.append(self.signal_2D)
+            signal_list.append(self.signal)
+            frames_list.append(self.cam.frame)
+        return signal_2D_list, signal_list, frames_list
+
+    def _get_em_field(self, src):
+        """Pupil-plane EM field of the source (as in wfs_measure)."""
+        self.maskAmplitude = xp.sqrt(xp.asarray(src.intensity, dtype=self.precision)/self.nTheta)
+        return self.maskAmplitude * xp.exp(1j*xp.asarray(src.phase, dtype=self.precision))
 
     def __mul__(self, obj):
         if obj.tag == 'detector':
