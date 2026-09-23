@@ -1,3 +1,6 @@
+" Tomography tutorial"
+
+#%%
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -12,6 +15,7 @@ from OOPAO.FieldTransformer import FieldTransformer
 from OOPAO.tools.tools import crop
 import tomoAO
 from OOPAO.tools.displayTools import cl_plot, displayMap
+from OOPAO.calibration.compute_KL_modal_basis import compute_KL_basis
 
 
 #%% ### Telescope ###
@@ -258,6 +262,44 @@ science = Source(optBand='H', magnitude=0)
 
 ngs*tel
 science*tel
+
+#%%
+M2C_KL = compute_KL_basis(tel, atm, dm, lim = 1e-2)
+
+# apply the 10 first KL modes
+dm.coefs = M2C_KL[:,:10]
+# propagate through the DM
+ngs**tel*dm
+# show the first 10 KL modes applied on the DM
+
+displayMap(ngs.OPD)
+plt.show()
+
+## Projector into KL modes ##
+
+from Tomo_tools_Rafael.Tools import KL_projection
+
+KL_proj = KL_projection(tel=tel,
+                        dm=dm,
+                        M2C_KL=M2C_KL)
+
+#%%
+## Projector test ##
+N_modes = 800
+amp = np.zeros(N_modes)
+amp[:N_modes] = np.random.normal(loc=0.0, scale=50e-9, size=N_modes)
+
+
+dm.coefs = M2C_KL[:, :N_modes] @ amp
+ngs**tel*dm
+
+kl_coefs = KL_proj.from_opd_2_kl_coefs(OPD=ngs.OPD,
+                                       wavelength=ngs.wavelength)
+
+plt.plot(amp*10**9,"o")
+plt.plot(kl_coefs,".")
+plt.grid()
+plt.show()
 
 #%% ### Tomography ###
 # Dictionary to be filled with parameters necessary for the tomographic reconstructor
@@ -516,6 +558,7 @@ frame_delay = 1  # number of frame delay
 # variables used to save closed-loop data
 SR_ngs = np.zeros(n_loop)
 SR_science = np.zeros(n_loop)
+kl_coefs_science = np.zeros((M2C_KL.shape[1],n_loop))
 
 wfe_atmosphere = np.zeros(n_loop)
 wfe_residual_science = np.zeros(n_loop)
@@ -661,7 +704,12 @@ for i in range(n_loop):
     print('NGS: Strehl ratio [%] : ', np.round(SR_ngs[i],1), ' WFE [nm] : ', np.round(wfe_residual_NGS[i],2))
     print('science: Strehl ratio [%] : ', np.round(SR_science[i],1), ' WFE [nm] : ', np.round(wfe_residual_science[i],2))
 
+    ## Modal decomposition of the phase ##
+    kl_coefs = KL_proj.from_opd_2_kl_coefs(OPD=science.OPD,
+                                           wavelength=ngs.wavelength,
+                                           units="rad")
 
+    kl_coefs_science[:,i] = kl_coefs # rad
 
 #%%
 plt.figure()
@@ -680,3 +728,15 @@ plt.plot(SR_ngs)
 plt.title("Strehl ratio",fontsize=14,pad=10)
 plt.grid()
 plt.show()
+
+modal_var = np.var(kl_coefs_science,axis=1)
+
+plt.plot(modal_var)
+plt.xlabel("KL mode index",fontsize=12,labelpad=10)
+plt.ylabel("Modal variance (rad^2)",fontsize=12,labelpad=10)
+plt.yscale("log")
+plt.xscale("log")
+plt.grid()
+plt.show()
+
+# %%
