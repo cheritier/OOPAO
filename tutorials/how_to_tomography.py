@@ -12,10 +12,8 @@ from OOPAO.Source import Source
 from OOPAO.Atmosphere import Atmosphere
 from OOPAO.Asterism import Asterism
 from OOPAO.FieldTransformer import FieldTransformer
-from OOPAO.tools.tools import crop
 import tomoAO
 from OOPAO.tools.displayTools import cl_plot, displayMap
-from OOPAO.calibration.compute_KL_modal_basis import compute_KL_basis
 
 
 #%% ### Telescope ###
@@ -178,60 +176,13 @@ assert wfs_geom.is_geometric == True
 
 #%%
 
-print("Computing the noise cov from the SH wfs numerically ...")
-
-N = 500
-
-print("Applying desired noise in the SH ...")
-wfs.cam.photonNoise = True
-wfs.cam.readoutNoise = 0.0
-
-print("##### Noise being applied in the SH ####")
-print("Photon noise: {}".format(wfs.cam.photonNoise))
-print("Readout noise: {}".format(wfs.cam.readoutNoise))
-
-lgs_asterism**tel*ft*wfs
-
-N_signal = len(wfs.signal)
-
-# Initializing 2D data cube. At each iteration, the columns of this matrix are filled with wfs.signal
-# The covariance matrix can then be calculated using numpy.cov
-Cn_2d = np.zeros((N_signal, N))
-
-print("Doing {} SH noisy signal samples ...".format(N))
-
-for i in tqdm(range(N)):
-
-    # propagation of planar WF towards wfs
-    lgs_asterism**tel*ft*wfs
-
-    signal = wfs.signal.copy()
-
-    Cn_2d[:, i] = signal
-
-## Cov formula ##
-# rowvar = True -- each row is a variable and each column an observation
-Cn_slope = np.cov(Cn_2d, rowvar=True)
-# remove non-diagonal elements
-Cn_slope *= np.eye(len(Cn_slope))
-
-#%%
-
-#### Plot diagonal elements from covariance matrix ####
-plt.plot(np.diag(Cn_slope), ".-")
-plt.title(r"Diag. elements of numerical $C_{n}$ (Meas. space)",pad=10,fontsize=14)
-plt.ylabel(r"$[SH units]^2$",labelpad=10,fontsize=12)
-plt.grid()
-plt.show()
-
-#%%
-
 ### Deformable mirror ###
 
 dm = DeformableMirror(telescope = tel,
                       nSubap = n_subaperture*2,
                       mechCoupling = 0.3,
-                      pitch = None)
+                      pitch = None,
+                      actuator_selection=None)
 
 print("DM pitch: {} m".format(dm.pitch))
 print(tel.D/(dm.nAct-1))
@@ -262,44 +213,6 @@ science = Source(optBand='H', magnitude=0)
 
 ngs*tel
 science*tel
-
-#%%
-M2C_KL = compute_KL_basis(tel, atm, dm, lim = 1e-2)
-
-# apply the 10 first KL modes
-dm.coefs = M2C_KL[:,:10]
-# propagate through the DM
-ngs**tel*dm
-# show the first 10 KL modes applied on the DM
-
-displayMap(ngs.OPD)
-plt.show()
-
-## Projector into KL modes ##
-
-from Tomo_tools_Rafael.Tools import KL_projection
-
-KL_proj = KL_projection(tel=tel,
-                        dm=dm,
-                        M2C_KL=M2C_KL)
-
-#%%
-## Projector test ##
-N_modes = 800
-amp = np.zeros(N_modes)
-amp[:N_modes] = np.random.normal(loc=0.0, scale=50e-9, size=N_modes)
-
-
-dm.coefs = M2C_KL[:, :N_modes] @ amp
-ngs**tel*dm
-
-kl_coefs = KL_proj.from_opd_2_kl_coefs(OPD=ngs.OPD,
-                                       wavelength=ngs.wavelength)
-
-plt.plot(amp*10**9,"o")
-plt.plot(kl_coefs,".")
-plt.grid()
-plt.show()
 
 #%% ### Tomography ###
 # Dictionary to be filled with parameters necessary for the tomographic reconstructor
@@ -337,6 +250,17 @@ aoSys = tomoAO.Simulation.AOSystem(param=config_vars,
                                    filtered_subap_mask_operation="union",
                                    os=config_vars["os"])
 
+# misReg information to tomoAO model
+for i in range(lgs_asterism.n_source):
+    ## put offsets into meters ##
+    aoSys.lgsAst[i].offset_x = -shift_x[i]*tel.pixelSize
+    aoSys.lgsAst[i].offset_y = -shift_y[i]*tel.pixelSize
+
+print(lgs_asterism.src[0].offset_x)
+print(lgs_asterism.src[0].offset_y)
+
+print(aoSys.lgsAst[0].offset_x)
+print(aoSys.lgsAst[0].offset_y)
 
 plt.imshow(aoSys.outputReconstructiongrid)
 plt.title("Reconstruction grid",fontsize=14,pad=10)
@@ -355,24 +279,6 @@ plt.show()
 print(np.shape(aoSys.outputReconstructiongrid))
 print(np.shape(aoSys.filtered_subap_mask))
 print(np.shape(aoSys.unfiltered_subap_mask))
-
-print(lgs_asterism.src[0].offset_x)
-print(lgs_asterism.src[0].offset_y)
-
-print(aoSys.lgsAst[0].offset_x)
-print(aoSys.lgsAst[0].offset_y)
-
-#%%
-
-## put offsets into meters ##
-for i in range(lgs_asterism.n_source):
-    aoSys.lgsAst[i].offset_x = -shift_x[i]*tel.pixelSize
-    aoSys.lgsAst[i].offset_y = -shift_y[i]*tel.pixelSize
-    # aoSys.lgsAst.src[i].offset_x = 0
-    # aoSys.lgsAst.src[i].offset_y = 0
-
-print(aoSys.lgsAst[0].offset_x)
-print(aoSys.lgsAst[0].offset_y)
 
 #%% ## Spatio-angular Tomographic reconstructor ###
 
@@ -398,17 +304,6 @@ atm.r0 = r0 # this is important since the atm.r0 is changed inside the rec funct
 plt.figure()
 plt.imshow(reconstructor)
 plt.title("Spatio-angular reconstructor",fontsize=14,pad=10)
-plt.colorbar()
-plt.show()
-
-print(np.shape(rec.Gamma))
-print(np.shape(reconstructor))
-print(np.sum(aoSys.filtered_subap_mask)*2*4)
-print(wfs.nSignal)
-
-#%%
-
-plt.imshow(rec.filtered_subap_mask)
 plt.colorbar()
 plt.show()
 
@@ -558,7 +453,6 @@ frame_delay = 1  # number of frame delay
 # variables used to save closed-loop data
 SR_ngs = np.zeros(n_loop)
 SR_science = np.zeros(n_loop)
-kl_coefs_science = np.zeros((M2C_KL.shape[1],n_loop))
 
 wfe_atmosphere = np.zeros(n_loop)
 wfe_residual_science = np.zeros(n_loop)
@@ -704,13 +598,6 @@ for i in range(n_loop):
     print('NGS: Strehl ratio [%] : ', np.round(SR_ngs[i],1), ' WFE [nm] : ', np.round(wfe_residual_NGS[i],2))
     print('science: Strehl ratio [%] : ', np.round(SR_science[i],1), ' WFE [nm] : ', np.round(wfe_residual_science[i],2))
 
-    ## Modal decomposition of the phase ##
-    kl_coefs = KL_proj.from_opd_2_kl_coefs(OPD=science.OPD,
-                                           wavelength=ngs.wavelength,
-                                           units="rad")
-
-    kl_coefs_science[:,i] = kl_coefs # rad
-
 #%%
 plt.figure()
 
@@ -726,16 +613,6 @@ plt.show()
 plt.figure()
 plt.plot(SR_ngs)
 plt.title("Strehl ratio",fontsize=14,pad=10)
-plt.grid()
-plt.show()
-
-modal_var = np.var(kl_coefs_science,axis=1)
-
-plt.plot(modal_var)
-plt.xlabel("KL mode index",fontsize=12,labelpad=10)
-plt.ylabel("Modal variance (rad^2)",fontsize=12,labelpad=10)
-plt.yscale("log")
-plt.xscale("log")
 plt.grid()
 plt.show()
 
