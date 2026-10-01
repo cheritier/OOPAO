@@ -272,8 +272,8 @@ def ft_sh_phase_screen(atm, resolution, pixel_size, l0=1e-10, seed=None, return_
         cn = ((randomState.normal(size=(3, 3)) + 1j*randomState.normal(size=(3, 3))) * np.sqrt(PSD_phi)*del_f)
         SH = backend.zeros((resolution, resolution), dtype="complex")
         # loop over frequencies on this grid (the 3x3 coefficients are Python scalars)
-        for i in range(0, 2):
-            for j in range(0, 2):
+        for i in range(0, 3):
+            for j in range(0, 3):
                 SH += complex(cn[i, j]) * backend.exp(1j*2*np.pi*(float(fx[i, j])*x+float(fy[i, j])*y))
         phs_lo = phs_lo + SH
         # accumulate subharmonics
