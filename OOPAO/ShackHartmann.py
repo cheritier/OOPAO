@@ -249,9 +249,16 @@ class ShackHartmann:
         if n_pixel_per_subaperture is None:
             self.n_pix_subap = self.n_pix_subap_init
         else:
-            if n_pixel_per_subaperture % 2 != 0:
-                raise OopaoError('n_pixel_per_subaperture can only be an even number.')
             self.n_pix_subap = n_pixel_per_subaperture
+            if (self.n_pix_subap_init - self.n_pix_subap) % 2 != 0 and not self.half_pixel_shift:
+                # the spots are computed on n_pix_subap_init pixels, centred on the
+                # (n_pix_subap_init-1)/2 point: cropping (or padding) them by an odd
+                # number of pixels would leave them between two pixels of the
+                # subaperture. Shift them by half a pixel so they land on its centre.
+                print('n_pixel_per_subaperture ('+str(self.n_pix_subap)+') and the ' +
+                      str(self.n_pix_subap_init)+' pixels of the lenslet computation differ by an odd number: ' +
+                      'half_pixel_shift is set to True to center the spots on the central pixel')
+                self._half_pixel_shift = True
             if n_pixel_per_subaperture*self.pixel_scale > self.n_pix_subap_init*self.pixel_scale_init*self.zero_padding and self.is_LGS is False:
                 warning('The requested number of pixel per subaperture is too large!\n' +
                         'The SH spots will be zero-padded to provide the desired number but will not contain any signal.\n' +
@@ -727,9 +734,8 @@ class ShackHartmann:
                                          intensity.shape[1]//self.binning_pixel_scale,
                                          intensity.shape[1]//self.binning_pixel_scale], operation='sum')
                 # crop the resulting spots to the right number of pixels
-                n_crop = (intensity.shape[1] - self.n_pix_subap)//2
-                if n_crop > 0:
-                    intensity = intensity[:, n_crop:-n_crop, n_crop:-n_crop]
+                if intensity.shape[1] > self.n_pix_subap:
+                    intensity = self._fit_to_subaperture(intensity)
             elif self.convolution_tag == 'direct':
                 n_crop = intensity.shape[1]//4
                 intensity = intensity[:, n_crop:-n_crop, n_crop:-n_crop]
@@ -745,9 +751,8 @@ class ShackHartmann:
                                          intensity.shape[1] // self.binning_pixel_scale,
                                          intensity.shape[1] // self.binning_pixel_scale], operation='sum')
                 # crop the resulting spots
-                n_crop = (intensity.shape[1] - self.n_pix_subap)//2
-                if n_crop > 0:
-                    intensity = intensity[:, n_crop:-n_crop, n_crop:-n_crop]
+                if intensity.shape[1] > self.n_pix_subap:
+                    intensity = self._fit_to_subaperture(intensity)
         else:
             # set the sampling of the spots
             if self.pixel_scale == self.pixel_scale_init:
@@ -761,23 +766,44 @@ class ShackHartmann:
                 intensity = xp_.pad(intensity, [[0, 0], [self.extra_pixel, self.extra_pixel], [self.extra_pixel, self.extra_pixel]])
                 # bin the spots to get the requested pixel scale
                 intensity = bin_ndarray(intensity, [intensity.shape[0], self.n_pix_subap_init, self.n_pix_subap_init], operation='sum')
-        # crop to the right number of pixel (backend-agnostic: dispatches on
-        # whatever produced `intensity` above -- numpy for the LGS branch,
-        # xp for the common non-LGS branch)
-        xp_ = get_array_module(intensity)
-        n_crop = (intensity.shape[1] - self.n_pix_subap)//2
-        if n_crop > 0:
-            intensity = intensity[:, n_crop:-n_crop, n_crop:-n_crop]
-        elif n_crop < 0:
-            intensity = xp_.pad(intensity, [[0, 0],
-                                            [-n_crop, -n_crop],
-                                            [-n_crop, -n_crop]])
+        # crop or pad to the right number of pixel
+        intensity = self._fit_to_subaperture(intensity)
         if self.binning_factor > 1:
             intensity = bin_ndarray(intensity, [intensity.shape[0], self.n_pix_subap//self.binning_factor, self.n_pix_subap//self.binning_factor], operation='sum')
         else:
             if self.binning_factor != 1:
                 raise OopaoError('The binning factor must be a scalar >= 1')
         return intensity
+
+    def _fit_to_subaperture(self, intensity):
+        """Crop or zero-pad a (n, N, N) cube of spots to (n, n_pix_subap, n_pix_subap),
+        keeping the spots centred (backend-agnostic: numpy for the LGS branch, xp
+        otherwise).
+
+        The spots are centred on (N-1)/2, shifted by half a pixel with
+        half_pixel_shift. An even difference N - n_pix_subap is cropped (padded)
+        equally on both sides; an odd one, possible when n_pix_subap and N have
+        different parities, one pixel more on the side that puts the half-pixel
+        shifted spot on the central pixel of the subaperture.
+        """
+        n_in, n = intensity.shape[1], self.n_pix_subap
+        diff = n_in - n
+        if diff == 0:
+            return intensity
+        # pixels removed (added) before the spot: the spot, at (n_in-1)/2 - shift,
+        # must land on (n-1)/2
+        before = (diff + self._spot_shift_px()) // 2 if diff % 2 else diff // 2
+        if diff > 0:
+            return intensity[:, before:before+n, before:before+n]
+        xp_ = get_array_module(intensity)
+        before, after = -before, -diff + before
+        return xp_.pad(intensity, [[0, 0], [before, after], [before, after]])
+
+    def _spot_shift_px(self):
+        """Twice the spot shift from half_pixel_shift, in detector pixels along
+        each axis: -1 (the phasor moves the spots half a pixel towards pixel 0)
+        or 0."""
+        return -1 if self.half_pixel_shift else 0
 
     def _spots_to_frame(self, intensity, sh_data):
         """Detector frame (NumPy) with the spots of the valid subapertures, zero elsewhere."""
@@ -900,9 +926,8 @@ class ShackHartmann:
                                              weighting_map.shape[1]//self.binning_pixel_scale,
                                              weighting_map.shape[1]//self.binning_pixel_scale], operation='sum')
                 # crop the resulting spots to the right number of pixels
-                n_crop = (weighting_map.shape[1] - self.n_pix_subap)//2
-                if n_crop > 0:
-                    weighting_map = weighting_map[:, n_crop:-n_crop, n_crop:-n_crop]
+                if weighting_map.shape[1] > self.n_pix_subap:
+                    weighting_map = self._fit_to_subaperture(weighting_map)
             else:
                 if np.isscalar(fwhm_factor):
                     fwhm_factor = [fwhm_factor, fwhm_factor]
