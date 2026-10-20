@@ -27,7 +27,17 @@ from OOPAO.tools.interpolateGeometricalTransformation import (
     rotateImageMatrix,
     translationImageMatrix,
 )
+from OOPAO.runtime import precision_bits
 from OOPAO.tools.tools import OopaoError
+
+
+def _precision():
+    """Floating-point type of the influence functions (OOPAO_PRECISION).
+
+    The influence functions are computed on the CPU and returned as NumPy arrays: the DeformableMirror
+    uploads its modes to the GPU when needed.
+    """
+    return np.float64 if precision_bits() == 64 else np.float32
 
 
 # ---------------------------------------------------------------------------
@@ -71,9 +81,14 @@ def compute_ELT_M4_influence_functions(name_system: str,
 
     Returns
     -------
-    IF_2D : np.ndarray (float32)
-        Influence-function cube of shape [n_act, resolution, resolution].
+    IF_2D : np.ndarray
+        Influence-function cube of shape [n_act, resolution, resolution], at the OOPAO precision.
     """
+    if mis_registration is None:
+        mis_registration = MisRegistration()
+    # computed at the OOPAO precision (halves the memory of the FEM data and of the interpolations in 32 bits)
+    precision = _precision()
+
     # -------------------- input parameters --------------------
     if specific_parameters is None:
         n_segments = 6
@@ -112,7 +127,7 @@ def compute_ELT_M4_influence_functions(name_system: str,
     # file created with FEMreduce_4tuto.py
     print('LOADING FEM DATA...\n')
     IFMA = np.fromfile(loc + 'SAVED_DATA/IFMA_FEM_123903x892.raw',
-                       dtype=np.float64).reshape(n_nodes, nact_per_seg)
+                       dtype=np.float64).reshape(n_nodes, nact_per_seg).astype(precision, copy=False)
     if new_arrangement:
         IFMA = IFMA[:, idx]
 
@@ -198,22 +213,22 @@ def compute_ELT_M4_influence_functions(name_system: str,
 
         verts = tri.simplices[s]            # [n_q, 3]
         rows = np.repeat(np.arange(len(query)), 3)
-        return csr_matrix((w.ravel(), (rows, verts.ravel())),
+        return csr_matrix((w.ravel().astype(precision), (rows, verts.ravel())),
                           shape=(len(query), points.shape[0]))
 
     def process_segment(k):
         """Interpolate all IFs of segment k.
 
-        Returns an array [nact_per_seg, resolution, resolution] (float32).
+        Returns an array [nact_per_seg, resolution, resolution].
         """
         P = build_interp_matrix(xy_coords[:, :, k], qpts)  # one triangulation
-        seg = (P @ IFMA).astype(np.float32)                # [n_q, 892]
+        seg = P @ IFMA                                     # [n_q, 892]
         return seg.T.reshape(nact_per_seg, resolution, resolution)
 
     # -------------------- run interpolations --------------------
     print('RUNNING INTERPOLATIONS...\n')
     t_start = time.time()
-    IF_2D = np.zeros([nact, resolution, resolution], dtype=np.float32)
+    IF_2D = np.zeros([nact, resolution, resolution], dtype=precision)
 
     if parallel and n_segments > 1:
         # One process per segment. Reduce n_jobs if RAM is tight; large
@@ -250,7 +265,7 @@ def compute_RAMA_DM97_influence_functions(name_system: str,
     Returns
     -------
     IF_2D : np.ndarray
-        Influence-function cube of shape [n_act, resolution, resolution].
+        Influence-function cube of shape [n_act, resolution, resolution], at the OOPAO precision.
     """
     try:
         IF_2D = np.load(loc + 'IF_97.npy')
@@ -275,7 +290,7 @@ def compute_RAMA_DM97_influence_functions(name_system: str,
                                             pixel_size_out=pixel_size,
                                             resolution_out=resolution,
                                             mis_registration=mis_registration))
-    return IF_2D
+    return IF_2D.astype(_precision(), copy=False)
 
 
 # ---------------------------------------------------------------------------
@@ -295,7 +310,7 @@ def compute_LBT_ASM_influence_functions(name_system: str,
     Returns
     -------
     influence_functions : np.ndarray
-        Influence-function cube of shape [n_act, resolution, resolution].
+        Influence-function cube of shape [n_act, resolution, resolution], at the OOPAO precision.
     """
     if mis_registration is None:
         mis_registration = MisRegistration()
@@ -407,7 +422,7 @@ def compute_LBT_ASM_influence_functions(name_system: str,
     influence_functions = np.moveaxis(
         influence_functions.reshape(resolution, resolution, M2C.shape[0]), 2, 0)
 
-    return influence_functions
+    return influence_functions.astype(_precision(), copy=False)
 
 
 # ---------------------------------------------------------------------------
@@ -427,7 +442,7 @@ def compute_GHOST_DM492_influence_functions(name_system: str,
     Returns
     -------
     IF_2D : np.ndarray
-        Influence-function cube of shape [n_valid_act, resolution, resolution].
+        Influence-function cube of shape [n_valid_act, resolution, resolution], at the OOPAO precision.
     """
     try:
         dm_coord = scipy.io.loadmat(loc + 'dm_coord.mat')
@@ -456,7 +471,7 @@ def compute_GHOST_DM492_influence_functions(name_system: str,
                           pitch=diameter_dm_ghost / n_act_ghost)
 
     IF_2D = np.moveaxis(dm.modes.reshape(resolution, resolution, dm.nValidAct), 2, 0)
-    return IF_2D
+    return IF_2D.astype(_precision(), copy=False)
 
 
 # ---------------------------------------------------------------------------
@@ -476,7 +491,7 @@ def compute_PAPYRUS_DM241_influence_functions(name_system: str,
     Returns
     -------
     IF_2D : np.ndarray
-        Influence-function cube of shape [n_valid_act, resolution, resolution].
+        Influence-function cube of shape [n_valid_act, resolution, resolution], at the OOPAO precision.
     """
     T152_on_DM_size = 37.5  # size of the T152 pupil on the DM [mm]
 
@@ -508,7 +523,7 @@ def compute_PAPYRUS_DM241_influence_functions(name_system: str,
                           print_dm_properties=False)
 
     IF_2D = np.moveaxis(dm.modes.reshape(resolution, resolution, dm.nValidAct), 2, 0)
-    return IF_2D
+    return IF_2D.astype(_precision(), copy=False)
 
 
 # ---------------------------------------------------------------------------
@@ -528,7 +543,7 @@ def compute_EKARUS_DM468_influence_functions(name_system: str,
     Returns
     -------
     IF : np.ndarray
-        Influence-function cube of shape [n_act, resolution, resolution].
+        Influence-function cube of shape [n_act, resolution, resolution], at the OOPAO precision.
     """
     try:
         IF = np.load(loc + 'IF_zonal_cube.npy')
@@ -547,4 +562,4 @@ def compute_EKARUS_DM468_influence_functions(name_system: str,
                                          pixel_size_out=diameter / resolution,
                                          resolution_out=resolution,
                                          mis_registration=mis_registration))
-    return IF
+    return IF.astype(_precision(), copy=False)

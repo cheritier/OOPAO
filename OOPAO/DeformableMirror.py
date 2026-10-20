@@ -102,7 +102,8 @@ class DeformableMirror:
         print_dm_properties : bool, optional
             Boolean to print the dm properties. The default is True.
         floating_precision : int, optional
-            If set to 32, uses float32 precision to save memory. The default is 64.
+            If set to 32, the influence functions are stored and used in float32 to save memory, also in a
+            64-bit simulation. Always 32 when OOPAO_PRECISION=32. The default is 64.
         altitude : float, optional
             Altitude to which the DM is conjugated. The default is None and corresponds to a DM conjugated to the ground.
         actuator_selection : optional
@@ -196,6 +197,9 @@ class DeformableMirror:
         else:
             self.precision_complex = xp.complex128
         self.print_dm_properties = print_dm_properties
+        # influence functions in float32 if requested or if the simulation is in 32 bits
+        if precision == 32:
+            floating_precision = 32
         self.floating_precision = floating_precision
         self.flip_ = flip
         self.flip_lr = flip_lr
@@ -829,7 +833,7 @@ class DeformableMirror:
     def _modes_times_coefs(self):
         """DM shape (flattened) = modes @ coefs.
 
-        On the CPU the product uses self.modes directly. On the GPU a copy of the modes, at the working
+        On the CPU the product uses self.modes directly. On the GPU a copy of the modes, at their
         precision, is uploaded once and reused; it is uploaded again whenever self.modes is replaced by a new
         array (call reset_gpu_modes() after editing self.modes in place). The coefficients can be NumPy or
         CuPy arrays. The result stays on the GPU with GPU residency and is copied back to the CPU otherwise.
@@ -841,15 +845,26 @@ class DeformableMirror:
                 return self.modes @ self._coefs
         if self._gpu_modes_source is not self.modes:
             self._gpu_modes = None  # free the previous copy before uploading the new one
-            self._gpu_modes = xp.asarray(self.modes, dtype=self.precision)
+            self._gpu_modes = xp.asarray(self.modes)
             self._gpu_modes_source = self.modes
-        opd = self._gpu_modes @ xp.asarray(self._coefs, dtype=self.precision)
+        opd = self._gpu_modes @ xp.asarray(self._coefs, dtype=self._gpu_modes.dtype)
         return opd if self.gpu_resident else xp.asnumpy(opd)
 
     def reset_gpu_modes(self):
         """Drop the GPU copy of the modes: it is uploaded again at the next update of dm.coefs."""
         self._gpu_modes = None
         self._gpu_modes_source = None
+
+    @property
+    def modes(self):
+        return self._modes
+
+    @modes.setter
+    def modes(self, val):
+        # stored at the precision of the influence functions (no copy if already at that precision)
+        if val is not None:
+            val = val.astype(np.float32 if self.floating_precision == 32 else np.float64, copy=False)
+        self._modes = val
 
     @property
     def coefs(self):
