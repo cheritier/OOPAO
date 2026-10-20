@@ -134,6 +134,7 @@ Main contributors:
  - João Monteiro
  - Matteo Pasinetti
  - Francisco Oyarzùn
+ - Sylvain Cêtre
 
 ## CITING OOPAO
 If you use OOPAO for your own research, we kindly ask you to cite the OOPAO AO4ELT7 proceeding (Heritier et al. 2023).
