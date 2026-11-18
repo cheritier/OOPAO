@@ -323,7 +323,8 @@ class ShackHartmann:
             self.set_valid_subaperture(src=src, sh_data=self.sh_data['src_'+str(i_src)])
             # Set the pupil masks for each SH (needed for the geometric SH implementation with EM field transform)
             intensity_cpu = _to_numpy(src.intensity)
-            self.sh_data['src_' + str(i_src)].pupil_mask = intensity_cpu == np.max(intensity_cpu)
+            # relative difference avoids taking out pupil pixels with floating point differences, that may be introduced in the FieldTransform
+            self.sh_data['src_' + str(i_src)].pupil_mask = np.isclose(intensity_cpu, np.max(intensity_cpu), rtol=1e-6, atol=0.0)
             # initialize the weithing map for the CoG computation
             self.sh_data['src_'+str(i_src)].weighting_map = 1
             # store the number of signal
