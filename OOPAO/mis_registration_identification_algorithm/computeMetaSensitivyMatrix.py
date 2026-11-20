@@ -19,7 +19,7 @@ from astropy.io import fits as pfits
 
 from ..MisRegistration import MisRegistration
 from ..calibration.CalibrationVault import CalibrationVault
-from ..calibration.InteractionMatrix import InteractionMatrix, InteractionMatrixFromPhaseScreen
+from ..calibration.InteractionMatrix import InteractionMatrix
 from ..runtime import to_backend
 from ..tools.interpolateGeometricalTransformation import (anamorphosisImageMatrix,
                                                           rotateImageMatrix,
@@ -77,8 +77,7 @@ def as_2d(D):
 # Models of the WFS signals
 # ------------------------------------------------------------------------------------------------
 def interaction_matrix(ngs, tel, dm, wfs, modes):
-    return InteractionMatrix(ngs, tel, dm, wfs, modes, STROKE,
-                             phaseOffset=0, nMeasurements=1, invert=False, print_time=False)
+    return InteractionMatrix(ngs, tel, dm, wfs, modes, STROKE, nMeasurements=1, invert=False, print_time=False)
 
 
 def dm_modes_opd(dm, modes):
