@@ -511,7 +511,12 @@ class Telescope:
         None.
 
         """
-        pupil_padded = np.pad(self.initial_pupil, [padding_values, padding_values])*0
+        if padding_values!=0:    
+            pupil_padded = np.pad(self.initial_pupil, [padding_values, padding_values])*0
+        else:
+            return
+            
+            
         n_extra_pix = padding_values
         if sky_offset is not None:
             if max(sky_offset) < n_extra_pix:
