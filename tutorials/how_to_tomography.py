@@ -27,9 +27,9 @@ tel = Telescope(diameter          = 8.0,   # diameter [m]
                samplingTime       = 0.001, # sampling time [s]
                fov                = 40)    # FOV of telescope [arcsec]
 
-# N = 2
-# n_subaperture += (2*N)
-# tel.pad(padding_values=N*n_pixel_per_subaperture)
+N = 2
+n_subaperture += (2*N)
+tel.pad(padding_values=N*n_pixel_per_subaperture)
 
 plt.figure()
 plt.imshow(tel.pupil)
@@ -97,19 +97,28 @@ atm.display_atm_layers()
 
 #%%
 
-# n_pix = n_pixel_per_subaperture/4
-n_pix = 2.0
-shift_x = [n_pix,-n_pix,n_pix,-n_pix]
-shift_y = [n_pix,-n_pix,-n_pix,n_pix]
+use_sup_res = True
+
+if use_sup_res:
+    n_pix = 2.0
+    shift_x = [n_pix,-n_pix,n_pix,-n_pix] # [pix]
+    shift_y = [n_pix,-n_pix,-n_pix,n_pix] # [pix]
+    rotation_angle = [-10,-2,8,16]        # [deg]
+else:
+    shift_x = [0]*lgs_asterism.n_source
+    shift_y = [0]*lgs_asterism.n_source
+    rotation_angle = [0]*lgs_asterism.n_source
 
 ### Field transformer class to simulate different shifts between the 4 SHs
 # this operator allows to perform a geometrical transformation to the EM field
 # which will be different for each guide star --> SH pair (line of sight)
-# in this case only shifts are being considered, but rotations, magnifications, and other are possible
+# we can apply shifts and rotations, but magnifications, and other are possible
+# tomoAO only takes into consideration shifts and rotations in its model for now
 
 ft = FieldTransformer(src=lgs_asterism,
                       shift_x=shift_x,
-                      shift_y=shift_y)
+                      shift_y=shift_y,
+                      rotation_angle=rotation_angle)
 
 lgs_asterism**tel
 
@@ -174,6 +183,15 @@ wfs_geom = ShackHartmann(telescope     = tel,
 
 assert wfs_geom.is_geometric == True
 
+for i in range(lgs_asterism.n_source):
+
+    plt.figure()
+    plt.title("SH pupil mask {}".format(i))
+    plt.imshow(wfs_geom.sh_data['src_' + str(i)].pupil_mask)
+    plt.colorbar()
+    plt.show()
+    plt.close()
+
 #%%
 
 ### Deformable mirror ###
@@ -182,7 +200,7 @@ dm = DeformableMirror(telescope = tel,
                       nSubap = n_subaperture*2,
                       mechCoupling = 0.3,
                       pitch = None,
-                      actuator_selection=None)
+                      actuator_selection=0.25)
 
 print("DM pitch: {} m".format(dm.pitch))
 print(tel.D/(dm.nAct-1))
@@ -214,7 +232,9 @@ science = Source(optBand='H', magnitude=0)
 ngs*tel
 science*tel
 
-#%% ### Tomography ###
+#%% 
+
+### Tomography ###
 # Dictionary to be filled with parameters necessary for the tomographic reconstructor
 config_vars = {}
 
@@ -229,9 +249,12 @@ config_vars["dm_resolution"] = config_vars["os"] * config_vars["nSubaperture"] +
 # resolution of the original simulated phase screens
 config_vars["resolution"] = tel.resolution
 
-## add offsets to mmse star by hand ##
-ngs.offset_x = 0
-ngs.offset_y = 0
+#`None`: with the standard stencil, the same for the 4 SHs. Shifts and rotations enter only through the
+# covariances.
+# `'hybrid'` (or `'area'` / `'point'`): one Γ block per SH, weighted by the illumination of the nodes in that SH's
+# pupil. A list with one precomputed mask per SH is also accepted.
+ampl_mask = "hybrid"     # None (standard stencil) or 'hybrid' / 'area' / 'point'
+# ampl_mask = None
 
 #%%
 
@@ -245,29 +268,27 @@ aoSys = tomoAO.Simulation.AOSystem(param=config_vars,
                                    # each SH
                                    mmse_star=ngs,   # natural guide star
                                    # (giving optimization direction for mmse reconstruction)
-                                   wfs=wfs,   # SH wfs
+                                   wfs=wfs_geom,   # SH wfs
                                    sci_src=science,   # science source
                                    filtered_subap_mask_operation="union",
                                    os=config_vars["os"])
 
-# misReg information to tomoAO model
+# the misReg information for each SH is now internally converted
+# inside tomoAO (conversion from pixels to meters is done automatically)
 for i in range(lgs_asterism.n_source):
-    ## put offsets into meters ##
-    aoSys.lgsAst[i].offset_x = -shift_x[i]*tel.pixelSize
-    aoSys.lgsAst[i].offset_y = -shift_y[i]*tel.pixelSize
+    print("LGS guide star {}".format(i))
+    print("Shift x: {:.3f} m".format(aoSys.lgsAst[i].offset_x))
+    print("Shift y: {:.3f} m".format(aoSys.lgsAst[i].offset_y))
+    print("Rotation: {:.3f} rad".format(aoSys.lgsAst[i].rotation))
 
-print(lgs_asterism.src[0].offset_x)
-print(lgs_asterism.src[0].offset_y)
+# MMSE star offsets now also automatically set to zero internally
+print(aoSys.mmseStar.offset_x)
+print(aoSys.mmseStar.offset_y)
 
-print(aoSys.lgsAst[0].offset_x)
-print(aoSys.lgsAst[0].offset_y)
+#%%
 
 plt.imshow(aoSys.outputReconstructiongrid)
 plt.title("Reconstruction grid",fontsize=14,pad=10)
-plt.colorbar()
-plt.show()
-
-plt.imshow(aoSys.filtered_subap_mask^aoSys.unfiltered_subap_mask)
 plt.colorbar()
 plt.show()
 
@@ -275,6 +296,17 @@ plt.imshow(aoSys.filtered_subap_mask)
 plt.title("Filtered subap mask",fontsize=14,pad=10)
 plt.colorbar()
 plt.show()
+
+plt.imshow(aoSys.unfiltered_subap_mask)
+plt.title("Unfiltered subap mask",fontsize=14,pad=10)
+plt.colorbar()
+plt.show()
+
+# wfs pupil mask for the gradient operator
+for i in range(lgs_asterism.n_source):
+    plt.imshow(aoSys.wfs_pupils[i])
+    plt.colorbar()
+    plt.show()
 
 print(np.shape(aoSys.outputReconstructiongrid))
 print(np.shape(aoSys.filtered_subap_mask))
@@ -292,8 +324,10 @@ rec = tomoReconstructor(ao_sys=aoSys,                 # AO system object (as cre
                         os=config_vars["os"],         # oversampling factor (used to compute the reconstruction grid)
                         indexation="xxyy",            # related with slopes ordering (in oopao they are xxyy)
                         remove_tt_focus = False,      # wether or not to remove TT from reconstruction
-                        filter_subapertures = True)   # wether or not to filter SH subapertures (in simulation the
+                        filter_subapertures = True,   # wether or not to filter SH subapertures (in simulation the
                                                       # valid subapertures are constant, so this is set False
+                        ampl_mask=ampl_mask)           
+                                                      
                                                       
 final_time = time.time()
 
@@ -459,6 +493,13 @@ wfe_residual_science = np.zeros(n_loop)
 wfe_residual_NGS = np.zeros(n_loop)
 wfsSignal = np.arange(0, wfs.nSignal*lgs_asterism.n_source)*0  # buffer to simulate the loop delay
 
+s_prev = np.zeros(wfs.nSignal)
+
+# If True, we assure that the abs DM coeffs are within a certain DM max stroke
+# with light_ratio=1 in the SHs, not necessary
+use_dm_clip = False
+max_stroke = 1.0e-6
+
 # configure the display pannel
 plot_obj = cl_plot(list_fig=[atm.OPD,  # list of data for the different subplots
                               ngs.OPD,
@@ -546,16 +587,20 @@ for i in range(n_loop):
     # store the slopes after propagating to the wfs <=> 1 frames delay
     if frame_delay == 1:
         wfsSignal = np.hstack(wfs.signal)
-        wfsSignal = wfsSignal-imat@dm.coefs
+        # wfsSignal = wfsSignal-imat@dm.coefs
+        wfsSignal = s_prev-imat@dm.coefs
 
 
     # apply the commands on the DM (POLC)
     dm.coefs = (1-gain_cl)*dm.coefs - gain_cl * (reconstructor@wfsSignal)
 
+    if use_dm_clip:
+        dm.coefs = np.clip(dm.coefs, -max_stroke, max_stroke)
+
     # store the slopes after computing the commands <=> 2 frames delay
     if frame_delay == 2:
         wfsSignal = np.hstack(wfs.signal)
-        wfsSignal = wfsSignal-imat@dm.coefs
+        wfsSignal = s_prev-imat@dm.coefs
 
     # print('Elapsed time: ' + str(time.time()-a) + ' s')
 
@@ -598,16 +643,21 @@ for i in range(n_loop):
     print('NGS: Strehl ratio [%] : ', np.round(SR_ngs[i],1), ' WFE [nm] : ', np.round(wfe_residual_NGS[i],2))
     print('science: Strehl ratio [%] : ', np.round(SR_science[i],1), ' WFE [nm] : ', np.round(wfe_residual_science[i],2))
 
-#%%
-plt.figure()
+    s_prev = wfs.signal
 
-plt.plot(wfe_residual_NGS,label='Residuals')
+#%%
+
+mean_wfe = np.mean(wfe_residual_NGS[20:])
+
+plt.figure()
+plt.plot(wfe_residual_NGS,label=r'Residuals: $\mu$ = {:.0f} nm rms'.format(mean_wfe))
 plt.plot(wfe_atmosphere,label="Total")
 plt.title('Residuals',fontsize=14,pad=10)
 plt.ylabel('Residual [nm rms]',fontsize=12,labelpad=10)
 plt.legend(fontsize=12)
 plt.grid()
 plt.show()
+plt.close()
 
 
 plt.figure()
@@ -615,5 +665,6 @@ plt.plot(SR_ngs)
 plt.title("Strehl ratio",fontsize=14,pad=10)
 plt.grid()
 plt.show()
+plt.close()
 
 # %%
